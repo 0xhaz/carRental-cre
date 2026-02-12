@@ -90,8 +90,8 @@ export const assets = {
 
 export const menuLinks = [
   { name: "Home", path: "/" },
-  { name: "Cars", path: "/cars" },
-  { name: "My Bookings", path: "/my-bookings" },
+  { name: "Browse Cars", path: "/renter/browse" },
+  { name: "Invest", path: "/investor/marketplace" },
 ];
 
 export const ownerMenuLinks = [
@@ -116,6 +116,102 @@ export const ownerMenuLinks = [
   {
     name: "Manage Bookings",
     path: "/manage-bookings",
+    icon: listIcon,
+    coloredIcon: listIconColored,
+  },
+];
+
+// Investor Portal Menu Links
+export const investorMenuLinks = [
+  {
+    name: "Home",
+    path: "/",
+    icon: dashboardIcon,
+    coloredIcon: dashboardIconColored,
+  },
+  {
+    name: "Dashboard",
+    path: "/investor/dashboard",
+    icon: dashboardIcon,
+    coloredIcon: dashboardIconColored,
+  },
+  {
+    name: "Marketplace",
+    path: "/investor/marketplace",
+    icon: carIcon,
+    coloredIcon: carIconColored,
+  },
+  {
+    name: "My Portfolio",
+    path: "/investor/portfolio",
+    icon: listIcon,
+    coloredIcon: listIconColored,
+  },
+];
+
+// Rentor Portal Menu Links
+export const rentorMenuLinks = [
+  {
+    name: "Home",
+    path: "/",
+    icon: dashboardIcon,
+    coloredIcon: dashboardIconColored,
+  },
+  {
+    name: "Dashboard",
+    path: "/rentor/dashboard",
+    icon: dashboardIcon,
+    coloredIcon: dashboardIconColored,
+  },
+  {
+    name: "My Vehicles",
+    path: "/rentor/vehicles",
+    icon: carIcon,
+    coloredIcon: carIconColored,
+  },
+  {
+    name: "Fundraising",
+    path: "/rentor/fundraising",
+    icon: addIcon,
+    coloredIcon: addIconColored,
+  },
+  {
+    name: "Bookings",
+    path: "/rentor/bookings",
+    icon: listIcon,
+    coloredIcon: listIconColored,
+  },
+  {
+    name: "Analytics",
+    path: "/rentor/analytics",
+    icon: dashboardIcon,
+    coloredIcon: dashboardIconColored,
+  },
+];
+
+// Renter Portal Menu Links
+export const renterMenuLinks = [
+  {
+    name: "Home",
+    path: "/",
+    icon: dashboardIcon,
+    coloredIcon: dashboardIconColored,
+  },
+  {
+    name: "Browse Cars",
+    path: "/renter/browse",
+    icon: carIcon,
+    coloredIcon: carIconColored,
+  },
+  {
+    name: "Active Rental",
+    path: "/renter/active",
+    icon: cautionIconColored,
+    coloredIcon: cautionIconColored,
+  },
+  {
+    name: "My Bookings",
+    path: "/renter/bookings",
     icon: listIcon,
     coloredIcon: listIconColored,
   },

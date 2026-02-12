@@ -4,8 +4,8 @@ import imageKit from "../configs/imageKit.js";
 import fs from "fs";
 import Booking from "../models/Booking.js";
 
-// Change Role to Owner
-export const changeRoleToOwner = async (req, res) => {
+// Change Role to Rentor
+export const changeRoleToRentor = async (req, res) => {
   try {
     if (!req.user) {
       return res.json({ success: false, message: "User not authenticated" });
@@ -13,7 +13,7 @@ export const changeRoleToOwner = async (req, res) => {
 
     const { _id } = req.user;
 
-    await User.findByIdAndUpdate(_id, { role: "owner" });
+    await User.findByIdAndUpdate(_id, { role: "rentor" });
     res.json({ success: true, message: "Now you can list cars" });
   } catch (error) {
     console.log(error.message);
@@ -64,8 +64,8 @@ export const addCar = async (req, res) => {
   }
 };
 
-// API to list Owner Cars
-export const getOwnerCars = async (req, res) => {
+// API to list Rentor Cars
+export const getRentorCars = async (req, res) => {
   try {
     const { _id } = req.user;
     const cars = await Car.find({ owner: _id });
@@ -84,7 +84,7 @@ export const toggleCarAvailability = async (req, res) => {
     const { carId } = req.body;
     const car = await Car.findById(carId);
 
-    // Check if the car belongs to the owner
+    // Check if the car belongs to the rentor
     if (car.owner.toString() !== _id.toString()) {
       return res.json({
         success: false,
@@ -102,14 +102,14 @@ export const toggleCarAvailability = async (req, res) => {
   }
 };
 
-// API for owner to delete a car
+// API for rentor to delete a car
 export const deleteCar = async (req, res) => {
   try {
     const { _id } = req.user;
     const { carId } = req.body;
     const car = await Car.findById(carId);
 
-    // Check if the car belongs to the owner
+    // Check if the car belongs to the rentor
     if (car.owner.toString() !== _id.toString()) {
       return res.json({
         success: false,
@@ -128,12 +128,12 @@ export const deleteCar = async (req, res) => {
   }
 };
 
-// API for owner to get Dashboard Data
+// API for rentor to get Dashboard Data
 export const getDashboardData = async (req, res) => {
   try {
     const { _id, role } = req.user;
 
-    if (role !== "owner") {
+    if (role !== "rentor") {
       return res.json({ success: false, message: "Not authorized" });
     }
 

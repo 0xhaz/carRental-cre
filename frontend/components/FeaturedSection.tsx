@@ -25,10 +25,10 @@ const FeaturedSection = () => {
         ))}
       </div>
 
-      <button className="flex items-center justify-center gap-2 px-6 py-2 border border-borderColor hover:bg-gray-50 rounded-md mt-18 cursor-pointer">
-        <Link href="/cars">Explore All Cars</Link>
+      <Link href="/renter/browse" className="flex items-center justify-center gap-2 px-6 py-2 border border-borderColor hover:bg-gray-50 rounded-md mt-18 cursor-pointer">
+        Explore All Cars
         <Image src={assets.arrow_icon} alt="Arrow" />
-      </button>
+      </Link>
     </div>
   );
 };

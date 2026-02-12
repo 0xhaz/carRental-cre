@@ -24,15 +24,18 @@ export const registerUser = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({
+    const newUser = await User.create({
       name,
       email,
       password: hashedPassword,
     });
 
-    const token = generateToken(user._id.toString());
+    const token = generateToken(newUser._id.toString());
 
-    res.json({ success: true, token });
+    // Return user object without password
+    const user = await User.findById(newUser._id).select("-password");
+
+    res.json({ success: true, token, user });
   } catch (error) {
     console.log(error.message);
     res.json({ success: false, message: error.message });
@@ -52,7 +55,11 @@ export const loginUser = async (req, res) => {
       return res.json({ success: false, message: "Invalid credentials" });
     }
     const token = generateToken(user._id.toString());
-    res.json({ success: true, token });
+
+    // Return user object without password
+    const userWithoutPassword = await User.findById(user._id).select("-password");
+
+    res.json({ success: true, token, user: userWithoutPassword });
   } catch (error) {
     console.log(error.message);
     res.json({ success: false, message: error.message });
@@ -74,6 +81,40 @@ export const getCars = async (req, res) => {
   try {
     const cars = await Car.find({ isAvailable: true });
     res.json({ success: true, cars });
+  } catch (error) {
+    console.log(error.message);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// Update User Role
+export const updateUserRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+    const { _id } = req.user;
+
+    if (!role) {
+      return res.json({ success: false, message: "Role is required" });
+    }
+
+    // Validate role
+    const validRoles = ["renter", "rentor", "investor", "admin"];
+    if (!validRoles.includes(role)) {
+      return res.json({ success: false, message: "Invalid role" });
+    }
+
+    // Update user role
+    const user = await User.findByIdAndUpdate(
+      _id,
+      { role },
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
+    }
+
+    res.json({ success: true, user, message: "Role updated successfully" });
   } catch (error) {
     console.log(error.message);
     res.json({ success: false, message: error.message });

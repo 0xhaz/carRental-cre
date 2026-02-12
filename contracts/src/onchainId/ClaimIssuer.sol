@@ -270,46 +270,9 @@ contract ClaimIssuer is Ownable, ReentrancyGuard {
         claimIds = new bytes32[](_identities.length);
 
         for (uint256 i = 0; i < _identities.length; i++) {
-            if (_identities[i] == address(0)) revert ClaimIssuer__InvalidIdentity();
-            if (_datas[i].length == 0) revert ClaimIssuer__EmptyClaimData();
-
-            // Check authorization for each claim
-            if (
-                !_hasKeyPurpose(keccak256(abi.encodePacked(msg.sender)), CLAIM_SIGNER_KEY)
-                    || !_hasKeyPurpose(keccak256(abi.encodePacked(msg.sender)), MANAGEMENT_KEY)
-            ) {
-                revert ClaimIssuer__SenderDoesNotHaveClaimSignerKey();
-            }
-
             claimRequestNonce++;
-
-            // Scope to reduce stack depth
-            {
-                bytes32 claimId = keccak256(abi.encodePacked(address(this), _identities[i], _topics[i], _datas[i]));
-                claimIds[i] = claimId;
-
-                // Generate claim signature inline
-                bytes memory signature = _signClaim(keccak256(abi.encodePacked(_identities[i], _topics[i], _datas[i])));
-
-                issuedClaims[claimId] = IssuedClaim({
-                    identity: _identities[i],
-                    topic: _topics[i],
-                    scheme: _schemes[i],
-                    signature: signature,
-                    data: _datas[i],
-                    uri: _uris[i],
-                    issuedAt: block.timestamp,
-                    validTo: _validTos[i],
-                    revoked: false,
-                    revokedAt: 0
-                });
-
-                claimsByIdentity[_identities[i]].push(claimId);
-                claimsByTopic[_topics[i]].push(claimId);
-                allClaims.push(claimId);
-
-                emit ClaimIssued(_identities[i], _topics[i], claimId, address(this), signature, _datas[i]);
-            }
+            claimIds[i] =
+                _batchIssueClaimAtIndex(_identities[i], _topics[i], _schemes[i], _datas[i], _uris[i], _validTos[i]);
         }
 
         return claimIds;
@@ -564,125 +527,69 @@ contract ClaimIssuer is Ownable, ReentrancyGuard {
      * @notice Issue investor claims to an identity
      * @param _identity Address of the OnchainID identity
      * @param _scheme Scheme of the claims
-     * @param _kycData KYC claim data
-     * @param _accreditedData Accredited investor claim data
-     * @param _regionalData Regional eligibility claim data
+     * @param _claimDatas Array of claim data [kycData, accreditedData, regionalData]
      * @param _validTo Timestamp until which the claims are valid
      * @return claimIds Array of issued claim IDs
      */
-    function issueInvestorClaims(
-        address _identity,
-        uint256 _scheme,
-        bytes calldata _kycData,
-        bytes calldata _accreditedData,
-        bytes calldata _regionalData,
-        uint256 _validTo
-    ) external onlyClaimSigner whenActive nonReentrant returns (bytes32[] memory claimIds) {
+    function issueInvestorClaims(address _identity, uint256 _scheme, bytes[] calldata _claimDatas, uint256 _validTo)
+        external
+        onlyClaimSigner
+        whenActive
+        nonReentrant
+        returns (bytes32[] memory claimIds)
+    {
         if (_identity == address(0)) revert ClaimIssuer__InvalidIdentity();
 
-        claimIds = new bytes32[](3);
         uint256[] memory topics = ClaimTopics.getInvestorClaims();
+        if (_claimDatas.length != topics.length) revert ClaimIssuer__ArrayLengthMismatch();
 
-        // Issue KYC_VERIFIED claim
-        claimIds[0] = _issueClaimInternal(_identity, topics[0], _scheme, _kycData, "", _validTo);
-
-        // Issue ACCREDITED_INVESTOR claim
-        claimIds[1] = _issueClaimInternal(_identity, topics[1], _scheme, _accreditedData, "", _validTo);
-
-        // Issue REGIONAL_ELIGIBILITY claim
-        claimIds[2] = _issueClaimInternal(_identity, topics[2], _scheme, _regionalData, "", _validTo);
-
-        return claimIds;
+        claimIds = _issueClaimsLoop(_identity, _scheme, topics, _claimDatas, _validTo);
     }
 
     /**
      * @notice Issue renter claims to an identity
      * @param _identity Address of the OnchainID identity
      * @param _scheme Scheme of the claims
-     * @param _kycData KYC claim data
-     * @param _driverLicenseData Driver license claim data
-     * @param _insuranceData Insurance claim data
-     * @param _creditScoreData Credit score claim data
-     * @param _regionalData Regional eligibility claim data
+     * @param _claimDatas Array of claim data [kycData, driverLicenseData, insuranceData, creditScoreData, regionalData]
      * @param _validTo Timestamp until which the claims are valid
      * @return claimIds Array of issued claim IDs
      */
-    function issueRenterClaims(
-        address _identity,
-        uint256 _scheme,
-        bytes calldata _kycData,
-        bytes calldata _driverLicenseData,
-        bytes calldata _insuranceData,
-        bytes calldata _creditScoreData,
-        bytes calldata _regionalData,
-        uint256 _validTo
-    ) external onlyClaimSigner whenActive nonReentrant returns (bytes32[] memory claimIds) {
+    function issueRenterClaims(address _identity, uint256 _scheme, bytes[] calldata _claimDatas, uint256 _validTo)
+        external
+        onlyClaimSigner
+        whenActive
+        nonReentrant
+        returns (bytes32[] memory claimIds)
+    {
         if (_identity == address(0)) revert ClaimIssuer__InvalidIdentity();
 
-        claimIds = new bytes32[](5);
         uint256[] memory topics = ClaimTopics.getRenterClaims();
+        if (_claimDatas.length != topics.length) revert ClaimIssuer__ArrayLengthMismatch();
 
-        // Issue KYC_VERIFIED claim
-        claimIds[0] = _issueClaimInternal(_identity, topics[0], _scheme, _kycData, "", _validTo);
-
-        // Issue DRIVER_LICENSE_VALID claim
-        claimIds[1] = _issueClaimInternal(_identity, topics[1], _scheme, _driverLicenseData, "", _validTo);
-
-        // Issue INSURANCE_VERIFIED claim
-        claimIds[2] = _issueClaimInternal(_identity, topics[2], _scheme, _insuranceData, "", _validTo);
-
-        // Issue CREDIT_SCORE_RANGE claim
-        claimIds[3] = _issueClaimInternal(_identity, topics[3], _scheme, _creditScoreData, "", _validTo);
-
-        // Issue REGIONAL_ELIGIBILITY claim
-        claimIds[4] = _issueClaimInternal(_identity, topics[4], _scheme, _regionalData, "", _validTo);
-
-        return claimIds;
+        claimIds = _issueClaimsLoop(_identity, _scheme, topics, _claimDatas, _validTo);
     }
 
     /**
      * @notice Issue rentor (vehicle owner) claims to an identity
      * @param _identity Address of the OnchainID identity
      * @param _scheme Scheme of the claims
-     * @param _kycData KYC claim data
-     * @param _businessData Business registration claim data
-     * @param _vehicleOwnershipData Vehicle ownership claim data
-     * @param _insuranceData Insurance claim data
-     * @param _regionalData Regional eligibility claim data
+     * @param _claimDatas Array of claim data [kycData, businessData, vehicleOwnershipData, insuranceData, regionalData]
      * @param _validTo Timestamp until which the claims are valid
      * @return claimIds Array of issued claim IDs
      */
-    function issueRentorClaims(
-        address _identity,
-        uint256 _scheme,
-        bytes calldata _kycData,
-        bytes calldata _businessData,
-        bytes calldata _vehicleOwnershipData,
-        bytes calldata _insuranceData,
-        bytes calldata _regionalData,
-        uint256 _validTo
-    ) external onlyClaimSigner whenActive nonReentrant returns (bytes32[] memory claimIds) {
+    function issueRentorClaims(address _identity, uint256 _scheme, bytes[] calldata _claimDatas, uint256 _validTo)
+        external
+        onlyClaimSigner
+        whenActive
+        nonReentrant
+        returns (bytes32[] memory claimIds)
+    {
         if (_identity == address(0)) revert ClaimIssuer__InvalidIdentity();
 
-        claimIds = new bytes32[](5);
         uint256[] memory topics = ClaimTopics.getRentorClaims();
+        if (_claimDatas.length != topics.length) revert ClaimIssuer__ArrayLengthMismatch();
 
-        // Issue KYC_VERIFIED claim
-        claimIds[0] = _issueClaimInternal(_identity, topics[0], _scheme, _kycData, "", _validTo);
-
-        // Issue BUSINESS_REGISTERED claim
-        claimIds[1] = _issueClaimInternal(_identity, topics[1], _scheme, _businessData, "", _validTo);
-
-        // Issue VEHICLE_OWNERSHIP_PROOF claim
-        claimIds[2] = _issueClaimInternal(_identity, topics[2], _scheme, _vehicleOwnershipData, "", _validTo);
-
-        // Issue INSURANCE_VERIFIED claim
-        claimIds[3] = _issueClaimInternal(_identity, topics[3], _scheme, _insuranceData, "", _validTo);
-
-        // Issue REGIONAL_ELIGIBILITY claim
-        claimIds[4] = _issueClaimInternal(_identity, topics[4], _scheme, _regionalData, "", _validTo);
-
-        return claimIds;
+        claimIds = _issueClaimsLoop(_identity, _scheme, topics, _claimDatas, _validTo);
     }
 
     /**
@@ -717,8 +624,10 @@ contract ClaimIssuer is Ownable, ReentrancyGuard {
 
             for (uint256 j = 0; j < identityClaims.length; j++) {
                 IssuedClaim memory claim = issuedClaims[identityClaims[j]];
-                if (claim.topic == topics[i] && !claim.revoked &&
-                    (claim.validTo == 0 || claim.validTo > block.timestamp)) {
+                if (
+                    claim.topic == topics[i] && !claim.revoked
+                        && (claim.validTo == 0 || claim.validTo > block.timestamp)
+                ) {
                     hasTopic = true;
                     break;
                 }
@@ -746,8 +655,10 @@ contract ClaimIssuer is Ownable, ReentrancyGuard {
 
             for (uint256 j = 0; j < identityClaims.length; j++) {
                 IssuedClaim memory claim = issuedClaims[identityClaims[j]];
-                if (claim.topic == topics[i] && !claim.revoked &&
-                    (claim.validTo == 0 || claim.validTo > block.timestamp)) {
+                if (
+                    claim.topic == topics[i] && !claim.revoked
+                        && (claim.validTo == 0 || claim.validTo > block.timestamp)
+                ) {
                     hasTopic = true;
                     break;
                 }
@@ -775,8 +686,10 @@ contract ClaimIssuer is Ownable, ReentrancyGuard {
 
             for (uint256 j = 0; j < identityClaims.length; j++) {
                 IssuedClaim memory claim = issuedClaims[identityClaims[j]];
-                if (claim.topic == topics[i] && !claim.revoked &&
-                    (claim.validTo == 0 || claim.validTo > block.timestamp)) {
+                if (
+                    claim.topic == topics[i] && !claim.revoked
+                        && (claim.validTo == 0 || claim.validTo > block.timestamp)
+                ) {
                     hasTopic = true;
                     break;
                 }
@@ -794,16 +707,55 @@ contract ClaimIssuer is Ownable, ReentrancyGuard {
                         INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @dev Internal function to issue a claim
-     * @param _identity Address of the OnchainID identity
-     * @param _topic Claim topic
-     * @param _scheme Scheme of the claim
-     * @param _data Claim data
-     * @param _uri URI associated with the claim
-     * @param _validTo Timestamp until which the claim is valid
-     * @return claimId ID of the issued claim
-     */
+    function _issueClaimsLoop(
+        address _identity,
+        uint256 _scheme,
+        uint256[] memory _topics,
+        bytes[] calldata _claimDatas,
+        uint256 _validTo
+    ) internal returns (bytes32[] memory claimIds) {
+        claimIds = new bytes32[](_topics.length);
+        for (uint256 i = 0; i < _topics.length; i++) {
+            claimIds[i] = _issueClaimInternal(_identity, _topics[i], _scheme, _claimDatas[i], "", _validTo);
+        }
+    }
+
+    function _batchIssueClaimAtIndex(
+        address _identity,
+        uint256 _topic,
+        uint256 _scheme,
+        bytes calldata _data,
+        string calldata _uri,
+        uint256 _validTo
+    ) internal returns (bytes32 claimId) {
+        if (_identity == address(0)) revert ClaimIssuer__InvalidIdentity();
+        if (_data.length == 0) revert ClaimIssuer__EmptyClaimData();
+
+        bytes32 dataHash = keccak256(abi.encodePacked(_identity, _topic, _data));
+        bytes memory signature = _signClaim(dataHash);
+
+        claimId = keccak256(abi.encodePacked(address(this), _identity, _topic, _data));
+
+        issuedClaims[claimId] = IssuedClaim({
+            identity: _identity,
+            topic: _topic,
+            scheme: _scheme,
+            signature: signature,
+            data: _data,
+            uri: _uri,
+            issuedAt: block.timestamp,
+            validTo: _validTo,
+            revoked: false,
+            revokedAt: 0
+        });
+
+        claimsByIdentity[_identity].push(claimId);
+        claimsByTopic[_topic].push(claimId);
+        allClaims.push(claimId);
+
+        emit ClaimIssued(_identity, _topic, claimId, address(this), signature, _data);
+    }
+
     function _issueClaimInternal(
         address _identity,
         uint256 _topic,

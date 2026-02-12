@@ -1,0 +1,64 @@
+import { InvestorType } from './user';
+
+export enum CampaignStatus {
+  DRAFT = 'draft',
+  ACTIVE = 'active',
+  FUNDED = 'funded',
+  CLOSED = 'closed',
+  CANCELLED = 'cancelled',
+}
+
+export interface Milestone {
+  _id?: string;
+  name: string;
+  description: string;
+  releasePercentage: number; // % of funds to release
+  completed: boolean;
+  completedAt?: Date;
+}
+
+export interface FundraisingCampaign {
+  _id: string;
+  vehicle: string; // Vehicle ID
+  rentor: string; // User ID
+
+  targetAmount: number;
+  currentAmount: number;
+  minInvestment: number;
+  maxInvestment: number;
+
+  investorTypeAllowed: InvestorType[];
+
+  expectedROI: number;
+  duration: number; // Days
+
+  status: CampaignStatus;
+
+  milestones: Milestone[];
+
+  startDate?: Date;
+  endDate?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CampaignWithVehicle extends FundraisingCampaign {
+  vehicleDetails: {
+    brand: string;
+    model: string;
+    year: number;
+    image: string;
+    vin?: string;
+  };
+}
+
+export interface CampaignFormData {
+  vehicleId: string;
+  targetAmount: number;
+  minInvestment: number;
+  maxInvestment: number;
+  expectedROI: number;
+  duration: number;
+  investorTypeAllowed: InvestorType[];
+  milestones: Omit<Milestone, '_id' | 'completed' | 'completedAt'>[];
+}

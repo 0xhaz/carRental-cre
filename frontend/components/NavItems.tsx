@@ -14,7 +14,7 @@ interface NavItemsProps {
 const NavItems = () => {
   const location = usePathname();
   const [open, setOpen] = useState(false);
-  const isOwnerPath = location.startsWith("/owner");
+  const isOwnerPath = location.startsWith("/owner") || location.startsWith("/rentor");
   const router = useRouter();
 
   const { setShowLogin, user, logout, isOwner, axios, setIsOwner } =
@@ -58,7 +58,8 @@ const NavItems = () => {
       return;
     }
 
-    router.push(`/owner/${ownerId}`);
+    // Navigate to new rentor portal instead of old owner portal
+    router.push(`/rentor`);
   };
 
   return (

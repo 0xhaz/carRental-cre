@@ -3,6 +3,7 @@ import { Outfit } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/context/AppContext";
 import { MotionConfig } from "motion/react";
+import RootLayoutContent from "./RootLayoutContent";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -11,8 +12,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Car Rental Service",
-  description: "A simple car rental service application built with Next.js",
+  title: "RegShield - Car Rental & Investment Platform",
+  description: "A decentralized car rental and investment platform built with Next.js",
 };
 
 export default function RootLayout({
@@ -24,7 +25,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${outfit.variable} antialiased`}>
         <AppProvider>
-          <MotionConfig>{children}</MotionConfig>
+          <MotionConfig>
+            <RootLayoutContent>{children}</RootLayoutContent>
+          </MotionConfig>
         </AppProvider>
       </body>
     </html>

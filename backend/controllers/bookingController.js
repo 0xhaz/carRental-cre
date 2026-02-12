@@ -92,10 +92,10 @@ export const getUserBookings = async (req, res) => {
   }
 };
 
-// API to list owner bookings
-export const getOwnerBookings = async (req, res) => {
+// API to list rentor bookings
+export const getRentorBookings = async (req, res) => {
   try {
-    if (req.user.role !== "owner") {
+    if (req.user.role !== "rentor") {
       return res.json({ success: false, message: "Not authorized" });
     }
 
