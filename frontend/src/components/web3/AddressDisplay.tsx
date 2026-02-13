@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Badge } from "@/src/components/ui";
-import { formatAddress, copyToClipboard } from "@/src/lib/utils";
+import { Button, Badge } from "@/components/ui";
+import { formatAddress, copyToClipboard } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 
 export interface AddressDisplayProps {

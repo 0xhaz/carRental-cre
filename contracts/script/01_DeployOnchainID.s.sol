@@ -24,17 +24,21 @@ contract DeployOnchainID is Script {
 
         // 1. Deploy OnchainIDFactory
         console.log("\n1. Deploying OnchainIDFactory...");
-        OnchainIDFactory onchainIDFactory = new OnchainIDFactory();
+        OnchainIDFactory onchainIDFactory = new OnchainIDFactory(owner);
         console.log("OnchainIDFactory deployed at:", address(onchainIDFactory));
 
         // 2. Deploy ClaimIssuer (platform will use this to issue claims)
         console.log("\n2. Deploying ClaimIssuer...");
-        ClaimIssuer claimIssuer = new ClaimIssuer();
+        ClaimIssuer claimIssuer = new ClaimIssuer(
+            owner,
+            "RegShield Claim Issuer",
+            "Official claim issuer for RegShield rental car tokenization platform"
+        );
         console.log("ClaimIssuer deployed at:", address(claimIssuer));
 
         // 3. Deploy KeyManager (manages keys for OnchainID)
         console.log("\n3. Deploying KeyManager...");
-        KeyManager keyManager = new KeyManager();
+        KeyManager keyManager = new KeyManager(owner);
         console.log("KeyManager deployed at:", address(keyManager));
 
         vm.stopBroadcast();

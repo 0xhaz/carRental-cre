@@ -1,4 +1,4 @@
-import { cn } from "@/src/lib/utils";
+import { cn } from "@/lib/utils";
 import { HTMLAttributes } from "react";
 
 export interface ProgressProps extends HTMLAttributes<HTMLDivElement> {

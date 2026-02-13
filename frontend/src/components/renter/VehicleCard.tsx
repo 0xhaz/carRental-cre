@@ -1,9 +1,9 @@
-import { Vehicle } from "@/src/types";
-import { Card, Badge } from "@/src/components/ui";
-import { assets } from "@/public/assets/assets";
+import { Vehicle } from "@/types";
+import { Card, Badge } from "@/components/ui";
+import { assets } from "@/constants/menuLinks";
 import Image from "next/image";
 import Link from "next/link";
-import { formatCurrency } from "@/src/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 
 export interface VehicleCardProps {
   vehicle: Vehicle;
@@ -27,7 +27,9 @@ export function VehicleCard({
 
   return (
     <Link href={`/renter/vehicle/${vehicle._id}`} onClick={handleClick}>
-      <Card className={`group overflow-hidden hover:-translate-y-1 hover:shadow-xl transition-all duration-500 cursor-pointer ${className}`}>
+      <Card
+        className={`group overflow-hidden hover:-translate-y-1 hover:shadow-xl transition-all duration-500 cursor-pointer ${className}`}
+      >
         {/* Vehicle Image */}
         <div className="relative h-48 overflow-hidden">
           <Image
@@ -74,19 +76,43 @@ export function VehicleCard({
           {/* Vehicle Specs Grid */}
           <div className="mt-4 grid grid-cols-2 gap-y-2 text-gray-600">
             <div className="flex items-center text-sm">
-              <Image src={assets.users_icon} alt="Seats" className="h-4 mr-2" />
+              <Image
+                src={assets.users_icon}
+                alt="Seats"
+                className="h-4 mr-2"
+                width={16}
+                height={16}
+              />
               <span>{vehicle.seating_capacity} Seats</span>
             </div>
             <div className="flex items-center text-sm">
-              <Image src={assets.fuel_icon} alt="Fuel" className="h-4 mr-2" />
+              <Image
+                src={assets.fuel_icon}
+                alt="Fuel"
+                className="h-4 mr-2"
+                width={16}
+                height={16}
+              />
               <span>{vehicle.fuel_type}</span>
             </div>
             <div className="flex items-center text-sm">
-              <Image src={assets.car_icon} alt="Transmission" className="h-4 mr-2" />
+              <Image
+                src={assets.car_icon}
+                alt="Transmission"
+                className="h-4 mr-2"
+                width={16}
+                height={16}
+              />
               <span>{vehicle.transmission}</span>
             </div>
             <div className="flex items-center text-sm">
-              <Image src={assets.location_icon} alt="Location" className="h-4 mr-2" />
+              <Image
+                src={assets.location_icon}
+                alt="Location"
+                className="h-4 mr-2"
+                width={16}
+                height={16}
+              />
               <span>{vehicle.location}</span>
             </div>
           </div>
@@ -105,7 +131,7 @@ export function VehicleCardSkeleton() {
         <div className="h-6 bg-gray-200 rounded animate-pulse w-3/4" />
         <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2" />
         <div className="grid grid-cols-2 gap-2 mt-4">
-          {[1, 2, 3, 4].map((i) => (
+          {[1, 2, 3, 4].map(i => (
             <div key={i} className="h-4 bg-gray-200 rounded animate-pulse" />
           ))}
         </div>

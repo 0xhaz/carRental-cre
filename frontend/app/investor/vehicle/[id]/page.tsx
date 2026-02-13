@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { InvestmentModal } from "@/src/components/investor";
+import { InvestmentModal } from "@/components/investor";
 import {
   Heading,
   Paragraph,
@@ -11,10 +11,10 @@ import {
   CardContent,
   Badge,
   Progress,
-} from "@/src/components/ui";
-import { generateMockVehicles } from "@/src/lib/mockData";
-import { Vehicle } from "@/src/types";
-import { formatCurrency } from "@/src/lib/utils";
+} from "@/components/ui";
+import { generateMockVehicles } from "@/lib/mockData";
+import { Vehicle } from "@/types";
+import { formatCurrency } from "@/lib/utils";
 import Image from "next/image";
 import { toast } from "react-hot-toast";
 

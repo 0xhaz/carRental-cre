@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, FormEvent, useEffect } from "react";
-import { Card, Button, Input } from "@/src/components/ui";
+import { Card, Button, Input } from "@/components/ui";
 import { toast } from "react-hot-toast";
-import { Vehicle } from "@/src/types";
-import { generateMockVehicles } from "@/src/lib/mockData";
+import { Vehicle } from "@/types";
+import { generateMockVehicles } from "@/lib/mockData";
 
 export interface CreateCampaignModalProps {
   onClose: () => void;

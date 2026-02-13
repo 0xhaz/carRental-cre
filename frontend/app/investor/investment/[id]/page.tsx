@@ -10,10 +10,10 @@ import {
   CardContent,
   Badge,
   Progress,
-} from "@/src/components/ui";
-import { generateMockInvestments, generateMockVehicles } from "@/src/lib/mockData";
-import { Investment, Vehicle } from "@/src/types";
-import { formatCurrency } from "@/src/lib/utils";
+} from "@/components/ui";
+import { generateMockInvestments, generateMockVehicles } from "@/lib/mockData";
+import { Investment, Vehicle } from "@/types";
+import { formatCurrency } from "@/lib/utils";
 import Image from "next/image";
 import { toast } from "react-hot-toast";
 

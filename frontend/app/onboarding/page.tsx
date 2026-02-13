@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { UserRole } from "@/src/types";
-import { useUserStore } from "@/src/store";
+import { UserRole } from "@/types";
+import { useUserStore } from "@/store";
 import { useAppContext } from "@/context/AppContext";
 import { toast } from "react-hot-toast";
 import { useState } from "react";
@@ -90,9 +90,15 @@ export default function Onboarding() {
         setUser(updatedUser);
         toast.success(`Welcome! You're now a ${role}`);
 
-        // Redirect to the appropriate portal
+        // Redirect based on role
         setTimeout(() => {
-          router.push(route);
+          // For investor/rentor, go to verification wizard
+          // For renter, go directly to browse
+          if (role === UserRole.INVESTOR || role === UserRole.RENTOR) {
+            router.push(`/verification?role=${role}`);
+          } else {
+            router.push(route);
+          }
         }, 500);
       } else {
         toast.error(data.message || "Failed to update role");

@@ -69,6 +69,8 @@ interface IRevenueDistributor {
 
     event FeesWithdrawn(address indexed recipient, uint256 platformFee, uint256 maintenanceReserve);
 
+    event RevenueClaimed(uint256 indexed vehicleId, address indexed holder, uint256 amount, uint256 timestamp);
+
     /*//////////////////////////////////////////////////////////////
                              ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -80,6 +82,7 @@ interface IRevenueDistributor {
     error RevenueDistributor__InvalidFeePercentage();
     error RevenueDistributor__DistributionFailed();
     error RevenueDistributor__WithdrawalFailed();
+    error RevenueDistributor__NothingToClaim();
 
     /*//////////////////////////////////////////////////////////////
                         CORE FUNCTIONS
@@ -139,6 +142,20 @@ interface IRevenueDistributor {
         uint256 insurancePercent,
         uint256 operatingPercent
     ) external;
+
+    /**
+     * @notice Claim accumulated revenue for a vehicle as a RevenueToken holder
+     * @param vehicleId Vehicle NFT token ID
+     * @return amount Amount claimed
+     */
+    function claimRevenue(uint256 vehicleId) external returns (uint256 amount);
+
+    /**
+     * @notice Claim revenue across multiple vehicles
+     * @param vehicleIds Array of vehicle IDs
+     * @return totalClaimed Total amount claimed
+     */
+    function batchClaimRevenue(uint256[] memory vehicleIds) external returns (uint256 totalClaimed);
 
     /*//////////////////////////////////////////////////////////////
                         VIEW FUNCTIONS
@@ -201,4 +218,12 @@ interface IRevenueDistributor {
      * @return registered Whether vehicle is registered
      */
     function isVehicleRegistered(uint256 vehicleId) external view returns (bool registered);
+
+    /**
+     * @notice Get claimable revenue for a holder for a specific vehicle
+     * @param vehicleId Vehicle NFT token ID
+     * @param holder Address of the RevenueToken holder
+     * @return claimable Amount available to claim
+     */
+    function getClaimableRevenue(uint256 vehicleId, address holder) external view returns (uint256 claimable);
 }

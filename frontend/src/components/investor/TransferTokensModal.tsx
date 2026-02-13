@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { Card, Button, Input } from "@/src/components/ui";
+import { Card, Button, Input } from "@/components/ui";
 import { toast } from "react-hot-toast";
 
 export interface TransferTokensModalProps {

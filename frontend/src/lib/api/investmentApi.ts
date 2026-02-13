@@ -1,10 +1,16 @@
 import apiClient from "./axios";
-import { Investment, Campaign } from "@/src/types";
+import { Investment, Campaign } from "@/types";
 
 export const investmentApi = {
   // Get marketplace (active campaigns)
   getMarketplace: async (): Promise<{ success: boolean; data: Campaign[] }> => {
     const { data } = await apiClient.get("/investments/marketplace");
+    return data;
+  },
+
+  // Get rentor's own campaigns
+  getRentorCampaigns: async (): Promise<{ success: boolean; data: Campaign[] }> => {
+    const { data } = await apiClient.get("/investments/rentor-campaigns");
     return data;
   },
 

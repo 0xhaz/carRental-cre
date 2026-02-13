@@ -4,12 +4,12 @@ pragma solidity ^0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IRentalPaymentProtocol} from "../interfaces/payment/IRentalPaymentProtocol.sol";
 import {IPaymentEscrow} from "../interfaces/payment/IPaymentEscrow.sol";
 import {IIdentityRegistry} from "../interfaces/erc3643/IIdentityRegistry.sol";
 import {IParticipantTypeRegistry} from "../interfaces/erc3643/IParticipantTypeRegistry.sol";
 import {IRenterCompliance} from "../interfaces/compliance/IRenterCompliance.sol";
+import {IRevenueDistributor} from "../interfaces/revenue/IRevenueDistributor.sol";
 
 /**
  * @title RentalPaymentProtocol
@@ -20,11 +20,11 @@ contract RentalPaymentProtocol is IRentalPaymentProtocol, Ownable, ReentrancyGua
     /*//////////////////////////////////////////////////////////////
                            STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
-    IERC20 public immutable paymentToken;
     IPaymentEscrow public paymentEscrow;
     IIdentityRegistry public identityRegistry;
     IParticipantTypeRegistry public participantTypeRegistry;
     IRenterCompliance public renterCompliance;
+    IRevenueDistributor public revenueDistributor;
 
     mapping(uint256 => RentalPayment) private _rentalPayments;
     mapping(uint256 => uint256) private _bookingToPayment;
@@ -71,20 +71,18 @@ contract RentalPaymentProtocol is IRentalPaymentProtocol, Ownable, ReentrancyGua
     //////////////////////////////////////////////////////////////*/
 
     constructor(
-        address _paymentToken,
         address _paymentEscrow,
         address _identityRegistry,
         address _participantTypeRegistry,
         address _renterCompliance
     ) Ownable(msg.sender) {
         if (
-            _paymentToken == address(0) || _paymentEscrow == address(0) || _identityRegistry == address(0)
+            _paymentEscrow == address(0) || _identityRegistry == address(0)
                 || _participantTypeRegistry == address(0) || _renterCompliance == address(0)
         ) {
             revert RentalPayment__InvalidAddress();
         }
 
-        paymentToken = IERC20(_paymentToken);
         paymentEscrow = IPaymentEscrow(_paymentEscrow);
         identityRegistry = IIdentityRegistry(_identityRegistry);
         participantTypeRegistry = IParticipantTypeRegistry(_participantTypeRegistry);
@@ -106,7 +104,7 @@ contract RentalPaymentProtocol is IRentalPaymentProtocol, Ownable, ReentrancyGua
         uint256 securityDeposit,
         uint256 startTime,
         uint256 endTime
-    ) external override nonReentrant whenNotPaused returns (uint256 paymentId) {
+    ) external payable override nonReentrant whenNotPaused returns (uint256 paymentId) {
         if (rentor == address(0)) revert RentalPayment__InvalidAddress();
         if (vehicleId == 0) revert RentalPayment__InvalidVehicleId();
         if (rentalFee == 0) revert RentalPayment__InvalidAmount();
@@ -124,11 +122,8 @@ contract RentalPaymentProtocol is IRentalPaymentProtocol, Ownable, ReentrancyGua
 
         uint256 totalAmount = rentalFee + securityDeposit;
 
-        // Check renter's token balance and allowance
-        if (paymentToken.balanceOf(msg.sender) < totalAmount) {
-            revert RentalPayment__InvalidAmount();
-        }
-        if (paymentToken.allowance(msg.sender, address(this)) < totalAmount) {
+        // Check renter's ETH value
+        if (msg.value < totalAmount) {
             revert RentalPayment__InvalidAmount();
         }
 
@@ -151,18 +146,16 @@ contract RentalPaymentProtocol is IRentalPaymentProtocol, Ownable, ReentrancyGua
         payment.actualReturnTime = 0;
         payment.penaltyAmount = 0;
 
-        // Transfer tokens to escrow
-        bool sent = paymentToken.transferFrom(msg.sender, address(this), totalAmount);
-        if (!sent) {
-            revert RentalPayment__PaymentAlreadyProcessed();
-        }
-        bool escrowed = paymentToken.transfer(address(paymentEscrow), totalAmount);
-        if (!escrowed) {
-            revert RentalPayment__PaymentAlreadyProcessed();
-        }
+        // Forward ETH to escrow
+        paymentEscrow.createEscrow{value: totalAmount}(
+            paymentId, msg.sender, rentor, totalAmount, (endTime - startTime) + 7 days
+        );
 
-        // Create escrow (duration = rental period + 7 days for return processing)
-        paymentEscrow.createEscrow(paymentId, msg.sender, rentor, totalAmount, (endTime - startTime) + 7 days);
+        // Refund excess ETH
+        if (msg.value > totalAmount) {
+            (bool refunded,) = payable(msg.sender).call{value: msg.value - totalAmount}("");
+            if (!refunded) revert RentalPayment__PaymentAlreadyProcessed();
+        }
 
         payment.state = RentalPaymentState.ESCROWED;
 
@@ -369,6 +362,15 @@ contract RentalPaymentProtocol is IRentalPaymentProtocol, Ownable, ReentrancyGua
     }
 
     /**
+     * @notice Set revenue distributor for forwarding rental revenue
+     * @param _revenueDistributor Address of the RevenueDistributor contract
+     */
+    function setRevenueDistributor(address _revenueDistributor) external onlyOwner {
+        if (_revenueDistributor == address(0)) revert RentalPayment__InvalidAddress();
+        revenueDistributor = IRevenueDistributor(_revenueDistributor);
+    }
+
+    /**
      * @notice Pause contract
      */
     function pause() external onlyOwner {
@@ -408,10 +410,15 @@ contract RentalPaymentProtocol is IRentalPaymentProtocol, Ownable, ReentrancyGua
     }
 
     /**
-     * @dev Add revenue to vehicle revenue pool
+     * @dev Add revenue to vehicle revenue pool and forward to RevenueDistributor
      */
     function _addVehicleRevenue(uint256 vehicleId, uint256 amount) internal {
         RevenueDistribution storage revenue = _vehicleRevenue[vehicleId];
         revenue.totalRevenue += amount;
+
+        // Forward revenue to RevenueDistributor for waterfall distribution
+        if (address(revenueDistributor) != address(0)) {
+            revenueDistributor.addRevenue(vehicleId, amount);
+        }
     }
 }

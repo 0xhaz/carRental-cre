@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, CardContent, Badge } from "@/src/components/ui";
+import { Button, Card, CardContent, Badge } from "@/components/ui";
 import { X, SlidersHorizontal } from "lucide-react";
 
 export interface VehicleFilterState {

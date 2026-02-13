@@ -4,9 +4,9 @@ import { useMemo, useState, FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { assets, ownerMenuLinks } from "@/public/assets/assets";
-import { Button } from "@/src/components/ui";
-import { useUserStore } from "@/src/store";
+import { assets, ownerMenuLinks } from "@/constants/menuLinks";
+import { Button } from "@/components/ui";
+import { useUserStore } from "@/store";
 import { useAppContext } from "@/context/AppContext";
 import { toast } from "react-hot-toast";
 

@@ -22,6 +22,9 @@
     "react-hot-toast": "^2.6.0",
     "recharts": "^3.7.0",
     "tailwind-merge": "^3.4.0",
+    "thirdweb": "^5.118.1",
+    "viem": "^2.45.3",
+    "wagmi": "^3.4.3",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IPaymentProtocol} from "../interfaces/payment/IPaymentProtocol.sol";
 import {IPaymentEscrow} from "../interfaces/payment/IPaymentEscrow.sol";
 import {IRefundManager} from "../interfaces/payment/IRefundManager.sol";
@@ -13,6 +12,7 @@ import {IComplianceRules} from "../interfaces/compliance/IComplianceRules.sol";
 import {IIdentityRegistry} from "../interfaces/erc3643/IIdentityRegistry.sol";
 import {IParticipantTypeRegistry} from "../interfaces/erc3643/IParticipantTypeRegistry.sol";
 import {IInvestorRequestManager} from "../interfaces/investor/IInvestorRequestManager.sol";
+import {IERC3643} from "../interfaces/erc3643/IERC3643.sol";
 
 /**
  * @title RegShieldPaymentProtocol
@@ -23,7 +23,6 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
     /*//////////////////////////////////////////////////////////////
                            STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
-    IERC20 public immutable regToken;
     IPaymentEscrow public paymentEscrow;
     IRefundManager public refundManager;
     IDisputeResolver public disputeResolver;
@@ -49,6 +48,18 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
 
     /// @notice Milestone tracking for payments
     mapping(uint256 => MilestoneStatus) public paymentMilestones;
+
+    /// @notice Token addresses for each vehicle (assetToken + revenueToken)
+    struct VehicleTokens {
+        address assetToken;
+        address revenueToken;
+    }
+
+    /// @notice Mapping from vehicle ID to its token pair
+    mapping(uint256 => VehicleTokens) public vehicleTokens;
+
+    /// @notice Authorized operators that can call completeMilestone (e.g. CRE PaymentReceiver)
+    mapping(address => bool) public authorizedOperators;
 
     uint256 private _nextPaymentId = 1;
     uint256 public totalPayments;
@@ -96,11 +107,22 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
     /// @notice Emitted when investment funds are released
     event InvestmentFundsReleased(uint256 indexed paymentId, uint256 indexed vehicleId, uint256 amount);
 
+    /// @notice Emitted when tokens are minted to an investor after milestone completion
+    event InvestorTokensMinted(
+        uint256 indexed paymentId, uint256 indexed vehicleId, address indexed investor, uint256 amount
+    );
+
+    /// @notice Emitted when vehicle tokens are registered
+    event VehicleTokensRegistered(uint256 indexed vehicleId, address assetToken, address revenueToken);
+
     /// @notice Emitted when participant type registry is updated
     event ParticipantTypeRegistryUpdated(address indexed oldRegistry, address indexed newRegistry);
 
     /// @notice Emitted when investor request manager is updated
     event InvestorRequestManagerUpdated(address indexed oldManager, address indexed newManager);
+
+    /// @notice Emitted when an operator is authorized or revoked
+    event AuthorizedOperatorUpdated(address indexed operator, bool authorized);
 
     /*//////////////////////////////////////////////////////////////
                              MODIFIERS
@@ -126,16 +148,22 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
         _;
     }
 
+    modifier onlyOwnerOrOperator() {
+        if (msg.sender != owner() && !authorizedOperators[msg.sender]) {
+            revert PaymentProtocol__UnauthorizedOperator();
+        }
+        _;
+    }
+
     /*//////////////////////////////////////////////////////////////
                            CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
-    constructor(address _regToken, address _complianceRules, address _identityRegistry) Ownable(msg.sender) {
-        if (_regToken == address(0) || _complianceRules == address(0) || _identityRegistry == address(0)) {
+    constructor(address _complianceRules, address _identityRegistry) Ownable(msg.sender) {
+        if (_complianceRules == address(0) || _identityRegistry == address(0)) {
             revert PaymentProtocol__InvalidAddress();
         }
 
-        regToken = IERC20(_regToken);
         complianceRules = IComplianceRules(_complianceRules);
         identityRegistry = IIdentityRegistry(_identityRegistry);
 
@@ -144,8 +172,8 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
             confirmationPeriod: 24 hours,
             disputeWindow: 7 days,
             refundWindow: 30 days,
-            maxPaymentAmount: 50_000 * 10 ** 18,
-            minPaymentAmount: 1 * 10 ** 18,
+            maxPaymentAmount: 10 ether,
+            minPaymentAmount: 0.001 ether,
             escrowFeeRate: 10
         });
     }
@@ -174,9 +202,21 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
         disputeResolver = IDisputeResolver(_disputeResolver);
     }
 
+    /**
+     * @notice Authorize or revoke an operator for milestone completion
+     * @param operator Address to authorize (e.g. CRE PaymentReceiver)
+     * @param authorized Whether to grant or revoke access
+     */
+    function setAuthorizedOperator(address operator, bool authorized) external onlyOwner {
+        if (operator == address(0)) revert PaymentProtocol__InvalidAddress();
+        authorizedOperators[operator] = authorized;
+        emit AuthorizedOperatorUpdated(operator, authorized);
+    }
+
     /// @inheritdoc IPaymentProtocol
     function initiatePayment(address payee, uint256 amount, string calldata reason)
         external
+        payable
         override
         nonReentrant
         whenNotPaused
@@ -198,12 +238,9 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
         uint256 escrowFee = (amount * paymentSettings.escrowFeeRate) / FEE_RATE_DENOMINATOR;
         uint256 totalAmount = amount + escrowFee;
 
-        // Check payer's token balance and allowance
-        if (regToken.balanceOf(msg.sender) <= totalAmount) {
+        // Check payer's ETH value
+        if (msg.value < totalAmount) {
             revert PaymentProtocol__InsufficientBalance();
-        }
-        if (regToken.allowance(msg.sender, address(this)) < totalAmount) {
-            revert PaymentProtocol__InsufficientAllowance();
         }
 
         // Create payment record
@@ -223,20 +260,16 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
         payment.paymentReason = reason;
         payment.escrowAmount = totalAmount;
 
-        // Transfer tokens from payer to this contract, then to escrow
-        bool sent = regToken.transferFrom(msg.sender, address(this), totalAmount);
-        if (!sent) {
-            revert PaymentProtocol__TokenTransferFailed();
-        }
-        bool escrowed = regToken.transfer(address(paymentEscrow), totalAmount);
-        if (!escrowed) {
-            revert PaymentProtocol__TokenTransferFailed();
-        }
-
-        // Create escrow
-        paymentEscrow.createEscrow(
+        // Forward ETH to escrow
+        paymentEscrow.createEscrow{value: totalAmount}(
             paymentId, msg.sender, payee, amount, paymentSettings.confirmationPeriod + paymentSettings.disputeWindow
         );
+
+        // Refund excess ETH
+        if (msg.value > totalAmount) {
+            (bool refunded,) = payable(msg.sender).call{value: msg.value - totalAmount}("");
+            if (!refunded) revert PaymentProtocol__ETHTransferFailed();
+        }
 
         // Update mappings
         _payerPayments[msg.sender].push(paymentId);
@@ -449,6 +482,22 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
     }
 
     /**
+     * @notice Register token pair for a vehicle
+     * @param vehicleId ID of the vehicle
+     * @param _assetToken Address of the vehicle's AssetToken
+     * @param _revenueToken Address of the vehicle's RevenueToken
+     */
+    function registerVehicleTokens(uint256 vehicleId, address _assetToken, address _revenueToken) external onlyOwner {
+        if (_assetToken == address(0) || _revenueToken == address(0)) {
+            revert PaymentProtocol__InvalidAddress();
+        }
+
+        vehicleTokens[vehicleId] = VehicleTokens({assetToken: _assetToken, revenueToken: _revenueToken});
+
+        emit VehicleTokensRegistered(vehicleId, _assetToken, _revenueToken);
+    }
+
+    /**
      * @notice Initiate investment payment for a vehicle
      * @param vehicleId ID of the vehicle to invest in
      * @param rentor Address of the vehicle owner (payee)
@@ -458,6 +507,7 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
      */
     function initiateVehicleInvestment(uint256 vehicleId, address rentor, uint256 amount, string calldata reason)
         external
+        payable
         nonReentrant
         whenNotPaused
         returns (uint256 paymentId)
@@ -478,12 +528,9 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
         uint256 escrowFee = (amount * paymentSettings.escrowFeeRate) / FEE_RATE_DENOMINATOR;
         uint256 totalAmount = amount + escrowFee;
 
-        // Check investor's token balance and allowance
-        if (regToken.balanceOf(msg.sender) <= totalAmount) {
+        // Check investor's ETH value
+        if (msg.value < totalAmount) {
             revert PaymentProtocol__InsufficientBalance();
-        }
-        if (regToken.allowance(msg.sender, address(this)) < totalAmount) {
-            revert PaymentProtocol__InsufficientAllowance();
         }
 
         // Create payment record
@@ -503,20 +550,16 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
         payment.paymentReason = reason;
         payment.escrowAmount = totalAmount;
 
-        // Transfer tokens to escrow
-        bool sent = regToken.transferFrom(msg.sender, address(this), totalAmount);
-        if (!sent) {
-            revert PaymentProtocol__TokenTransferFailed();
-        }
-        bool escrowed = regToken.transfer(address(paymentEscrow), totalAmount);
-        if (!escrowed) {
-            revert PaymentProtocol__TokenTransferFailed();
-        }
-
-        // Create escrow
-        paymentEscrow.createEscrow(
+        // Forward ETH to escrow
+        paymentEscrow.createEscrow{value: totalAmount}(
             paymentId, msg.sender, rentor, amount, paymentSettings.confirmationPeriod + paymentSettings.disputeWindow
         );
+
+        // Refund excess ETH
+        if (msg.value > totalAmount) {
+            (bool refunded,) = payable(msg.sender).call{value: msg.value - totalAmount}("");
+            if (!refunded) revert PaymentProtocol__ETHTransferFailed();
+        }
 
         // Initialize milestone tracking
         paymentMilestones[paymentId].vehicleId = vehicleId;
@@ -549,7 +592,7 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
     function completeMilestone(uint256 paymentId, string calldata milestone)
         external
         validPaymentId(paymentId)
-        onlyOwner
+        onlyOwnerOrOperator
     {
         MilestoneStatus storage milestones = paymentMilestones[paymentId];
 
@@ -665,7 +708,7 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
     }
 
     /**
-     * @dev Release funds after milestone completion
+     * @dev Release funds after milestone completion and mint tokens to investor
      */
     function _releaseMilestoneFunds(uint256 paymentId) internal {
         MilestoneStatus storage milestones = paymentMilestones[paymentId];
@@ -683,8 +726,30 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
         // Release funds from escrow
         paymentEscrow.releaseEscrow(paymentId);
 
+        // Mint AssetToken + RevenueToken to investor
+        _mintInvestorTokens(paymentId, milestones.vehicleId, payment.payer, payment.amount);
+
         emit InvestmentFundsReleased(paymentId, milestones.vehicleId, payment.amount);
         emit PaymentConfirmed(paymentId, payment.payee, block.timestamp);
+    }
+
+    /**
+     * @dev Mint AssetToken and RevenueToken to the investor proportional to their investment
+     */
+    function _mintInvestorTokens(uint256 paymentId, uint256 vehicleId, address investor, uint256 amount) internal {
+        VehicleTokens storage tokens = vehicleTokens[vehicleId];
+
+        // Only mint if tokens are registered for this vehicle
+        if (tokens.assetToken == address(0) || tokens.revenueToken == address(0)) {
+            return;
+        }
+
+        // Mint equal amounts of AssetToken and RevenueToken
+        // Amount corresponds to the investment amount (1:1 with payment token)
+        IERC3643(tokens.assetToken).mint(investor, amount);
+        IERC3643(tokens.revenueToken).mint(investor, amount);
+
+        emit InvestorTokensMinted(paymentId, vehicleId, investor, amount);
     }
 
     /**

@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { InvestmentCard, InvestmentCardSkeleton } from "@/src/components/investor";
-import { InvestmentModal } from "@/src/components/investor";
-import { Heading, Paragraph } from "@/src/components/ui";
-import { generateMockVehicles } from "@/src/lib/mockData";
-import { Vehicle } from "@/src/types";
+import { InvestmentCard, InvestmentCardSkeleton } from "@/components/investor";
+import { InvestmentModal } from "@/components/investor";
+import { Heading, Paragraph, Badge } from "@/components/ui";
+import { generateMockVehicles } from "@/lib/mockData";
+import { Vehicle } from "@/types";
+import { useAccount } from "wagmi";
 
 export default function InvestorMarketplace() {
+  const { isConnected } = useAccount();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
@@ -46,12 +48,31 @@ export default function InvestorMarketplace() {
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <Heading as="h1" className="mb-2">
-          Investment Marketplace
-        </Heading>
-        <Paragraph className="text-lg">
-          Browse and invest in rental vehicles to earn passive income
-        </Paragraph>
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <Heading as="h1" className="mb-2">
+              Investment Marketplace
+            </Heading>
+            <Paragraph className="text-lg">
+              Browse and invest in rental vehicles to earn passive income
+            </Paragraph>
+          </div>
+          {isConnected && (
+            <Badge variant="success" className="mt-2">
+              🔗 Wallet Connected
+            </Badge>
+          )}
+        </div>
+
+        {/* Wallet Connection Notice */}
+        {!isConnected && (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              💡 <strong>Tip:</strong> Connect your wallet to invest on-chain and track your investments
+              in real-time on the blockchain.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Investment Opportunities Grid */}

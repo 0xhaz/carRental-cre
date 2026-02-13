@@ -1,5 +1,5 @@
 import apiClient from "./axios";
-import { Vehicle } from "@/src/types";
+import { Vehicle } from "@/types";
 
 export const vehicleApi = {
   // Get all vehicles (for browsing)

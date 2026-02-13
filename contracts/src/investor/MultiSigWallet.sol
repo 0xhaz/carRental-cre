@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity ^0.8.20;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -19,7 +18,6 @@ contract MultiSigWallet is Ownable, ReentrancyGuard {
     error MultiSigWallet__OnlyBankCanCall();
     error MultiSigWallet__InvalidBankAddress();
     error MultiSigWallet__InvalidUserAddress();
-    error MultiSigWallet__InvalidTokenAddress();
     error MultiSigWallet__InvalidAmount();
     error MultiSigWallet__BankAndUserCannotBeSame();
     error MultiSigWallet__OnlyUserCanLockTokens();
@@ -34,13 +32,13 @@ contract MultiSigWallet is Ownable, ReentrancyGuard {
     error MultiSigWallet__BankSignatureMissing();
     error MultiSigWallet__UserSignatureMissing();
     error MultiSigWallet__InsufficientLockedBalance();
+    error MultiSigWallet__ETHTransferFailed();
     /*//////////////////////////////////////////////////////////////
                         STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
 
     address public immutable bank;
     address public immutable user;
-    address public immutable token;
 
     uint256 public lockedAmount;
 
@@ -71,15 +69,12 @@ contract MultiSigWallet is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _user, address _bank, address _token) Ownable(msg.sender) {
+    constructor(address _user, address _bank) Ownable(msg.sender) {
         if (_bank == address(0)) {
             revert MultiSigWallet__InvalidBankAddress();
         }
         if (_user == address(0)) {
             revert MultiSigWallet__InvalidUserAddress();
-        }
-        if (_token == address(0)) {
-            revert MultiSigWallet__InvalidTokenAddress();
         }
         if (_bank == _user) {
             revert MultiSigWallet__BankAndUserCannotBeSame();
@@ -87,34 +82,29 @@ contract MultiSigWallet is Ownable, ReentrancyGuard {
 
         bank = _bank;
         user = _user;
-        token = _token;
     }
 
     /*//////////////////////////////////////////////////////////////
                         EXTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     /**
-     * @dev Lock tokens in the multi-signature wallet
-     * @param amount The amount of tokens to lock
-     * @notice Only user can lock tokens
+     * @dev Lock ETH in the multi-signature wallet
+     * @notice Only user can lock funds. Send ETH with the call.
      */
-    function lockTokens(uint256 amount) external nonReentrant {
+    function lockFunds() external payable nonReentrant {
         if (msg.sender != user) {
             revert MultiSigWallet__OnlyUserCanLockTokens();
         }
-        if (amount == 0) {
+        if (msg.value == 0) {
             revert MultiSigWallet__InvalidAmount();
         }
         if (lockedAmount != 0) {
             revert MultiSigWallet__TokensAlreadyLocked();
         }
 
-        (bool success) = IERC20(token).transferFrom(msg.sender, address(this), amount);
-        require(success, "Token transfer failed");
+        lockedAmount = msg.value;
 
-        lockedAmount = amount;
-
-        emit TokensLocked(user, amount, block.timestamp);
+        emit TokensLocked(user, msg.value, block.timestamp);
     }
 
     /**
@@ -262,16 +252,15 @@ contract MultiSigWallet is Ownable, ReentrancyGuard {
      * @dev Get wallet status
      * @return bankAddress Bank address
      * @return userAddress User address
-     * @return tokenAddress Token address
      * @return locked Locked amount
-     * @return balance Wallet balance
+     * @return balance Wallet ETH balance
      */
     function getWalletStatus()
         external
         view
-        returns (address bankAddress, address userAddress, address tokenAddress, uint256 locked, uint256 balance)
+        returns (address bankAddress, address userAddress, uint256 locked, uint256 balance)
     {
-        return (bank, user, token, lockedAmount, IERC20(token).balanceOf(address(this)));
+        return (bank, user, lockedAmount, address(this).balance);
     }
 
     /**
@@ -305,15 +294,20 @@ contract MultiSigWallet is Ownable, ReentrancyGuard {
         if (!proposal.bankSigned) revert MultiSigWallet__BankSignatureMissing();
         if (!proposal.userSigned) revert MultiSigWallet__UserSignatureMissing();
         if (proposal.executed) revert MultiSigWallet__ProposalAlreadyExecuted();
-        if (proposal.amount >= lockedAmount) revert MultiSigWallet__InsufficientLockedBalance();
+        if (proposal.amount > lockedAmount) revert MultiSigWallet__InsufficientLockedBalance();
 
         proposal.executed = true;
 
         lockedAmount -= proposal.amount;
 
-        (bool success) = IERC20(token).transfer(proposal.recipient, proposal.amount);
-        require(success, "Token transfer failed");
+        (bool success,) = payable(proposal.recipient).call{value: proposal.amount}("");
+        if (!success) revert MultiSigWallet__ETHTransferFailed();
 
         emit TokensUnlocked(proposalId, proposal.recipient, proposal.amount);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                        RECEIVE ETH
+    //////////////////////////////////////////////////////////////*/
+    receive() external payable {}
 }

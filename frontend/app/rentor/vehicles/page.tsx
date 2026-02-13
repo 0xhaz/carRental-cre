@@ -2,29 +2,39 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { VehicleManagementCard, VehicleManagementCardSkeleton, AddVehicleModal } from "@/src/components/rentor";
-import { Heading, Paragraph, Button, Badge } from "@/src/components/ui";
-import { generateMockVehicles } from "@/src/lib/mockData";
-import { Vehicle } from "@/src/types";
+import { VehicleManagementCard, VehicleManagementCardSkeleton, AddVehicleModal } from "@/components/rentor";
+import { Heading, Paragraph, Button, Badge } from "@/components/ui";
+import { Vehicle } from "@/types";
 import { toast } from "react-hot-toast";
+import { useCanRentorAct } from "@/hooks/useComplianceStatus";
+import { vehicleApi } from "@/lib/api";
 import Link from "next/link";
 
 export default function RentorVehicles() {
   const router = useRouter();
+  const { canAct: canAddVehicle, reason: complianceReason } = useCanRentorAct();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  useEffect(() => {
-    const loadVehicles = async () => {
-      setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+  const loadVehicles = async () => {
+    setIsLoading(true);
+    try {
+      const response = await vehicleApi.getRentorVehicles();
 
-      const mockVehicles = generateMockVehicles(8);
-      setVehicles(mockVehicles);
+      if (response.success) {
+        setVehicles(response.data || []);
+      }
+    } catch (error: any) {
+      console.error("Failed to load vehicles:", error);
+      toast.error(error.response?.data?.message || "Failed to load vehicles");
+      setVehicles([]);
+    } finally {
       setIsLoading(false);
-    };
+    }
+  };
 
+  useEffect(() => {
     loadVehicles();
   }, []);
 
@@ -47,19 +57,17 @@ export default function RentorVehicles() {
   const availableCount = vehicles.filter((v) => v.isAvailable).length;
   const fundraisingCount = vehicles.filter((v) => v.fundraising?.active).length;
 
+  const handleAddVehicleClick = () => {
+    if (!canAddVehicle) {
+      toast.error(complianceReason || "Please complete verification first");
+      return;
+    }
+    setShowAddModal(true);
+  };
+
   const handleAddVehicleSuccess = () => {
-    // In a real app, this would refetch the vehicles list
-    // Simulate refetch
-    setTimeout(() => {
-      const loadVehicles = async () => {
-        setIsLoading(true);
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        const mockVehicles = generateMockVehicles(vehicles.length + 1);
-        setVehicles(mockVehicles);
-        setIsLoading(false);
-      };
-      loadVehicles();
-    }, 500);
+    // Refetch the vehicles list
+    loadVehicles();
   };
 
   return (
@@ -75,8 +83,8 @@ export default function RentorVehicles() {
               Manage your fleet of vehicles
             </Paragraph>
           </div>
-          <Button onClick={() => setShowAddModal(true)}>
-            Add New Vehicle
+          <Button onClick={handleAddVehicleClick} disabled={!canAddVehicle}>
+            {canAddVehicle ? "Add New Vehicle" : "Verification Required"}
           </Button>
         </div>
       </div>
@@ -132,9 +140,10 @@ export default function RentorVehicles() {
             </Paragraph>
             <Button
               className="mt-4"
-              onClick={() => setShowAddModal(true)}
+              onClick={handleAddVehicleClick}
+              disabled={!canAddVehicle}
             >
-              Add Your First Vehicle
+              {canAddVehicle ? "Add Your First Vehicle" : "Complete Verification First"}
             </Button>
           </div>
         )}

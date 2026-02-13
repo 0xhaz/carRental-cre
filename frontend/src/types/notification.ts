@@ -14,6 +14,9 @@ export type NotificationType =
   | "revenue_distributed"
   | "campaign_funded"
   | "vehicle_available"
+  | "kyc_approved"
+  | "kyc_rejected"
+  | "kyc_expired"
   | "system_update";
 
 export interface Notification {

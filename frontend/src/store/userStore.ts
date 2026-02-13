@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { User, UserRole } from "@/src/types";
-import { authApi, type LoginCredentials, type RegisterData } from "@/src/lib/api";
+import type { User, UserRole } from "@/types";
+import { authApi, type LoginCredentials, type RegisterData } from "@/lib/api";
 import { toast } from "react-hot-toast";
 
 interface UserState {
@@ -143,7 +143,7 @@ export const useUserStore = create<UserState>()(
         });
         localStorage.removeItem("token");
         localStorage.removeItem("user");
-        toast.success("Logged out successfully");
+        // Toast is handled by the component calling this function
       },
 
       updateUser: (updates) =>

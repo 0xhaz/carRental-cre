@@ -54,6 +54,21 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
     /// @notice Authorized revenue sources (RentalOperations, PaymentProtocol)
     mapping(address => bool) public authorizedSources;
 
+    /// @notice Cumulative revenue per token (scaled by PRECISION) per vehicle
+    mapping(uint256 => uint256) private _revenuePerTokenAccumulated;
+
+    /// @notice Snapshot of revenuePerToken at the time a holder last claimed
+    mapping(uint256 => mapping(address => uint256)) private _holderRevenueCheckpoint;
+
+    /// @notice Total claimed by each holder per vehicle
+    mapping(uint256 => mapping(address => uint256)) private _holderTotalClaimed;
+
+    /// @notice Unclaimed revenue pool per vehicle (held for pull claims)
+    mapping(uint256 => uint256) private _unclaimedPool;
+
+    /// @notice Precision multiplier for revenue-per-token calculations
+    uint256 private constant PRECISION = 1e18;
+
     /// @notice Basis points denominator (10000 = 100%)
     uint256 public constant BASIS_POINTS = 10000;
 
@@ -357,41 +372,114 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
         return _vehicleRevenue[vehicleId].revenueToken != address(0);
     }
 
+    /// @inheritdoc IRevenueDistributor
+    function getClaimableRevenue(uint256 vehicleId, address holder) external view override returns (uint256 claimable) {
+        return _calculateClaimable(vehicleId, holder);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        CLAIM FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @inheritdoc IRevenueDistributor
+    function claimRevenue(uint256 vehicleId)
+        external
+        override
+        nonReentrant
+        vehicleRegistered(vehicleId)
+        returns (uint256 amount)
+    {
+        amount = _processClaimForHolder(vehicleId, msg.sender);
+        if (amount == 0) {
+            revert RevenueDistributor__NothingToClaim();
+        }
+    }
+
+    /// @inheritdoc IRevenueDistributor
+    function batchClaimRevenue(uint256[] memory vehicleIds)
+        external
+        override
+        nonReentrant
+        returns (uint256 totalClaimed)
+    {
+        for (uint256 i = 0; i < vehicleIds.length; i++) {
+            if (_vehicleRevenue[vehicleIds[i]].revenueToken != address(0)) {
+                totalClaimed += _processClaimForHolder(vehicleIds[i], msg.sender);
+            }
+        }
+
+        if (totalClaimed == 0) {
+            revert RevenueDistributor__NothingToClaim();
+        }
+    }
+
     /*//////////////////////////////////////////////////////////////
                         INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Distribute revenue to token holders proportionally
-     * @dev This is a simplified version - in production, use pull pattern or batching
+     * @notice Record revenue distribution using revenue-per-token accumulator
+     * @dev Uses the "dividend per share" pattern — no iteration over holders needed.
+     *      Each call increases _revenuePerTokenAccumulated. Holders claim their
+     *      proportional share later via claimRevenue().
      */
     function _distributeToHolders(uint256 vehicleId, IRevenueToken revenueToken, uint256 totalAmount)
         internal
         returns (uint256 recipientCount)
     {
-        // Get total supply
         uint256 totalSupply = revenueToken.totalSupply();
 
-        // In a real implementation, you would:
-        // 1. Get all token holders (from events or indexer)
-        // 2. Calculate each holder's share
-        // 3. Either push payments or allow holders to pull their share
+        // Increase cumulative revenue-per-token
+        _revenuePerTokenAccumulated[vehicleId] += (totalAmount * PRECISION) / totalSupply;
 
-        // For this PoC, we'll record the distribution in the RevenueToken
-        // and allow holders to claim later (pull pattern)
+        // Track unclaimed pool
+        _unclaimedPool[vehicleId] += totalAmount;
 
-        // Record distribution in RevenueToken contract
-        // Note: This assumes RevenueToken has a function to record distributions
-        // For now, we'll just emit events
-
-        // This is a placeholder - actual implementation would iterate through holders
-        // and either push payments or allow pull claims
-
-        // For demonstration, return 1 (would be actual holder count)
+        // recipientCount is total holders — we don't know exact count on-chain,
+        // but totalSupply > 0 guarantees at least 1
         recipientCount = 1;
 
-        // Emit event for tracking
         emit IndividualDistribution(vehicleId, address(revenueToken), totalAmount, totalSupply, block.timestamp);
+    }
+
+    /**
+     * @notice Calculate claimable revenue for a holder
+     */
+    function _calculateClaimable(uint256 vehicleId, address holder) internal view returns (uint256) {
+        address revenueTokenAddr = _vehicleRevenue[vehicleId].revenueToken;
+        if (revenueTokenAddr == address(0)) return 0;
+
+        IRevenueToken revenueToken = IRevenueToken(revenueTokenAddr);
+        uint256 holderBalance = revenueToken.balanceOf(holder);
+        if (holderBalance == 0) return 0;
+
+        uint256 revenuePerToken = _revenuePerTokenAccumulated[vehicleId];
+        uint256 checkpoint = _holderRevenueCheckpoint[vehicleId][holder];
+
+        if (revenuePerToken <= checkpoint) return 0;
+
+        return (holderBalance * (revenuePerToken - checkpoint)) / PRECISION;
+    }
+
+    /**
+     * @notice Process claim for a specific holder and vehicle
+     */
+    function _processClaimForHolder(uint256 vehicleId, address holder) internal returns (uint256 amount) {
+        amount = _calculateClaimable(vehicleId, holder);
+        if (amount == 0) return 0;
+
+        // Update checkpoint to current accumulator
+        _holderRevenueCheckpoint[vehicleId][holder] = _revenuePerTokenAccumulated[vehicleId];
+        _holderTotalClaimed[vehicleId][holder] += amount;
+
+        // Decrease unclaimed pool
+        _unclaimedPool[vehicleId] -= amount;
+
+        // Record distribution in RevenueToken for tracking
+        IRevenueToken revenueToken = IRevenueToken(_vehicleRevenue[vehicleId].revenueToken);
+        revenueToken.recordRevenueDistribution(holder, amount);
+
+        emit RevenueClaimed(vehicleId, holder, amount, block.timestamp);
     }
 
     /**

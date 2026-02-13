@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { Card, Button, Input, Select } from "@/src/components/ui";
+import { Card, Button, Input, Select } from "@/components/ui";
 import { toast } from "react-hot-toast";
-import { cityList } from "@/public/assets/assets";
+import { cityList } from "@/constants/menuLinks";
 
 export interface AddVehicleModalProps {
   onClose: () => void;

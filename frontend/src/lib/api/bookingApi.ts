@@ -1,5 +1,5 @@
 import apiClient from "./axios";
-import { Booking } from "@/src/types";
+import { Booking } from "@/types";
 
 export interface CreateBookingData {
   carId: string;

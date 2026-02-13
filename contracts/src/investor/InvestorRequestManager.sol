@@ -44,6 +44,12 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
     error InvestorRequestManager__IndexOutOfBounds();
     error InvestorRequestManager__InvalidPaymentProtocol();
     error InvestorRequestManager__UnauthorizedCaller();
+    error InvestorRequestManager__MultiSigNotRequired();
+    error InvestorRequestManager__DirectLockOnly();
+    error InvestorRequestManager__IncorrectLockAmount();
+    error InvestorRequestManager__NoDirectLockFound();
+    error InvestorRequestManager__ETHTransferFailed();
+    error InvestorRequestManager__RequestNotFinalized();
     /*//////////////////////////////////////////////////////////////
                                 ENUMS
     //////////////////////////////////////////////////////////////*/
@@ -101,9 +107,6 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
     /// @notice Banking Institution address
     address public immutable bank;
 
-    /// @notice Security Token address
-    address public immutable token;
-
     /// @notice Identity Registry integration
     IIdentityRegistry public immutable identityRegistry;
 
@@ -118,6 +121,9 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
 
     /// @notice Mapping to track if a user has an active request
     mapping(address => bool) public hasActiveRequest;
+
+    /// @notice Direct ETH locks for RETAIL investors (bypasses MultiSigWallet)
+    mapping(address => uint256) public directLocks;
 
     /// @notice Mapping to track investment per vehicle per investor
     mapping(address => mapping(uint256 => uint256)) public vehicleInvestments;
@@ -145,7 +151,7 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
     /// @notice Emitted when tokens are locked in the multi-signature wallet
     event TokensLocked(address indexed user, address indexed wallet, uint256 amount, uint256 timestamp);
 
-    /// @notice Emitted when tokens are unlocked in the multi-signature wallet
+    /// @notice Emitted when an investor request is approved
     event InvestorRequestApproved(
         address indexed user, IInvestorTypeRegistry.InvestorType investorType, uint256 timestamp
     );
@@ -178,24 +184,26 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
     /// @notice Emitted when payment protocol is updated
     event PaymentProtocolUpdated(address indexed oldProtocol, address indexed newProtocol);
 
+    /// @notice Emitted when RETAIL investor locks ETH directly
+    event DirectFundsLocked(address indexed user, uint256 amount, uint256 timestamp);
+
+    /// @notice Emitted when RETAIL investor withdraws direct lock after finalization
+    event DirectFundsWithdrawn(address indexed user, uint256 amount, uint256 timestamp);
+
     /*//////////////////////////////////////////////////////////////
                         CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
     /**
      * @dev Constructor to initialize the InvestorRequestManager contract
      * @param _bank Address of the banking institution
-     * @param _token Address of the security token
      * @param _investorRegistry Address of the Investor Type Registry contract
      * @param _identityRegistry Address of the Identity Registry contract
      */
-    constructor(address _bank, address _token, address _investorRegistry, address _identityRegistry)
+    constructor(address _bank, address _investorRegistry, address _identityRegistry)
         Ownable(msg.sender)
     {
         if (_bank == address(0)) {
             revert InvestorRequestManager__InvalidBankAddress();
-        }
-        if (_token == address(0)) {
-            revert InvestorRequestManager__InvalidTokenAddress();
         }
         if (_investorRegistry == address(0)) {
             revert InvestorRequestManager__InvalidInvestorRegistry();
@@ -205,7 +213,6 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
         }
 
         bank = _bank;
-        token = _token;
         investorRegistry = IInvestorTypeRegistry(_investorRegistry);
         identityRegistry = IIdentityRegistry(_identityRegistry);
 
@@ -223,9 +230,6 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
     function requestInvestorStatus(IInvestorTypeRegistry.InvestorType requestedType) external nonReentrant {
         if (requestedType == IInvestorTypeRegistry.InvestorType.NORMAL) {
             revert InvestorRequestManager__CannotRequestNormalType();
-        }
-        if (uint8(requestedType) <= uint8(IInvestorTypeRegistry.InvestorType.INSTITUTIONAL)) {
-            revert InvestorRequestManager__InvalidInvestorType();
         }
         if (hasActiveRequest[msg.sender]) {
             revert InvestorRequestManager__ActiveRequestExists();
@@ -267,11 +271,64 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Create multi-signature wallet for investor
+     * @dev Lock ETH directly for RETAIL investors (simple 2-step flow)
+     * @notice RETAIL investors send ETH here instead of using MultiSigWallet
+     * @notice Advances status from PENDING directly to TOKENSLOCKED
+     */
+    function lockFundsDirect() external payable nonReentrant {
+        InvestorRequest storage request = requests[msg.sender];
+        if (request.status != RequestStatus.PENDING) {
+            revert InvestorRequestManager__InvalidRequestStatus();
+        }
+        if (request.requestedType != IInvestorTypeRegistry.InvestorType.RETAIL) {
+            revert InvestorRequestManager__DirectLockOnly();
+        }
+        if (msg.value < request.requiredLockAmount) {
+            revert InvestorRequestManager__IncorrectLockAmount();
+        }
+
+        // Refund excess ETH
+        uint256 excess = msg.value - request.requiredLockAmount;
+        directLocks[msg.sender] = request.requiredLockAmount;
+
+        // Skip WALLETCREATED — advance directly to TOKENSLOCKED
+        request.status = RequestStatus.TOKENSLOCKED;
+
+        if (excess > 0) {
+            (bool success,) = payable(msg.sender).call{value: excess}("");
+            if (!success) revert InvestorRequestManager__ETHTransferFailed();
+        }
+
+        emit DirectFundsLocked(msg.sender, request.requiredLockAmount, block.timestamp);
+    }
+
+    /**
+     * @dev Withdraw direct lock after request is APPROVED or REJECTED
+     * @notice Only for RETAIL investors who used lockFundsDirect
+     */
+    function withdrawDirectLock() external nonReentrant {
+        uint256 locked = directLocks[msg.sender];
+        if (locked == 0) revert InvestorRequestManager__NoDirectLockFound();
+
+        InvestorRequest storage request = requests[msg.sender];
+        if (request.status != RequestStatus.APPROVED && request.status != RequestStatus.REJECTED) {
+            revert InvestorRequestManager__RequestNotFinalized();
+        }
+
+        directLocks[msg.sender] = 0;
+
+        (bool success,) = payable(msg.sender).call{value: locked}("");
+        if (!success) revert InvestorRequestManager__ETHTransferFailed();
+
+        emit DirectFundsWithdrawn(msg.sender, locked, block.timestamp);
+    }
+
+    /**
+     * @dev Create multi-signature wallet for investor (ACCREDITED/INSTITUTIONAL only)
      * @param user Address of the investor
      */
     function createMultiSigWallet(address user) external nonReentrant {
-        if (msg.sender != bank || msg.sender != owner()) {
+        if (msg.sender != bank && msg.sender != owner()) {
             revert InvestorRequestManager__OnlyBankCanCreateWallet();
         }
 
@@ -279,12 +336,15 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
         if (request.status != RequestStatus.PENDING) {
             revert InvestorRequestManager__InvalidRequestStatus();
         }
+        if (request.requestedType == IInvestorTypeRegistry.InvestorType.RETAIL) {
+            revert InvestorRequestManager__MultiSigNotRequired();
+        }
         if (request.multiSigWallet != address(0)) {
             revert InvestorRequestManager__WalletAlreadyCreated();
         }
 
         // Create multi-signature wallet
-        MultiSigWallet wallet = new MultiSigWallet(bank, user, token);
+        MultiSigWallet wallet = new MultiSigWallet(user, bank);
 
         // Update request
         request.multiSigWallet = address(wallet);
@@ -294,8 +354,9 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Confirm tokens locked (called after user locks tokens)
-     * @notice User must approve tokens and call lockTokens on MultiSigWallet first
+     * @dev Confirm tokens locked (ACCREDITED/INSTITUTIONAL only)
+     * @notice User must call lockFunds on MultiSigWallet first, then call this to confirm
+     * @notice RETAIL investors use lockFundsDirect() instead
      */
     function confirmTokensLocked() external nonReentrant {
         InvestorRequest storage request = requests[msg.sender];
@@ -306,11 +367,11 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
             revert InvestorRequestManager__NoWalletAssigned();
         }
 
-        // Verify tokens are locked in the multi-sig wallet
-        MultiSigWallet wallet = MultiSigWallet(request.multiSigWallet);
+        // Verify funds are locked in the multi-sig wallet
+        MultiSigWallet wallet = MultiSigWallet(payable(request.multiSigWallet));
         uint256 lockedAmount = wallet.getLockedBalance();
 
-        if (lockedAmount <= request.requiredLockAmount) {
+        if (lockedAmount < request.requiredLockAmount) {
             revert InvestorRequestManager__InsufficientLockedTokens();
         }
 
@@ -320,11 +381,11 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Approve investor request (bank only)
+     * @dev Approve investor request (bank/owner only)
      * @param user Address of the investor to approve
      */
     function approveRequest(address user) external nonReentrant {
-        if (msg.sender != bank || msg.sender != owner()) {
+        if (msg.sender != bank && msg.sender != owner()) {
             revert InvestorRequestManager__OnlyBankCanApprove();
         }
 
@@ -333,10 +394,18 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
             revert InvestorRequestManager__TokensNotLocked();
         }
 
-        // Verify tokens are still locked
-        MultiSigWallet wallet = MultiSigWallet(request.multiSigWallet);
-        if (wallet.getLockedBalance() <= request.requiredLockAmount) {
-            revert InvestorRequestManager__TokensNoLongerLocked();
+        // Verify funds are still locked — tiered check
+        if (request.requestedType == IInvestorTypeRegistry.InvestorType.RETAIL) {
+            // RETAIL: check direct lock balance
+            if (directLocks[user] < request.requiredLockAmount) {
+                revert InvestorRequestManager__TokensNoLongerLocked();
+            }
+        } else {
+            // ACCREDITED/INSTITUTIONAL: check MultiSigWallet balance
+            MultiSigWallet wallet = MultiSigWallet(payable(request.multiSigWallet));
+            if (wallet.getLockedBalance() < request.requiredLockAmount) {
+                revert InvestorRequestManager__TokensNoLongerLocked();
+            }
         }
 
         // Assign investor type
@@ -356,7 +425,7 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
      * @param reason Reason for rejection
      */
     function rejectRequest(address user, string calldata reason) external {
-        if (msg.sender != bank || msg.sender != owner()) {
+        if (msg.sender != bank && msg.sender != owner()) {
             revert InvestorRequestManager__OnlyBankCanReject();
         }
         if (bytes(reason).length == 0) {
@@ -366,7 +435,7 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
         InvestorRequest storage request = requests[user];
         if (
             request.status != RequestStatus.PENDING && request.status != RequestStatus.WALLETCREATED
-                || request.status != RequestStatus.TOKENSLOCKED
+                && request.status != RequestStatus.TOKENSLOCKED
         ) {
             revert InvestorRequestManager__InvalidRequestStatus();
         }
@@ -463,14 +532,15 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
      * @notice Aligned with ARCHITECTURE.md specifications for rental car platform
      */
     function _initializeLockRequirements() private {
-        // Type 1: Retail Accredited Investor - Min: $1,000, Max: $50,000 per vehicle
-        lockRequirements[IInvestorTypeRegistry.InvestorType.RETAIL] = 1_000 * 10 ** 18; // 1,000 tokens (represents $1,000)
+        // ETH-denominated lock requirements for testnet demos
+        // Type 1: Retail Accredited Investor
+        lockRequirements[IInvestorTypeRegistry.InvestorType.RETAIL] = 0.01 ether;
 
-        // Type 2: Institutional Investor - Min: $50,000, Max: $500,000 per fleet
-        lockRequirements[IInvestorTypeRegistry.InvestorType.ACCREDITED] = 50_000 * 10 ** 18; // 50,000 tokens
+        // Type 2: Institutional Investor
+        lockRequirements[IInvestorTypeRegistry.InvestorType.ACCREDITED] = 0.1 ether;
 
-        // Type 3: Strategic Partner - Min: $500,000, Max: Unlimited
-        lockRequirements[IInvestorTypeRegistry.InvestorType.INSTITUTIONAL] = 500_000 * 10 ** 18; // 500,000 tokens
+        // Type 3: Strategic Partner
+        lockRequirements[IInvestorTypeRegistry.InvestorType.INSTITUTIONAL] = 1 ether;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -567,22 +637,22 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
         uint256 currentVehicleInvestment = vehicleInvestments[investor][vehicleId];
         uint256 newVehicleInvestment = currentVehicleInvestment + amount;
 
-        // Type 1: Retail Accredited - Max $50,000 per vehicle
+        // ETH-denominated investment limits for testnet demos
+        // Type 1: Retail Accredited - Min 0.001 ETH, Max 1 ETH per vehicle
         if (investorType == IInvestorTypeRegistry.InvestorType.RETAIL) {
-            if (amount < 1_000 * 10 ** 18) return (false, 1); // Min $1,000
-            if (newVehicleInvestment > 50_000 * 10 ** 18) return (false, 2); // Max $50,000
+            if (amount < 0.001 ether) return (false, 1);
+            if (newVehicleInvestment > 1 ether) return (false, 2);
         }
-        // Type 2: Institutional - Max $500,000 per fleet
+        // Type 2: Institutional - Min 0.1 ETH, Max 10 ETH total
         else if (investorType == IInvestorTypeRegistry.InvestorType.ACCREDITED) {
-            if (amount < 50_000 * 10 ** 18) return (false, 3); // Min $50,000
-            if (totalInvestment[investor] + amount > 500_000 * 10 ** 18) {
-                return (false, 4); // Max $500,000 total
+            if (amount < 0.1 ether) return (false, 3);
+            if (totalInvestment[investor] + amount > 10 ether) {
+                return (false, 4);
             }
         }
-        // Type 3: Strategic Partner - Unlimited
+        // Type 3: Strategic Partner - Min 1 ETH, no max
         else if (investorType == IInvestorTypeRegistry.InvestorType.INSTITUTIONAL) {
-            if (amount < 500_000 * 10 ** 18) return (false, 5); // Min $500,000
-            // No maximum limit
+            if (amount < 1 ether) return (false, 5);
         }
 
         return (true, 0);
@@ -595,4 +665,7 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
     function getParticipantRegistry() external view returns (address) {
         return address(participantRegistry);
     }
+
+    /// @notice Accept ETH for direct locks
+    receive() external payable {}
 }

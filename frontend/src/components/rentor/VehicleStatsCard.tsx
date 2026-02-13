@@ -1,7 +1,7 @@
 "use client";
 
-import { Card, CardHeader, CardTitle, CardContent, Badge } from "@/src/components/ui";
-import { formatCurrency } from "@/src/lib/utils";
+import { Card, CardHeader, CardTitle, CardContent, Badge } from "@/components/ui";
+import { formatCurrency } from "@/lib/utils";
 
 export interface VehicleStats {
   totalRevenue: number;

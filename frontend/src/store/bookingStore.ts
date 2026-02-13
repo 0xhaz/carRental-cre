@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { Booking, BookingStatus } from "@/src/types";
-import { bookingApi } from "@/src/lib/api";
+import type { Booking, BookingStatus } from "@/types";
+import { bookingApi } from "@/lib/api";
 import { toast } from "react-hot-toast";
 
 interface BookingFlowState {

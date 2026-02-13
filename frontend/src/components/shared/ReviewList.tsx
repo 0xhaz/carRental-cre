@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Review, User } from "@/src/types";
-import { Card, CardContent, Heading, Paragraph, Badge } from "@/src/components/ui";
+import { Review, User } from "@/types";
+import { Card, CardContent, Heading, Paragraph, Badge } from "@/components/ui";
 import { formatDistanceToNow } from "date-fns";
 
 export interface ReviewListProps {

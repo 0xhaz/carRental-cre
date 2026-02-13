@@ -10,9 +10,10 @@ import {
   investorMenuLinks,
   rentorMenuLinks,
   renterMenuLinks,
-} from "@/public/assets/assets";
-import { useUserStore } from "@/src/store";
-import { UserRole } from "@/src/types";
+  adminMenuLinks,
+} from "@/constants/menuLinks";
+import { useUserStore } from "@/store";
+import { UserRole } from "@/types";
 import { UserMenu } from "./UserMenu";
 import { NotificationBell } from "./NotificationBell";
 import { useAppContext } from "@/context/AppContext";
@@ -37,6 +38,8 @@ export function Header() {
 
     // Show role-specific navigation
     switch (user.role) {
+      case "admin":
+        return adminMenuLinks;
       case UserRole.INVESTOR:
         return investorMenuLinks;
       case UserRole.RENTOR:
@@ -52,7 +55,13 @@ export function Header() {
     <nav className="flex items-center justify-between px-6 md:px-16 lg:px-24 xl:px-32 py-4 text-gray-600 border-b border-borderColor relative transition-all bg-light">
       {/* Logo */}
       <Link href="/">
-        <Image src={assets.logo} alt="RegShield Logo" className="h-8" />
+        <Image
+          src={assets.logo}
+          alt="RegShield Logo"
+          className="h-8"
+          width={58}
+          height={48}
+        />
       </Link>
 
       {/* Desktop Navigation */}
@@ -83,7 +92,7 @@ export function Header() {
             className="py-1.5 w-full bg-transparent outline-none placeholder-gray-500"
             placeholder="Search vehicles"
           />
-          <Image src={assets.search_icon} alt="Search" />
+          <Image src={assets.search_icon} alt="Search" width={68} height={68} />
         </div>
 
         {/* Notifications */}
@@ -99,7 +108,12 @@ export function Header() {
         aria-label="Menu"
         onClick={() => setOpen(!open)}
       >
-        <Image src={open ? assets.close_icon : assets.menu_icon} alt="Menu" />
+        <Image
+          src={open ? assets.close_icon : assets.menu_icon}
+          alt="Menu"
+          width={24}
+          height={24}
+        />
       </button>
 
       {/* Mobile Drawer */}

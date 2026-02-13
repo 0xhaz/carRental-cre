@@ -9,10 +9,10 @@ import {
   Card,
   CardContent,
   Badge,
-} from "@/src/components/ui";
-import { generateMockBookings, generateMockVehicles } from "@/src/lib/mockData";
-import { Booking, Vehicle } from "@/src/types";
-import { formatCurrency, formatDate } from "@/src/lib/utils";
+} from "@/components/ui";
+import { generateMockBookings, generateMockVehicles } from "@/lib/mockData";
+import { Booking, Vehicle } from "@/types";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import Image from "next/image";
 import { toast } from "react-hot-toast";
 

@@ -7,10 +7,10 @@ import {
   VehicleFilters,
   ActiveFilters,
   type VehicleFilterState,
-} from "@/src/components/renter";
-import { Heading, Paragraph } from "@/src/components/ui";
-import { generateMockVehicles } from "@/src/lib/mockData";
-import { Vehicle } from "@/src/types";
+} from "@/components/renter";
+import { Heading, Paragraph } from "@/components/ui";
+import { generateMockVehicles } from "@/lib/mockData";
+import { Vehicle } from "@/types";
 
 const DEFAULT_FILTERS: VehicleFilterState = {
   search: "",

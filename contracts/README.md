@@ -1,569 +1,330 @@
-# Rental Car Tokenization Platform - Proof of Concept
+# RegShield — Rental Car Tokenization Platform
 
-A decentralized platform combining vehicle tokenization, compliant investment mechanisms, and operational rental management using **ERC-3643** and **Chainlink Runtime Environment (CRE)**.
+A decentralized rental car platform combining vehicle tokenization, compliant investment mechanisms, and operational rental management. Built on **ERC-3643** security tokens with **Chainlink CRE** for off-chain computation. All payments use **native ETH**.
 
-## 🏗️ Architecture Overview
-
-### Core Components
-
-1. **Identity Layer (OnchainID - ERC-734/735)**
-   - Blockchain-based identity for renters, investors, and rentors
-   - Claim-based verification system
-   - Trusted issuer management
-
-2. **Token Layer (ERC-3643)**
-   - **AssetToken**: Vehicle ownership tokens
-   - **RevenueToken**: Investment return rights
-   - Modular compliance with 4 investor types
-
-3. **Payment Protocol (RegShieldPaymentProtocol)**
-   - Dual-purpose: Investment capital raising + Rental payments
-   - Multi-type refunds (Automatic, Manual, Dispute, Emergency)
-   - Milestone-based escrow for investments
-
-4. **Vehicle Registry (NFT-based)**
-   - Each vehicle as unique NFT
-   - Linked to Asset/Revenue tokens
-   - Maintenance and incident tracking
-
-5. **Rental Management**
-   - Full booking lifecycle (Request → Active → Complete)
-   - Condition reporting (pre/post rental)
-   - Dispute resolution
-
-6. **Chainlink CRE Integration**
-   - Identity verification service
-   - Vehicle telematics service
-   - Damage assessment (AI-powered)
-   - Valuation service
-
-## 📁 Project Structure
+## Project Structure
 
 ```
-rental-car-poc/
-├── contracts/
-│   ├── OnchainID.sol                 # ERC-734/735 identity
-│   ├── ERC3643Token.sol              # Compliant security tokens
-│   ├── PaymentProtocol.sol           # Escrow & refunds
-│   └── RentalManagement.sol          # Vehicle NFT & bookings
-├── chainlink-cre/
-│   ├── identity-verification-service.js
-│   └── vehicle-telematics-service.js
-├── docs/
-│   └── ARCHITECTURE.md               # Detailed architecture
-└── README.md                         # This file
+contracts/
+├── src/
+│   ├── onchainId/           # ERC-734/735 identity (OnchainIDFactory, ClaimIssuer, KeyManager)
+│   ├── erc3643/             # Security tokens & registries (AssetToken, RevenueToken, IdentityRegistry, etc.)
+│   ├── compliance/          # Compliance modules (ComplianceRules, InvestorType, Renter, Operational, Transfer)
+│   ├── vehicle/             # VehicleNFT (ERC-721)
+│   ├── rental/              # RentalBooking, RentalOperations
+│   ├── payment/             # RegShieldPaymentProtocol, RentalPaymentProtocol, PaymentEscrow, RefundManager, DisputeResolver
+│   ├── investor/            # InvestorRequestManager, MultiSigWallet
+│   ├── revenue/             # RevenueDistributor
+│   ├── cre/                 # Chainlink CRE receivers (Compliance, Payment, Vehicle, Onboarding)
+│   ├── interfaces/          # All interface definitions
+│   └── mocks/               # Test mocks
+├── script/                  # Foundry deployment scripts (01-08 phased + DeployAll)
+├── test/                    # Foundry tests
+├── ARCHITECTURE.md          # Detailed architecture & frontend integration reference
+├── DEPLOYMENT.md            # Deployment guide
+├── deploy-phased.sh         # Phased deployment script
+├── extract-addresses.sh     # Extract deployed addresses from broadcast artifacts
+└── foundry.toml             # Foundry configuration
 ```
 
-## 🚀 Getting Started
+## Prerequisites
 
-### Prerequisites
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) (forge, cast, anvil)
+- Git
 
-- Node.js 18+
-- Hardhat or Foundry
-- Chainlink Node (for CRE deployment)
-- PostgreSQL (for off-chain data)
-
-### Installation
+## Quick Start
 
 ```bash
-# Clone repository
+# Clone and enter the contracts directory
 git clone <repo-url>
-cd rental-car-poc
+cd RegShield/contracts
 
 # Install dependencies
-npm install
+forge install
 
-# Set up environment variables
+# Copy environment config
 cp .env.example .env
-# Edit .env with your configuration
+# Edit .env with your private key, RPC URL, etc.
+
+# Build
+forge build
+
+# Run tests
+forge test
+
+# Run tests with verbosity
+forge test -vvv
 ```
 
-### Environment Variables
-
-```env
-# Blockchain
-PRIVATE_KEY=your_private_key
-RPC_URL=your_rpc_url
-ETHERSCAN_API_KEY=your_etherscan_key
-
-# Chainlink CRE
-CHAINLINK_NODE_URL=your_chainlink_node
-TEE_ATTESTATION_KEY=your_tee_key
-
-# External APIs (for CRE services)
-JUMIO_API_URL=https://api.jumio.com
-JUMIO_API_KEY=your_key
-
-ONFIDO_API_URL=https://api.onfido.com
-ONFIDO_API_KEY=your_key
-
-DMV_API_URL=your_dmv_api
-INSURANCE_VERIFIER_API_URL=your_insurance_api
-
-GEOTAB_API_URL=https://my.geotab.com
-GEOTAB_API_KEY=your_key
-
-# Payment
-USDC_TOKEN_ADDRESS=0x...
-```
-
-## 📝 Deployment Guide
-
-### 1. Deploy Core Contracts
+## Environment Variables
 
 ```bash
-# Compile contracts
-npx hardhat compile
+# Required
+PRIVATE_KEY=0x...                    # Deployer private key
+OWNER=0x...                          # Contract owner address
+SEPOLIA_RPC_URL=https://...          # Sepolia RPC endpoint
 
-# Deploy identity factory
-npx hardhat run scripts/deploy-identity.js --network <network>
+# Optional
+ETHERSCAN_API_KEY=...                # For contract verification
+BANK_ADDRESS=0x...                   # Banking institution (defaults to OWNER)
+CRE_FORWARDER=0x...                  # Chainlink forwarder (required for Phase 8)
 
-# Deploy compliance module
-npx hardhat run scripts/deploy-compliance.js --network <network>
-
-# Deploy payment protocol
-npx hardhat run scripts/deploy-payment.js --network <network>
-
-# Deploy vehicle registry
-npx hardhat run scripts/deploy-registry.js --network <network>
-
-# Deploy rental booking
-npx hardhat run scripts/deploy-rental.js --network <network>
+# After deployment, add deployed addresses for subsequent phases:
+# IDENTITY_REGISTRY=0x...
+# COMPLIANCE_RULES=0x...
+# (etc. — see deployed-addresses.env after running extract-addresses.sh)
 ```
 
-### 2. Configure System
+## Deployment
+
+### Phased Deployment (Recommended)
+
+Deploy contracts in 8 phases to avoid RPC rate limits. Each phase depends on the previous one.
 
 ```bash
-# Set up trusted issuers for identity claims
-npx hardhat run scripts/setup-trusted-issuers.js --network <network>
+# Deploy Phase 1: OnchainID Infrastructure
+./deploy-phased.sh 1
+# → Save ONCHAINID_FACTORY, CLAIM_ISSUER, KEY_MANAGER to .env
 
-# Configure compliance rules
-npx hardhat run scripts/setup-compliance.js --network <network>
+# Deploy Phase 2: Registries
+./deploy-phased.sh 2
+# → Save TRUSTED_ISSUERS_REGISTRY, CLAIM_TOPICS_REGISTRY, etc. to .env
 
-# Grant roles
-npx hardhat run scripts/grant-roles.js --network <network>
+# Continue through phases 3-8...
+./deploy-phased.sh 3   # Compliance Modules
+./deploy-phased.sh 4   # Identity Registry
+./deploy-phased.sh 5   # Vehicle & Rental
+./deploy-phased.sh 6   # Payment System (Native ETH)
+./deploy-phased.sh 7   # Revenue & Investor Management
+./deploy-phased.sh 8   # CRE Receiver Proxies
+
+# Or deploy all phases sequentially (with auto-delays)
+./deploy-phased.sh all
 ```
 
-### 3. Deploy Chainlink CRE Services
+### Extract Deployed Addresses
+
+After deployment, extract contract addresses from forge broadcast artifacts:
 
 ```bash
-# Package CRE services
-cd chainlink-cre
-npm run package
-
-# Deploy to Chainlink node
-chainlink cre deploy identity-verification-service.js
-chainlink cre deploy vehicle-telematics-service.js
-
-# Configure service endpoints
-chainlink cre configure --service identity-verification \
-  --endpoint wss://your-node/identity-verify
+./extract-addresses.sh
+# Outputs to deployed-addresses.env
+# Copy to frontend .env for integration
 ```
 
-## 🔄 Complete User Flows
+### Deploy All at Once (Local/Testing)
 
-### Flow 1: Investor Onboarding & Investment
-
-1. **Create Identity**
-```javascript
-// Investor creates OnchainID
-const identityFactory = await ethers.getContractAt("OnchainIDFactory", FACTORY_ADDRESS);
-const tx = await identityFactory.createIdentity(investor.address);
-const identity = await identityFactory.getIdentity(investor.address);
+```bash
+forge script script/DeployAll.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast --slow --legacy -vv
 ```
 
-2. **KYC Verification (via CRE)**
-```javascript
-// CRE service verifies investor
-const creRequest = {
-  userId: investor.address,
-  investorType: 1, // Retail
-  personalInfo: {...},
-  documents: {...}
-};
+## Architecture Overview
 
-// CRE returns attestation
-const attestation = await identityVerificationService.verifyInvestorIdentity(creRequest);
+**32 contracts** across 8 deployment phases:
+
+| Layer | Contracts | Purpose |
+|-------|-----------|---------|
+| Identity | OnchainIDFactory, ClaimIssuer, KeyManager | ERC-734/735 decentralized identity |
+| Registries | TrustedIssuers, ClaimTopics, InvestorType, ParticipantType | Claim management & role assignment |
+| Compliance | ComplianceRules, InvestorType, Renter, Operational, Transfer, Registry | Multi-layer compliance validation |
+| Identity Registry | IdentityRegistry | Address-to-identity mapping |
+| Vehicle | VehicleNFT | ERC-721 vehicle representation |
+| Rental | RentalBooking, RentalOperations | Booking lifecycle & condition tracking |
+| Payment | RegShieldPaymentProtocol, RentalPaymentProtocol, 2x PaymentEscrow, 2x RefundManager, DisputeResolver | Native ETH escrow, refunds, disputes |
+| Investor | InvestorRequestManager, MultiSigWallet | Tiered investor onboarding |
+| Revenue | RevenueDistributor | Waterfall revenue distribution |
+| CRE | ComplianceReceiver, PaymentReceiver, VehicleReceiver, OnboardingReceiver | Chainlink off-chain bridge |
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed function signatures, data flows, and frontend integration guide.
+
+## Key User Flows
+
+### Investor Onboarding (RETAIL — 2-step direct lock)
+
+```
+1. requestInvestorStatus(RETAIL)           → Status: PENDING
+2. lockFundsDirect{value: 0.01 ether}()   → Status: TOKENSLOCKED
+   (Admin approves)                        → Status: APPROVED
+3. withdrawDirectLock()                    → Reclaim locked ETH
 ```
 
-3. **Add Claims to OnchainID**
-```javascript
-// Add KYC claim
-await identity.addClaim(
-  1, // CLAIM_KYC
-  1, // ECDSA signature
-  CRE_ISSUER_ADDRESS,
-  attestation.signature,
-  attestation.data,
-  attestation.uri,
-  expiresAt
-);
+### Investor Onboarding (ACCREDITED/INSTITUTIONAL — 5-step MultiSig)
 
-// Add accredited investor claim
-await identity.addClaim(2, ...); // CLAIM_ACCREDITED_INVESTOR
+```
+1. requestInvestorStatus(ACCREDITED)       → Status: PENDING
+   (Admin creates MultiSigWallet)          → Status: WALLETCREATED
+2. MultiSigWallet.lockFunds{value}()       → ETH locked in wallet
+3. confirmTokensLocked()                   → Status: TOKENSLOCKED
+   (Admin approves)                        → Status: APPROVED
 ```
 
-4. **Register as Investor**
-```javascript
-const compliance = await ethers.getContractAt("InvestorComplianceModule", COMPLIANCE_ADDRESS);
-await compliance.registerInvestor(
-  investor.address,
-  1, // InvestorType.Retail
-  50000, // $50k max investment
-  "" // No regional restriction
-);
+### Vehicle Investment
+
+```
+1. initiateVehicleInvestment{value: amount}(vehicleId, rentor, amount, reason)
+   → ETH escrowed, compliance checked
+2. completeMilestone(paymentId, "VEHICLE_IDENTIFIED")
+   completeMilestone(paymentId, "PURCHASE_VERIFIED")
+   completeMilestone(paymentId, "INSURANCE_OBTAINED")
+   completeMilestone(paymentId, "REGISTRATION_COMPLETED")
+3. releaseMilestoneFunds(paymentId)
+   → ETH released to rentor, AssetToken + RevenueToken minted to investor
 ```
 
-5. **Make Investment**
-```javascript
-// Create investment payment
-const payment = await paymentProtocol.createPayment(
-  0, // PaymentType.Investment
-  rentor.address,
-  amount,
-  USDC_ADDRESS,
-  vehicleReferenceId,
-  "Investment in Vehicle ABC123",
-  { value: amount }
-);
+### Rental Booking
 
-// System escrows payment and verifies compliance
-await paymentProtocol.escrowPaymentWithMilestones(
-  paymentId,
-  [VEHICLE_PURCHASE_MILESTONE, REGISTRATION_MILESTONE],
-  releaseTime
-);
+```
+1. requestBooking{value: fee + deposit}(vehicleId, start, end, rate, deposit)
+2. (Admin) approveBooking(bookingId)
+3. startRental(bookingId, preCondition)    → Vehicle status: Rented
+4. initiateReturn(bookingId)
+5. completeReturn(bookingId, postCondition, damageCharges)
+   → Deposit settled, revenue distributed
 ```
 
-6. **Vehicle Purchase & Token Minting**
-```javascript
-// Once milestones complete, funds released
-await paymentProtocol.completeMilestone(paymentId, VEHICLE_PURCHASE_MILESTONE);
-await paymentProtocol.completeMilestone(paymentId, REGISTRATION_MILESTONE);
-await paymentProtocol.releasePayment(paymentId);
+### Revenue Claiming
 
-// Mint AssetToken and RevenueToken
-const assetToken = await ERC3643Token.deploy(...);
-const revenueToken = await ERC3643Token.deploy(...);
-
-await assetToken.mint(investor.address, assetTokenAmount);
-await revenueToken.mint(investor.address, revenueTokenAmount);
-
-// Mint Vehicle NFT
-await vehicleRegistry.mintVehicle(
-  rentor.address,
-  vehicleMetadata,
-  assetToken.address,
-  revenueToken.address
-);
+```
+1. getClaimableRevenue(vehicleId, holder)  → Check pending amount
+2. claimRevenue(vehicleId)                 → Receive ETH
+   // or batchClaimRevenue([vehicleId1, vehicleId2, ...])
 ```
 
-### Flow 2: Renter Booking & Rental
+## Investor Types & Limits
 
-1. **Create Renter Identity**
-```javascript
-const tx = await identityFactory.createIdentity(renter.address);
-const identity = await identityFactory.getIdentity(renter.address);
+| Type | Lock Requirement | Min/Max Investment | Lock-up |
+|------|-----------------|-------------------|---------|
+| RETAIL | 0.01 ETH (direct lock) | 0.001 - 1 ETH per vehicle | 6 months |
+| ACCREDITED | 0.1 ETH (MultiSigWallet) | 0.1 - 10 ETH total | 3 months |
+| INSTITUTIONAL | 1 ETH (MultiSigWallet) | 1 ETH+ (no max) | 12 months |
+
+## Revenue Waterfall
+
+```
+Gross Rental Income (100%)
+  ├── Platform Fee:        15%  → Protocol treasury
+  ├── Maintenance Reserve: 10%  → Per-vehicle escrow
+  ├── Insurance Premium:    5%  → Coverage payments
+  ├── Operating Costs:     10%  → Gas, cleaning, parking
+  └── Net Distributable:   60%  → RevenueToken holders (proportional)
 ```
 
-2. **Renter Verification (via CRE)**
-```javascript
-const creRequest = {
-  userId: renter.address,
-  personalInfo: {...},
-  driverLicense: {...},
-  insuranceInfo: {...}
-};
-
-const attestation = await identityVerificationService.verifyRenterIdentity(creRequest);
-```
-
-3. **Add Renter Claims**
-```javascript
-await identity.addClaim(1, ...); // CLAIM_KYC
-await identity.addClaim(4, ...); // CLAIM_DRIVER_LICENSE
-await identity.addClaim(5, ...); // CLAIM_INSURANCE
-await identity.addClaim(6, ...); // CLAIM_CREDIT_SCORE
-```
-
-4. **Request Booking**
-```javascript
-const booking = await rentalBooking.requestBooking(
-  vehicleId,
-  startTime,
-  endTime,
-  ratePerDay,
-  securityDeposit,
-  { value: totalCost + securityDeposit }
-);
-```
-
-5. **Compliance Approval**
-```javascript
-// Compliance officer reviews CRE attestation
-await rentalBooking.approveBooking(bookingId);
-```
-
-6. **Start Rental**
-```javascript
-// Operator records pre-rental condition
-const preCondition = {
-  timestamp: Date.now(),
-  mileage: 45000,
-  fuelLevel: 100,
-  photoHashes: [...],
-  damageNotes: [],
-  inspector: operator.address,
-  signature: "0x..."
-};
-
-await rentalBooking.startRental(bookingId, preCondition);
-
-// CRE unlocks vehicle via IoT
-// Telematics monitoring begins
-```
-
-7. **Active Rental Monitoring (via CRE)**
-```javascript
-// CRE continuously monitors vehicle
-const monitoring = await vehicleTelematicsService.monitorVehicle({
-  vehicleId,
-  bookingId,
-  geofence: {...},
-  maxSpeed: 120,
-  expectedReturnTime
-});
-
-// Alerts sent if violations detected
-if (monitoring.alerts.length > 0) {
-  // Send notifications
-}
-```
-
-8. **Return & Settlement**
-```javascript
-// Renter initiates return
-await rentalBooking.initiateReturn(bookingId);
-
-// Operator inspects vehicle
-const postCondition = {...};
-
-// CRE assesses damage
-const damageAssessment = await vehicleTelematicsService.assessVehicleDamage({
-  vehicleId,
-  bookingId,
-  preRentalPhotos,
-  postRentalPhotos
-});
-
-// Complete return
-await rentalBooking.completeReturn(
-  bookingId,
-  postCondition,
-  damageAssessment.totalEstimatedCost
-);
-
-// Payments automatically settled:
-// - Rental fee to rentor
-// - Deposit refund (minus damages) to renter
-// - Net revenue distributed to RevenueToken holders
-```
-
-### Flow 3: Revenue Distribution
-
-1. **Revenue Accumulation**
-```javascript
-// After each completed rental
-const rentalRevenue = booking.totalCost;
-await vehicleRegistry.addRevenue(vehicleId, rentalRevenue);
-```
-
-2. **Periodic Distribution (via Chainlink Automation)**
-```javascript
-// Triggered daily/weekly
-await revenueDistributor.distributeRevenue(vehicleToken);
-
-// Waterfall applied:
-// 15% → Platform fee
-// 10% → Maintenance reserve
-// 5% → Insurance
-// 10% → Operating costs
-// 60% → RevenueToken holders (proportional)
-```
-
-3. **Investor Receives Revenue**
-```javascript
-// RevenueToken holders automatically receive distributions
-// No action needed - funds arrive in wallet
-```
-
-## 🧪 Testing
-
-### Unit Tests
+## Testing
 
 ```bash
 # Run all tests
-npx hardhat test
+forge test
 
-# Run specific test suite
-npx hardhat test test/OnchainID.test.js
-npx hardhat test test/ERC3643Token.test.js
-npx hardhat test test/PaymentProtocol.test.js
-npx hardhat test test/RentalManagement.test.js
+# Run with gas reporting
+forge test --gas-report
+
+# Run specific test file
+forge test --match-path test/payment/PaymentEscrow.t.sol
+
+# Run with verbosity
+forge test -vvvv
+
+# Fork testing against Sepolia
+forge test --fork-url $SEPOLIA_RPC_URL
 ```
 
-### Integration Tests
+## Local Development
 
 ```bash
-# Test complete flows
-npx hardhat test test/integration/investment-flow.test.js
-npx hardhat test test/integration/rental-flow.test.js
+# Start local node
+anvil
+
+# Deploy to local node
+forge script script/DeployAll.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+
+# Interact with contracts via cast
+cast call $CONTRACT_ADDRESS "functionName(args)" --rpc-url http://127.0.0.1:8545
+cast send $CONTRACT_ADDRESS "functionName(args)" --private-key $PRIVATE_KEY --rpc-url http://127.0.0.1:8545
 ```
 
-### CRE Service Tests
+## Security
+
+- All ETH transfers use `.call{value:}` (not deprecated `.transfer()`)
+- `ReentrancyGuard` on all payable/ETH-transferring functions
+- Role-based access control (Ownable + custom bank/operator checks)
+- Escrow pattern: funds held in dedicated escrow contracts
+- Compliance gates on all user-facing payment functions
+- Excess ETH auto-refunded on payable functions
+- 2-of-2 MultiSigWallet for accredited/institutional fund locks
+
+## Chainlink CRE Integration
+
+RegShield uses Chainlink CRE (Compute Runtime Environment) for off-chain workflow orchestration. The CRE workflow monitors on-chain investment payments and automatically verifies milestones using external APIs.
+
+### Key Chainlink Files
+
+| File | Description |
+|------|-------------|
+| [`rental-cre/rental-workflow/main.ts`](../rental-cre/rental-workflow/main.ts) | Vehicle Investment Lifecycle CRE workflow — reads chain state, calls NHTSA VIN decoder API, submits milestone reports |
+| [`rental-cre/rental-workflow/config.staging.json`](../rental-cre/rental-workflow/config.staging.json) | Workflow config with contract addresses and cron schedule |
+| [`rental-cre/rental-workflow/workflow.yaml`](../rental-cre/rental-workflow/workflow.yaml) | CRE workflow settings (staging + production targets) |
+| [`rental-cre/project.yaml`](../rental-cre/project.yaml) | CRE project settings with RPC endpoints |
+| [`src/cre/PaymentReceiver.sol`](src/cre/PaymentReceiver.sol) | On-chain receiver for milestone verification reports |
+| [`src/cre/ComplianceReceiver.sol`](src/cre/ComplianceReceiver.sol) | On-chain receiver for compliance actions (blacklist, suspend) |
+| [`src/cre/VehicleReceiver.sol`](src/cre/VehicleReceiver.sol) | On-chain receiver for vehicle state updates (mileage, maintenance) |
+| [`src/cre/OnboardingReceiver.sol`](src/cre/OnboardingReceiver.sol) | On-chain receiver for investor/booking approval actions |
+| [`src/interfaces/cre/ReceiverTemplate.sol`](src/interfaces/cre/ReceiverTemplate.sol) | Base receiver with forwarder validation and security layers |
+
+### CRE Workflow Architecture
+
+```
+CRE Workflow (main.ts)
+  │
+  ├─ CronCapability: triggers every 30 seconds
+  │
+  ├─ EVMClient.callContract() ──→ Read on-chain state
+  │   ├─ RegShieldPaymentProtocol.totalPayments()
+  │   ├─ RegShieldPaymentProtocol.getMilestoneStatus(paymentId)
+  │   ├─ VehicleNFT.getVehicleMetadata(vehicleId)
+  │   └─ VehicleNFT.getVehicleStatus(vehicleId)
+  │
+  ├─ HTTPClient.sendRequest() ──→ NHTSA VIN Decoder API
+  │   └─ https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/{VIN}
+  │
+  └─ EVMClient.writeReport() ──→ PaymentReceiver.onReport()
+      └─ abi.encode(paymentId, milestoneName)
+          ├─ "VEHICLE_IDENTIFIED"      (NHTSA VIN validation)
+          ├─ "PURCHASE_VERIFIED"       (on-chain status + escrow)
+          ├─ "INSURANCE_OBTAINED"      (on-chain expiry check)
+          └─ "REGISTRATION_COMPLETED"  (on-chain expiry check)
+```
+
+### Running the CRE Workflow
 
 ```bash
-cd chainlink-cre
-npm test
+cd rental-cre
 
-# Test specific service
-npm test -- identity-verification-service.test.js
+# Install dependencies
+cd rental-workflow && bun install && cd ..
+
+# Simulate workflow (requires CRE CLI)
+cre workflow simulate rental-workflow -T staging-settings
+
+# Deploy workflow to Chainlink DON
+cre workflow deploy rental-workflow -T staging-settings
 ```
 
-## 📊 Example Scenarios
+## Documentation
 
-### Scenario 1: Retail Investor
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Detailed system architecture, all function signatures, frontend integration
+- [DEPLOYMENT.md](DEPLOYMENT.md) — Step-by-step deployment guide
+- [SUMMARY.md](SUMMARY.md) — Executive summary and business context
 
-**Profile:**
-- Type: Retail Accredited Investor
-- Investment: $10,000 in 2024 Tesla Model 3
-- Expected Return: 15% annually
+## Tech Stack
 
-**Journey:**
-1. Complete KYC via Jumio
-2. Verify accredited status ($200k+ income)
-3. Pass compliance checks
-4. Invest $10,000 via escrow
-5. Receive RevenueTokens
-6. Earn ~$1,500/year from rental income (distributed monthly)
+- **Solidity** ^0.8.20
+- **Foundry** (forge, cast, anvil)
+- **OpenZeppelin** Contracts (Ownable, ReentrancyGuard, ERC721)
+- **ERC-3643** Security Token Standard
+- **ERC-734/735** OnchainID Identity
+- **Chainlink CRE** Off-chain computation (TypeScript workflows → WASM → DON)
+- **NHTSA VIN Decoder API** — Vehicle identification verification
 
-### Scenario 2: Strategic Partner
+## License
 
-**Profile:**
-- Type: Strategic Partner (Car Rental Company)
-- Investment: $1M in fleet of 50 vehicles
-- Goal: Expand operations with capital
-
-**Journey:**
-1. Enhanced KYC + business verification
-2. Board approval process (Tier 3)
-3. Investment with 12-month lock-up
-4. Receive significant RevenueToken stake
-5. Potential operational partnership
-6. Higher returns due to scale
-
-### Scenario 3: Regional Investor
-
-**Profile:**
-- Type: Regional (California only)
-- Investment: $25,000
-- Restriction: Can only invest in CA-operated vehicles
-
-**Journey:**
-1. KYC + regional eligibility claim
-2. Register with CA restriction
-3. Browse CA vehicles only
-4. Invest in compliant vehicles
-5. Transfer restrictions enforced by smart contract
-
-## 🔐 Security Considerations
-
-### Smart Contract Security
-- Multi-signature for critical operations
-- Time locks on parameter changes
-- Circuit breakers (pause functionality)
-- Role-based access control (RBAC)
-- Comprehensive test coverage
-
-### CRE Security
-- TEE (Trusted Execution Environment) for data processing
-- Hardware-backed cryptographic signing
-- Zero-knowledge proofs for sensitive data
-- Secure API credential management
-- Audit logging
-
-### Operational Security
-- KYC/AML compliance
-- Ongoing monitoring
-- Dispute resolution process
-- Insurance coverage requirements
-- Regular security audits
-
-## 📈 Key Metrics Dashboard
-
-### For Rentors
-- Total vehicles tokenized
-- Total capital raised
-- Average utilization rate
-- Revenue per vehicle
-- Maintenance costs
-- Investor satisfaction
-
-### For Investors
-- Portfolio value
-- Revenue earned (monthly/total)
-- ROI percentage
-- Vehicle performance
-- Risk metrics
-- Liquidity events
-
-### For Renters
-- Booking history
-- Total spent
-- Loyalty rewards
-- Incident history
-- Credit score impact
-
-## 🛠️ Development Roadmap
-
-### Phase 1: MVP (Current PoC)
-- ✅ Core smart contracts
-- ✅ Basic CRE services
-- ✅ Essential flows
-- ⏳ Frontend UI
-- ⏳ Testnet deployment
-
-### Phase 2: Beta
-- Multi-chain support
-- Advanced telematics
-- Dynamic pricing
-- Insurance integration
-- Mobile app
-
-### Phase 3: Production
-- Mainnet launch
-- Institutional partnerships
-- Secondary market
-- DAO governance
-- Global expansion
-
-## 🤝 Contributing
-
-Contributions welcome! Please see CONTRIBUTING.md for guidelines.
-
-## 📄 License
-
-MIT License - see LICENSE.md
-
-## 📞 Support
-
-- Documentation: https://docs.example.com
-- Discord: https://discord.gg/example
-- Email: support@example.com
-
-## 🙏 Acknowledgments
-
-- Chainlink for CRE infrastructure
-- ERC-3643 standard contributors
-- OpenZeppelin for contract libraries
-- Community testers and advisors
+See LICENSE file.

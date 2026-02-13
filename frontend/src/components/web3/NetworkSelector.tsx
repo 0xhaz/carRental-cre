@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Select } from "@/src/components/ui";
-import { MOCK_NETWORKS } from "@/src/lib/constants";
+import { Select } from "@/components/ui";
+import { MOCK_NETWORKS } from "@/lib/constants";
 import { toast } from "react-hot-toast";
 
 export interface NetworkSelectorProps {

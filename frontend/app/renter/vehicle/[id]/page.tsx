@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Heading, Paragraph, Button, Badge, Card, CardContent, Separator } from "@/src/components/ui";
-import { BookingFlow } from "@/src/components/renter";
-import { ReviewList, ReviewStats, RoleSwitchModal } from "@/src/components/shared";
-import { generateMockVehicles, generateMockReviews } from "@/src/lib/mockData";
-import { formatCurrency } from "@/src/lib/utils";
-import { Vehicle, Review, UserRole } from "@/src/types";
+import { Heading, Paragraph, Button, Badge, Card, CardContent, Separator } from "@/components/ui";
+import { BookingFlow } from "@/components/renter";
+import { ReviewList, ReviewStats, RoleSwitchModal } from "@/components/shared";
+import { generateMockVehicles, generateMockReviews } from "@/lib/mockData";
+import { formatCurrency } from "@/lib/utils";
+import { Vehicle, Review, UserRole } from "@/types";
 import { toast } from "react-hot-toast";
 
 export default function VehicleDetails() {

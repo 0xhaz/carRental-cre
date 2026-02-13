@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Button, Heading, Paragraph } from "@/src/components/ui";
-import { useUserStore } from "@/src/store";
-import { UserRole } from "@/src/types";
+import { Button, Heading, Paragraph } from "@/components/ui";
+import { useUserStore } from "@/store";
+import { UserRole } from "@/types";
 import { toast } from "react-hot-toast";
 
 interface RoleSwitchModalProps {

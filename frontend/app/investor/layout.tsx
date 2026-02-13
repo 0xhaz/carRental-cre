@@ -3,9 +3,9 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { investorMenuLinks } from '@/public/assets/assets';
-import { RoleSwitcher, ProtectedRoute } from '@/src/components/shared';
-import { UserRole } from '@/src/types';
+import { investorMenuLinks } from '@/constants/menuLinks';
+import { RoleSwitcher, ProtectedRoute } from '@/components/shared';
+import { UserRole } from '@/types';
 
 export default function InvestorLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();

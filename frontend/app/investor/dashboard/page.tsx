@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RevenueChart, RevenueStats, TransferTokensModal } from "@/src/components/investor";
-import { Heading, Paragraph, Card, CardContent, Button } from "@/src/components/ui";
-import { generateMockRevenueData } from "@/src/lib/mockData";
-import { formatCurrency } from "@/src/lib/utils";
+import { RevenueChart, RevenueStats, TransferTokensModal } from "@/components/investor";
+import { Heading, Paragraph, Card, CardContent, Button } from "@/components/ui";
+import { generateMockRevenueData } from "@/lib/mockData";
+import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 
 export default function InvestorDashboard() {

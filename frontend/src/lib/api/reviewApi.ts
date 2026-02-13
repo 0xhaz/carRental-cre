@@ -1,5 +1,5 @@
 import apiClient from "./axios";
-import { Review, ReviewFormData } from "@/src/types";
+import { Review, ReviewFormData } from "@/types";
 
 export const reviewApi = {
   // Create review

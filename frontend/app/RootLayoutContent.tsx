@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { Toaster } from "react-hot-toast";
-import { Header, Footer, AuthModal } from "@/src/components/shared";
+import { Header, Footer, AuthModal } from "@/components/shared";
 import { useAppContext } from "@/context/AppContext";
 
 export default function RootLayoutContent({

@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BookingCard, BookingCardSkeleton } from "@/src/components/renter";
-import { Heading, Paragraph, Badge, Button } from "@/src/components/ui";
-import { generateMockBookings, generateMockVehicles } from "@/src/lib/mockData";
-import { Booking, Vehicle } from "@/src/types";
+import { BookingCard, BookingCardSkeleton } from "@/components/renter";
+import { Heading, Paragraph, Badge, Button } from "@/components/ui";
+import { generateMockBookings, generateMockVehicles } from "@/lib/mockData";
+import { Booking, Vehicle } from "@/types";
 import { toast } from "react-hot-toast";
 
 export default function RenterBookingsPage() {

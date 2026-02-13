@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, ButtonProps } from "@/src/components/ui";
-import { sleep } from "@/src/lib/utils";
+import { Button, ButtonProps } from "@/components/ui";
+import { sleep } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 
 export interface TransactionButtonProps extends Omit<ButtonProps, "onClick"> {

@@ -1,5 +1,5 @@
 import apiClient from "./axios";
-import { Notification } from "@/src/types";
+import { Notification } from "@/types";
 
 export const notificationApi = {
   // Get user notifications

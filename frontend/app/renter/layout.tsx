@@ -3,9 +3,9 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { renterMenuLinks } from '@/public/assets/assets';
-import { RoleSwitcher, ProtectedRoute } from '@/src/components/shared';
-import { UserRole } from '@/src/types';
+import { renterMenuLinks } from '@/constants/menuLinks';
+import { RoleSwitcher, ProtectedRoute } from '@/components/shared';
+import { UserRole } from '@/types';
 
 export default function RenterLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();

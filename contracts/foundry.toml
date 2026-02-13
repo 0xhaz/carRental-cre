@@ -6,4 +6,9 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 
+# Transaction retry configuration (helps with RPC rate limits)
+tx_retry = 10                    # Retry up to 10 times
+tx_retry_delay_seconds = 30      # Wait 30 seconds between retries
+gas_price_multiplier = 120       # Increase gas price by 20% on retry
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

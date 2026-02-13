@@ -110,6 +110,7 @@ interface IPaymentEscrow {
      */
     function createEscrow(uint256 paymentId, address payer, address payee, uint256 amount, uint256 duration)
         external
+        payable
         returns (uint256 escrowId);
 
     /**

@@ -1,6 +1,6 @@
-import { Booking, Vehicle } from "@/src/types";
-import { Card, CardContent, Button, Badge } from "@/src/components/ui";
-import { formatCurrency, formatDate } from "@/src/lib/utils";
+import { Booking, Vehicle } from "@/types";
+import { Card, CardContent, Button, Badge } from "@/components/ui";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
 

@@ -146,6 +146,26 @@ export const getInvestmentDetails = async (req, res) => {
   }
 };
 
+// @desc    Get rentor's own campaigns
+// @route   GET /api/investments/rentor-campaigns
+// @access  Private
+export const getRentorCampaigns = async (req, res) => {
+  try {
+    // Get vehicles owned by this rentor that have campaigns
+    const vehicles = await Car.find({ owner: req.user._id });
+    const vehicleIds = vehicles.map((v) => v._id);
+
+    const campaigns = await Campaign.find({ vehicle: { $in: vehicleIds } })
+      .populate("vehicle", "brand model year image pricePerDay location description")
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, data: campaigns });
+  } catch (error) {
+    console.error("Get rentor campaigns error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get campaign details
 // @route   GET /api/investments/campaign/:campaignId
 // @access  Public

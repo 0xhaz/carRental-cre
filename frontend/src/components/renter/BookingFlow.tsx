@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Button, Input, Separator, Badge, Card, CardContent } from "@/src/components/ui";
-import { Vehicle } from "@/src/types";
-import { formatCurrency, formatDate } from "@/src/lib/utils";
-import { useBookingFlowStore } from "@/src/store";
+import { Button, Input, Separator, Badge, Card, CardContent } from "@/components/ui";
+import { Vehicle } from "@/types";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { useBookingFlowStore } from "@/store";
 
 export interface BookingFlowProps {
   vehicle: Vehicle;

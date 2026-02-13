@@ -17,8 +17,7 @@ interface IPaymentProtocol {
     error PaymentProtocol__AmountExceedsMaximum();
     error PaymentProtocol__ReasonRequired();
     error PaymentProtocol__InsufficientBalance();
-    error PaymentProtocol__InsufficientAllowance();
-    error PaymentProtocol__TokenTransferFailed();
+    error PaymentProtocol__ETHTransferFailed();
     error PaymentProtocol__IdentityNotVerified();
     error PaymentProtocol__ComplianceValidationFailed();
     error PaymentProtocol__OracleAccessDenied();
@@ -38,6 +37,7 @@ interface IPaymentProtocol {
     error PaymentProtocol__DisputeWindowTooLong();
     error PaymentProtocol__InvalidAmountLimits();
     error PaymentProtocol__EscrowFeeRateTooHigh();
+    error PaymentProtocol__UnauthorizedOperator();
 
     /*//////////////////////////////////////////////////////////////
                              ENUMS
@@ -184,7 +184,7 @@ interface IPaymentProtocol {
      * @param reason Reason for the payment
      * @return paymentId Unique identifier for the initiated payment
      */
-    function initiatePayment(address payee, uint256 amount, string calldata reason) external returns (uint256 paymentId);
+    function initiatePayment(address payee, uint256 amount, string calldata reason) external payable returns (uint256 paymentId);
 
     /**
      * @notice Confirm a payment

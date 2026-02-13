@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { UserRole } from "@/src/types";
-import { useUserStore } from "@/src/store";
+import { UserRole } from "@/types";
+import { useUserStore } from "@/store";
 import { toast } from "react-hot-toast";
 
 export function RoleSwitcher() {

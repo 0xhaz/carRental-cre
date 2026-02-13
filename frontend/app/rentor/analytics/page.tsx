@@ -1,56 +1,80 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RevenueChart, RevenueStats } from "@/src/components/investor";
-import { VehicleStatsCard } from "@/src/components/rentor";
-import { Heading, Paragraph, Card, CardContent, Badge, Button, Select } from "@/src/components/ui";
-import { generateMockRevenueData, generateMockVehicles } from "@/src/lib/mockData";
-import { formatCurrency } from "@/src/lib/utils";
-import { Vehicle } from "@/src/types";
+import { RevenueChart } from "@/components/investor";
+import { VehicleStatsCard } from "@/components/rentor";
+import { VerificationStatusBanner } from "@/components/shared/VerificationStatusBanner";
+import { Heading, Paragraph, Card, CardContent, Badge, Select } from "@/components/ui";
+import { generateMockRevenueData } from "@/lib/mockData";
+import { formatCurrency } from "@/lib/utils";
+import { Vehicle } from "@/types";
+import { rentorApi, vehicleApi, bookingApi } from "@/lib/api";
+import { toast } from "react-hot-toast";
 
 export default function RentorAnalytics() {
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<"week" | "month" | "quarter" | "year">("month");
 
   useEffect(() => {
-    const loadAnalytics = async () => {
-      setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const mockRevenue = generateMockRevenueData(12); // Last 12 months
-      const mockVehicles = generateMockVehicles(8);
-
-      setRevenueData(mockRevenue);
-      setVehicles(mockVehicles);
-      setIsLoading(false);
-    };
-
     loadAnalytics();
   }, []);
 
-  // Calculate aggregate stats
-  const totalRevenue = revenueData.reduce((sum, item) => sum + item.revenue, 0);
-  const totalBookings = revenueData.reduce((sum, item) => sum + item.bookings, 0);
-  const averageRevenuePerMonth = totalRevenue / revenueData.length || 0;
-  const activeVehicles = vehicles.filter((v) => v.isAvailable).length;
-  const utilizationRate = ((totalBookings / (vehicles.length * 30)) * 100).toFixed(1);
+  const loadAnalytics = async () => {
+    setIsLoading(true);
+    try {
+      // Load rentor's dashboard data and vehicles in parallel
+      const [dashResponse, vehiclesResponse] = await Promise.all([
+        rentorApi.getDashboard(),
+        vehicleApi.getRentorVehicles(),
+      ]);
 
-  // Vehicle-specific stats
-  const topPerformingVehicle = vehicles.reduce((top, vehicle) => {
-    const vehicleRevenue = Math.random() * 10000; // Mock revenue per vehicle
-    const topRevenue = Math.random() * 10000;
-    return vehicleRevenue > topRevenue ? vehicle : top;
-  }, vehicles[0]);
+      if (dashResponse.success) {
+        setDashboardData(dashResponse.dashboardData);
+      }
+
+      if (vehiclesResponse.success) {
+        setVehicles(vehiclesResponse.data || []);
+      }
+
+      // Generate mock revenue data for visualization (TODO: Replace with real data from backend)
+      const mockRevenue = generateMockRevenueData(12);
+      setRevenueData(mockRevenue);
+    } catch (error: any) {
+      console.error("Failed to load analytics:", error);
+      toast.error(error.response?.data?.message || "Failed to load analytics");
+
+      setDashboardData({
+        totalCars: 0,
+        totalBookings: 0,
+        pendingBookings: 0,
+        completedBookings: 0,
+        monthlyRevenue: 0,
+      });
+      setVehicles([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Calculate aggregate stats from real data
+  const totalRevenue = dashboardData?.monthlyRevenue || 0;
+  const totalBookings = dashboardData?.totalBookings || 0;
+  const averageRevenuePerMonth = totalRevenue; // For current month
+  const activeVehicles = vehicles.filter((v) => v.isAvailable).length;
+  const utilizationRate = vehicles.length > 0
+    ? ((totalBookings / (vehicles.length * 30)) * 100).toFixed(1)
+    : "0.0";
 
   const vehicleStats = {
     totalRevenue: totalRevenue,
     totalBookings: totalBookings,
-    activeBookings: Math.floor(Math.random() * 10) + 3,
-    completedBookings: totalBookings - Math.floor(Math.random() * 10) - 3,
+    activeBookings: dashboardData?.pendingBookings || 0,
+    completedBookings: dashboardData?.completedBookings || 0,
     utilizationRate: parseFloat(utilizationRate),
-    averageRating: 4.7,
+    averageRating: 4.7, // TODO: Calculate from real reviews
   };
 
   return (
@@ -83,6 +107,9 @@ export default function RentorAnalytics() {
         </div>
       </div>
 
+      {/* Verification Status Banner */}
+      <VerificationStatusBanner roleType="rentor" className="mb-8" />
+
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
@@ -91,7 +118,7 @@ export default function RentorAnalytics() {
             <p className="text-3xl font-bold text-blue-700">
               {formatCurrency(totalRevenue)}
             </p>
-            <p className="text-xs text-green-600 mt-2">+12.5% vs last period</p>
+            <p className="text-xs text-gray-600 mt-2">Current period</p>
           </CardContent>
         </Card>
 
@@ -99,17 +126,15 @@ export default function RentorAnalytics() {
           <CardContent className="p-6">
             <p className="text-sm text-gray-600 mb-1">Total Bookings</p>
             <p className="text-3xl font-bold text-green-700">{totalBookings}</p>
-            <p className="text-xs text-green-600 mt-2">+8.3% vs last period</p>
+            <p className="text-xs text-gray-600 mt-2">All time</p>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
           <CardContent className="p-6">
-            <p className="text-sm text-gray-600 mb-1">Avg Revenue/Month</p>
-            <p className="text-3xl font-bold text-purple-700">
-              {formatCurrency(averageRevenuePerMonth)}
-            </p>
-            <p className="text-xs text-gray-600 mt-2">Over {revenueData.length} months</p>
+            <p className="text-sm text-gray-600 mb-1">Fleet Size</p>
+            <p className="text-3xl font-bold text-purple-700">{vehicles.length}</p>
+            <p className="text-xs text-gray-600 mt-2">{activeVehicles} active</p>
           </CardContent>
         </Card>
 
@@ -140,183 +165,24 @@ export default function RentorAnalytics() {
         <div className="mb-8">
           <VehicleStatsCard
             stats={vehicleStats}
-            period="Last 12 Months"
+            period="Current Period"
           />
         </div>
       )}
 
-      {/* Top Performing Vehicle */}
-      {!isLoading && topPerformingVehicle && (
-        <Card className="mb-8">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <Heading as="h3" className="mb-1">
-                  Top Performing Vehicle
-                </Heading>
-                <Paragraph className="text-sm text-gray-600">
-                  Highest revenue generator in your fleet
-                </Paragraph>
-              </div>
-              <Badge variant="success">Best Performer</Badge>
-            </div>
-
-            <div className="flex gap-6 items-start">
-              <img
-                src={topPerformingVehicle.image}
-                alt={`${topPerformingVehicle.brand} ${topPerformingVehicle.model}`}
-                className="w-48 h-32 object-cover rounded-lg"
-              />
-              <div className="flex-1">
-                <h4 className="text-xl font-semibold mb-2">
-                  {topPerformingVehicle.brand} {topPerformingVehicle.model} ({topPerformingVehicle.year})
-                </h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Revenue Generated</p>
-                    <p className="text-lg font-bold text-green-600">
-                      {formatCurrency(8750)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Bookings</p>
-                    <p className="text-lg font-bold text-blue-600">32</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Avg Rating</p>
-                    <p className="text-lg font-bold text-orange-600">4.9/5.0</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* Empty State */}
+      {!isLoading && vehicles.length === 0 && (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <Paragraph className="text-lg text-gray-600 mb-2">
+              No analytics data available
+            </Paragraph>
+            <Paragraph className="text-sm text-gray-500">
+              Add vehicles to your fleet to start tracking analytics
+            </Paragraph>
           </CardContent>
         </Card>
       )}
-
-      {/* Vehicle Performance Breakdown */}
-      <Card className="mb-8">
-        <CardContent className="p-6">
-          <Heading as="h3" className="mb-4">
-            Individual Vehicle Performance
-          </Heading>
-          <div className="space-y-4">
-            {vehicles.slice(0, 5).map((vehicle, index) => {
-              const vehicleRevenue = Math.floor(Math.random() * 5000) + 3000;
-              const vehicleBookings = Math.floor(Math.random() * 20) + 10;
-              const utilizationPercent = Math.floor(Math.random() * 40) + 60;
-
-              return (
-                <div
-                  key={vehicle._id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                      <img
-                        src={vehicle.image}
-                        alt={`${vehicle.brand} ${vehicle.model}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div>
-                      <h5 className="font-semibold">
-                        {vehicle.brand} {vehicle.model}
-                      </h5>
-                      <p className="text-sm text-gray-600">{vehicle.year}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-8 items-center">
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">Revenue</p>
-                      <p className="font-semibold text-green-600">
-                        {formatCurrency(vehicleRevenue)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">Bookings</p>
-                      <p className="font-semibold text-blue-600">{vehicleBookings}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">Utilization</p>
-                      <p className="font-semibold text-orange-600">
-                        {utilizationPercent}%
-                      </p>
-                    </div>
-                    <Button size="sm" variant="outline">
-                      View Details
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Revenue Distribution */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardContent className="p-6">
-            <Heading as="h3" className="mb-4">
-              Revenue by Category
-            </Heading>
-            <div className="space-y-3">
-              {[
-                { category: "Sedan", revenue: 12500, percentage: 35, color: "bg-blue-500" },
-                { category: "SUV", revenue: 18750, percentage: 45, color: "bg-green-500" },
-                { category: "Luxury", revenue: 8750, percentage: 20, color: "bg-purple-500" },
-              ].map((item) => (
-                <div key={item.category}>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium">{item.category}</span>
-                    <span className="text-sm text-gray-600">
-                      {formatCurrency(item.revenue)} ({item.percentage}%)
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`${item.color} h-2 rounded-full transition-all`}
-                      style={{ width: `${item.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <Heading as="h3" className="mb-4">
-              Booking Status Distribution
-            </Heading>
-            <div className="space-y-3">
-              {[
-                { status: "Completed", count: 142, percentage: 65, color: "bg-green-500" },
-                { status: "Active", count: 38, percentage: 20, color: "bg-blue-500" },
-                { status: "Pending", count: 18, percentage: 10, color: "bg-orange-500" },
-                { status: "Cancelled", count: 12, percentage: 5, color: "bg-red-500" },
-              ].map((item) => (
-                <div key={item.status}>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium">{item.status}</span>
-                    <span className="text-sm text-gray-600">
-                      {item.count} bookings ({item.percentage}%)
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`${item.color} h-2 rounded-full transition-all`}
-                      style={{ width: `${item.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

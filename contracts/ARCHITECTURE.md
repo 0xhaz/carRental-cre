@@ -1,694 +1,627 @@
-# Rental Car Tokenization Platform - Architecture
+# RegShield - Rental Car Tokenization Platform Architecture
 
 ## Overview
-Decentralized rental car platform combining vehicle tokenization, compliant investment mechanisms, and operational rental management using ERC-3643 and Chainlink CRE.
 
-## System Components
+Decentralized rental car platform combining vehicle tokenization, compliant investment mechanisms, and operational rental management. Built on ERC-3643 security tokens with Chainlink CRE for off-chain computation. All payments use **native ETH** (no ERC-20 tokens).
 
-### 1. Core Identity & Compliance Layer
+**Network**: Sepolia Testnet (Chain ID: 11155111)
+**Solidity**: ^0.8.20 | **Framework**: Foundry
+
+---
+
+## Contract Inventory (32 contracts)
+
+| Phase | Contract | Purpose |
+|-------|----------|---------|
+| 1 | OnchainIDFactory | Deploy identity contracts per participant |
+| 1 | ClaimIssuer | Issue/revoke identity claims |
+| 1 | KeyManager | Manage identity keys |
+| 2 | TrustedIssuersRegistry | Track authorized claim issuers |
+| 2 | ClaimTopicsRegistry | Define required claim topics |
+| 2 | InvestorTypeRegistry | Manage investor type assignments |
+| 2 | ParticipantTypeRegistry | Manage participant roles (renter/rentor) |
+| 3 | ComplianceRules | Multi-layer compliance engine |
+| 3 | InvestorTypeCompliance | Investor-specific compliance checks |
+| 3 | RenterCompliance | Renter eligibility validation |
+| 3 | OperationalCompliance | Vehicle operational compliance |
+| 3 | TransferRestrictions | Token transfer restrictions |
+| 3 | ComplianceRegistry | Central compliance aggregator |
+| 4 | IdentityRegistry | Map addresses to verified identities |
+| 5 | VehicleNFT | ERC-721 vehicle representation |
+| 5 | RentalBooking | Booking lifecycle management |
+| 5 | RentalOperations | Condition reports, handovers, damage |
+| 6 | RegShieldPaymentProtocol | Investment payment processing |
+| 6 | PaymentEscrow (x2) | ETH escrow (investment + rental) |
+| 6 | RefundManager (x2) | Refund processing (investment + rental) |
+| 6 | RentalPaymentProtocol | Rental payment processing |
+| 6 | DisputeResolver | Oracle-mediated dispute resolution |
+| 7 | RevenueDistributor | Waterfall revenue distribution |
+| 7 | InvestorRequestManager | Investor onboarding + tiered locking |
+| 7 | MultiSigWallet | 2-of-2 multisig for accredited/institutional locks |
+| 8 | ComplianceReceiver | CRE: compliance actions |
+| 8 | PaymentReceiver | CRE: milestone completions |
+| 8 | VehicleReceiver | CRE: vehicle data updates |
+| 8 | OnboardingReceiver | CRE: investor/booking approvals |
+
+---
+
+## Deployment Phases
+
+Deploy in order using `./deploy-phased.sh [1-8|all]`:
+
+```
+Phase 1: OnchainID Infrastructure     (OnchainIDFactory, ClaimIssuer, KeyManager)
+Phase 2: Registries                    (TrustedIssuers, ClaimTopics, InvestorType, ParticipantType)
+Phase 3: Compliance Modules            (ComplianceRules, InvestorType, Renter, Operational, Transfer, Registry)
+Phase 4: Identity Registry             (IdentityRegistry)
+Phase 5: Vehicle & Rental              (VehicleNFT, RentalBooking, RentalOperations)
+Phase 6: Payment System (Native ETH)   (2x PaymentProtocol, 2x Escrow, 2x RefundManager, DisputeResolver)
+Phase 7: Revenue & Investor            (RevenueDistributor, InvestorRequestManager, MultiSigWallet)
+Phase 8: CRE Receivers                 (Compliance, Payment, Vehicle, Onboarding)
+```
+
+After deployment, run `./extract-addresses.sh` to extract addresses from broadcast artifacts into `deployed-addresses.env`.
+
+---
+
+## System Architecture
+
+### 1. Identity & Compliance Layer
 
 #### OnchainID System (ERC-734/735)
-- **Purpose**: Blockchain-based identity for all participants
-- **Participants**:
-  - **Renters**: Driver license, insurance, credit score claims
-  - **Investors**: Accreditation, regional eligibility, AML/KYC claims
-  - **Rentors**: Business registration, vehicle ownership claims
-  
-**Claim Structure**:
+
+All participants (renters, investors, rentors) must have an OnchainID with verified claims before interacting with the platform.
+
+**Claim Topics**:
 ```
-Claim Topics:
-- 1: KYC Verified
-- 2: Accredited Investor
-- 3: Regional Eligibility (per jurisdiction)
-- 4: Driver License Valid
-- 5: Insurance Verified
-- 6: Credit Score Range
-- 7: Business Registered
-- 8: Vehicle Ownership Proof
+1: KYC Verified
+2: Accredited Investor
+3: Regional Eligibility
+4: Driver License Valid
+5: Insurance Verified
+6: Credit Score Range
+7: Business Registered
+8: Vehicle Ownership Proof
 ```
 
-**Trusted Issuers** (via Chainlink CRE):
-- KYC providers (Jumio, Onfido)
-- Government agencies (DMV, business registries)
-- Insurance providers
-- Credit bureaus
+**Trusted Issuers** (verified via Chainlink CRE):
+- KYC providers, government agencies, insurance providers, credit bureaus
 
 #### ERC-3643 Token System
 
-**A. AssetToken (Vehicle Ownership)**
-- Represents fractional or full ownership of specific vehicles
-- One token contract per vehicle or fleet
-- Tradeable among qualified investors
-- Linked to physical vehicle via VIN
+**AssetToken** - Fractional vehicle ownership. One token per vehicle, tradeable among qualified investors, linked to physical vehicle via VIN.
 
-**B. RevenueToken (Investment Rights)**
-- Represents rights to rental income streams
-- Issued to investors who fund vehicle purchases
-- Non-transferable or restricted transfer (securities)
-- Automatically receives proportional rental revenue
+**RevenueToken** - Rights to rental income streams. Issued to investors who fund vehicle purchases. Automatically receives proportional rental revenue.
 
-**Benefits of Dual Token**:
-- Clean separation: ownership vs. income rights
-- Flexibility: Can sell asset while retaining revenue stream
-- Compliance: Different regulatory treatment
+#### Compliance Modules
 
-#### ComplianceRules Engine
+| Module | Purpose |
+|--------|---------|
+| ComplianceRules | Central engine: accreditation, investment limits, regional restrictions |
+| InvestorTypeCompliance | Transfer velocity, holding periods, cooldowns |
+| RenterCompliance | Age, license, insurance, credit score, blacklist |
+| OperationalCompliance | Vehicle registration, maintenance, insurance coverage |
+| TransferRestrictions | Whitelist tiers, lock-up periods, max transfer size |
+| ComplianceRegistry | Aggregates all modules for single-call checks |
 
-**Multi-Layer Validation**:
-
-1. **Investor Compliance Module**
-   - Accreditation verification
-   - Investment limits per type
-   - Regional restrictions
-   - Transfer velocity limits
-   - Holding period enforcement
-
-2. **Renter Compliance Module**
-   - Age verification (21+)
-   - Driver license validity
-   - Insurance coverage
-   - Credit score minimum
-   - Prior incident history
-
-3. **Transfer Compliance Module**
-   - Whitelist tier verification
-   - Lock-up period checks
-   - Maximum transfer size
-   - Cooling-off period
-   - Large transfer alerts
-
-4. **Operational Compliance Module**
-   - Vehicle registration status
-   - Maintenance schedule adherence
-   - Insurance coverage validity
-   - Regional operating permits
+---
 
 ### 2. Investor Management System
 
-#### Investor Type System
+#### Investor Types
 
+| Type | Lock Requirement | Min Investment | Max Investment | Lock-up |
+|------|-----------------|----------------|----------------|---------|
+| RETAIL (1) | 0.01 ETH | 0.001 ETH | 1 ETH per vehicle | 6 months |
+| ACCREDITED (2) | 0.1 ETH | 0.1 ETH | 10 ETH total | 3 months |
+| INSTITUTIONAL (3) | 1 ETH | 1 ETH | No max | 12 months |
+
+#### Tiered Onboarding Flow
+
+The onboarding flow differs by investor type. **RETAIL** investors use a simplified direct-lock flow. **ACCREDITED/INSTITUTIONAL** investors use a 2-of-2 MultiSigWallet.
+
+**RETAIL Investor Flow (2 steps)**:
 ```
-Type 1: Retail Accredited Investor
-├── Min Investment: $1,000
-├── Max Investment: $50,000 per vehicle
-├── Required Tier: Tier 1 (Basic KYC)
-├── Transfer Limit: 10% of holdings per month
-└── Lock-up: 6 months
+1. User calls requestInvestorStatus(RETAIL)
+   ├── Requires: verified OnchainID (KYC)
+   ├── Requires: no existing active request
+   └── Status → PENDING
 
-Type 2: Institutional Investor
-├── Min Investment: $50,000
-├── Max Investment: $500,000 per fleet
-├── Required Tier: Tier 2 (Enhanced DD)
-├── Transfer Limit: 25% of holdings per month
-└── Lock-up: 3 months
+2. User calls lockFundsDirect{value: 0.01 ether}()
+   ├── ETH held in InvestorRequestManager contract
+   ├── Excess ETH auto-refunded
+   └── Status → TOKENSLOCKED (skips WALLETCREATED)
 
-Type 3: Strategic Partner (Rental Companies)
-├── Min Investment: $500,000
-├── Max Investment: Unlimited
-├── Required Tier: Tier 3 (Board Approval)
-├── Transfer Limit: 50% of holdings per quarter
-└── Lock-up: 12 months
+3. Admin/Bank calls approveRequest(user)
+   ├── Verifies directLocks[user] >= requiredAmount
+   ├── Assigns investor type in InvestorTypeRegistry
+   └── Status → APPROVED
 
-Type 4: Regional Specific Investor
-├── Based on Type 1-3 but with geographic restrictions
-├── Must have regional eligibility claim
-├── Can only invest in vehicles operating in their region
-└── Additional compliance based on local regulations
-```
-
-#### Whitelist Tier System
-
-```
-Tier 1: Basic KYC
-├── Identity verification
-├── Address proof
-├── Source of funds declaration
-└── Sanctions screening
-
-Tier 2: Enhanced Due Diligence
-├── All Tier 1 requirements
-├── Accredited investor verification
-├── Financial statements review
-├── Background check
-└── Reference checks
-
-Tier 3: Strategic Partner Review
-├── All Tier 2 requirements
-├── Corporate structure analysis
-├── Board approval required
-├── Legal opinion
-└── Business plan review
-
-Tier 4: Regional Compliance
-├── Tier 1, 2, or 3 base requirements
-├── Regional regulatory compliance
-├── Jurisdiction-specific documentation
-└── Local tax registration
+4. User calls withdrawDirectLock()
+   └── Reclaims locked ETH after approval/rejection
 ```
 
-#### Large Transfer Detection
-
-**Thresholds**:
-- Absolute: >$100,000 or >10,000 tokens
-- Relative: >5% of total token supply
-- Velocity: >3 transfers in 24 hours
-
-**Actions**:
-1. Automatic hold (24-48 hours)
-2. Compliance officer notification
-3. Review queue entry
-4. Enhanced transaction monitoring
-5. Post-review release or rejection
-
-### 3. Payment Protocol System
-
-#### A. RegShieldPaymentProtocol (Investment Payments)
-
-**Purpose**: Handle capital raising and investment transactions
-
-**Flow**:
+**ACCREDITED/INSTITUTIONAL Investor Flow (5 steps)**:
 ```
-1. Investment Commitment
-   ├── Investor creates commitment
-   ├── Funds escrowed in PaymentEscrow
-   ├── Compliance checks via OnchainID
-   └── RevenueTokens reserved
+1. User calls requestInvestorStatus(ACCREDITED|INSTITUTIONAL)
+   └── Status → PENDING
 
-2. Milestone Validation (via Chainlink CRE)
-   ├── Vehicle identified and inspected
-   ├── Purchase agreement verified
-   ├── Insurance obtained
-   └── Registration completed
+2. Admin/Bank calls createMultiSigWallet(user)
+   ├── Deploys new MultiSigWallet(user, bank)
+   └── Status → WALLETCREATED
 
-3. Fund Release
-   ├── Milestone confirmation
-   ├── Funds released to rentor
-   ├── RevenueTokens minted to investor
-   └── AssetToken created (linked to VIN)
+3. User sends ETH to MultiSigWallet, calls lockFunds{value: amount}()
+   └── ETH locked in wallet (only user can lock)
 
-4. Revenue Distribution
-   ├── Rental income accumulated
-   ├── Operating costs deducted
-   ├── Net revenue calculated
-   └── Proportional distribution to RevenueToken holders
+4. User calls confirmTokensLocked()
+   ├── Verifies MultiSigWallet.getLockedBalance() >= required
+   └── Status → TOKENSLOCKED
+
+5. Admin/Bank calls approveRequest(user)
+   ├── Verifies wallet balance still sufficient
+   ├── Assigns investor type in InvestorTypeRegistry
+   └── Status → APPROVED
+
+   (Unlock from MultiSigWallet requires 2-of-2 proposal: user + bank)
 ```
 
-**Refund Types**:
-- **Automatic Refund**: Campaign fails to meet minimum
-- **Manual Refund**: Compliance officer decision
-- **Dispute Refund**: Arbitration result
-- **Emergency Refund**: Critical issue (fraud, safety)
+**Request Statuses**: `NONE` → `PENDING` → `WALLETCREATED`* → `TOKENSLOCKED` → `APPROVED` | `REJECTED`
+(*RETAIL skips WALLETCREATED)
 
-#### B. RentalPaymentProtocol (Operational Payments)
+#### InvestorRequestManager — Frontend Integration
 
-**Purpose**: Handle renter payments and deposits
+```solidity
+// Constructor: (address _bank, address _investorRegistry, address _identityRegistry)
 
-**Flow**:
-```
-1. Booking & Deposit
-   ├── Renter requests booking
-   ├── Compliance checks (OnchainID + CRE)
-   ├── Security deposit escrowed
-   └── Rental fee payment scheduled
+// --- User Functions ---
+requestInvestorStatus(InvestorType requestedType)           // Start onboarding
+lockFundsDirect() payable                                    // RETAIL: lock ETH directly
+withdrawDirectLock()                                         // RETAIL: reclaim after finalized
+confirmTokensLocked()                                        // ACCREDITED/INSTITUTIONAL: confirm multisig lock
 
-2. Active Rental
-   ├── Vehicle released (IoT unlock via CRE)
-   ├── Telematics monitoring
-   ├── Payment processing (time-based)
-   └── Condition tracking
+// --- Admin/Bank Functions ---
+createMultiSigWallet(address user)                           // ACCREDITED/INSTITUTIONAL only
+approveRequest(address user)                                 // Approve after TOKENSLOCKED
+rejectRequest(address user, string reason)                   // Reject with reason
 
-3. Return & Settlement
-   ├── Vehicle returned
-   ├── Condition assessment (CRE + IoT)
-   ├── Damage/penalty calculation
-   ├── Deposit settlement
-   └── Final payment to RevenueToken holders
+// --- View Functions ---
+getRequest(address user) → (type, requiredLock, wallet, status, createdAt, approvedAt, reason)
+directLocks(address user) → uint256                          // RETAIL lock balance
+lockRequirements(InvestorType) → uint256                     // Required lock per type
+canInvestInVehicle(address, uint256 vehicleId, uint256 amount) → (bool, uint8 reason)
+getVehicleInvestment(address, uint256 vehicleId) → uint256
+getTotalInvestment(address) → uint256
+hasActiveRequest(address) → bool
 
-4. Revenue Distribution
-   ├── Rental revenue collected
-   ├── Platform fees deducted
-   ├── Maintenance reserve allocated
-   ├── Net revenue to RevenueToken holders
-   └── Automatic distribution via smart contract
+// --- Payment Protocol Integration ---
+recordVehicleInvestment(address investor, uint256 vehicleId, uint256 amount) // Called by payment protocol
+setPaymentProtocol(address)                                  // Owner only
 ```
 
-**Payment States**:
-- PENDING: Initial creation
-- ESCROWED: Funds locked
-- ACTIVE: Rental in progress
-- PROCESSING: Return evaluation
-- COMPLETED: Funds distributed
-- DISPUTED: Arbitration needed
-- REFUNDED: Funds returned
-- CANCELLED: Booking cancelled
+#### MultiSigWallet — Frontend Integration
 
-### 4. Vehicle Registry System
+```solidity
+// Constructor: (address _user, address _bank)
 
-#### VehicleNFT Contract
+lockFunds() payable                           // User locks ETH
+proposeUnlock(uint256 amount, address recipient, string reason) → bytes32   // Either party
+signUnlock(bytes32 proposalId)                // Other party signs (auto-executes at 2 sigs)
 
-**Each vehicle represented as unique NFT**:
-
-```
-VehicleNFT {
-  tokenId: uint256 (unique)
-  vin: string (Vehicle Identification Number)
-  metadata: {
-    make: string
-    model: string
-    year: uint256
-    color: string
-    mileage: uint256 (updated via CRE)
-    registrationExpiry: uint256
-    insuranceExpiry: uint256
-  }
-  assetToken: address (linked ERC-3643 AssetToken)
-  revenueToken: address (linked ERC-3643 RevenueToken)
-  status: enum (Available, Rented, Maintenance, Retired)
-  currentBooking: uint256 (if rented)
-  maintenanceSchedule: uint256[] (timestamp array)
-  incidentHistory: uint256[] (incident IDs)
-}
+// View
+getWalletStatus() → (bank, user, lockedAmount, balance)
+getLockedBalance() → uint256
+getProposal(bytes32) → (proposer, amount, recipient, reason, userSigned, bankSigned, executed, createdAt)
 ```
 
-**Functions**:
-- `mintVehicle()`: Create new vehicle NFT (rentor only)
-- `updateStatus()`: Change operational status
-- `recordMaintenance()`: Log maintenance event
-- `recordIncident()`: Log damage/incident
-- `updateMileage()`: Update from telematics (CRE)
-- `linkTokens()`: Associate Asset/Revenue tokens
+---
 
-### 5. Rental Management System
+### 3. Payment System (Native ETH)
 
-#### RentalBooking Contract
+All payments use native ETH via `msg.value`. No ERC-20 tokens.
 
-**Booking Lifecycle**:
+#### Architecture
 
 ```
-States:
-- REQUESTED: Renter initiated
-- PENDING_APPROVAL: Compliance checks running (CRE)
-- APPROVED: Ready for pickup
-- ACTIVE: Vehicle in renter possession
-- PENDING_RETURN: Return process initiated
-- COMPLETED: Successfully closed
-- CANCELLED: Cancelled by renter/system
-- DISPUTED: Issue requiring resolution
+                    ┌─────────────────────────┐
+                    │   RegShieldPaymentProtocol│ ← Investment payments
+                    │   (payable functions)      │
+                    └──────────┬────────────────┘
+                               │
+                    ┌──────────▼────────────────┐
+                    │    PaymentEscrow           │ ← Holds ETH in escrow
+                    │    (investment instance)    │
+                    └──────────┬────────────────┘
+                               │
+                    ┌──────────▼────────────────┐
+                    │    RefundManager           │ ← Processes refunds
+                    │    (investment instance)    │
+                    └───────────────────────────┘
+
+                    ┌─────────────────────────┐
+                    │   RentalPaymentProtocol  │ ← Rental payments
+                    │   (payable functions)     │
+                    └──────────┬───────────────┘
+                               │
+                    ┌──────────▼───────────────┐
+                    │    PaymentEscrow          │ ← Holds ETH in escrow
+                    │    (rental instance)       │
+                    └──────────┬───────────────┘
+                               │
+                    ┌──────────▼───────────────┐
+                    │    RefundManager          │ ← Processes refunds
+                    │    (rental instance)       │
+                    └───────────────────────────┘
+
+                    ┌───────────────────────────┐
+                    │    DisputeResolver         │ ← Multi-oracle voting
+                    └───────────────────────────┘
 ```
 
-**Booking Structure**:
-```
-Booking {
-  id: uint256
-  vehicleId: uint256 (NFT token ID)
-  renter: address (OnchainID)
-  startTime: uint256
-  endTime: uint256
-  ratePerDay: uint256
-  securityDeposit: uint256
-  status: BookingStatus
-  paymentId: uint256 (link to payment escrow)
-  preCondition: ConditionReport (photos, mileage, fuel)
-  postCondition: ConditionReport (populated at return)
-  extensionCount: uint256
-  overdueMinutes: uint256
-}
-```
+Each `PaymentEscrow` is tied to ONE protocol. Two instances are deployed: one for investments, one for rentals.
 
-**Key Functions**:
-- `requestBooking()`: Create new booking request
-- `approveBooking()`: System approval after compliance
-- `startRental()`: Activate rental (unlock vehicle)
-- `extendRental()`: Add time (with additional payment)
-- `initiateReturn()`: Begin return process
-- `completeReturn()`: Finalize after inspection
-- `reportIssue()`: Flag problem during rental
-- `disputeCharges()`: Contest damage/fees
+#### RegShieldPaymentProtocol (Investment Payments)
 
-#### RentalOperations Contract
+Handles capital raising with milestone-based fund release.
 
-**Vehicle Handover**:
-```
-Pickup Process:
-1. Renter arrives at location
-2. Condition inspection (photos via CRE)
-3. Pre-rental report generated
-4. Vehicle IoT unlocked via CRE
-5. Booking status → ACTIVE
-6. Telematics monitoring begins
+```solidity
+// Constructor: (address _complianceRules, address _identityRegistry)
+
+// --- Investor-facing ---
+initiateVehicleInvestment(uint256 vehicleId, address rentor, uint256 amount, string reason) payable → uint256 paymentId
+// msg.value = investment amount + escrow fee
+
+// --- Admin/CRE Functions ---
+completeMilestone(uint256 paymentId, string milestone)    // Mark milestone done
+releaseMilestoneFunds(uint256 paymentId)                  // Release after all milestones
+registerVehicleTokens(uint256 vehicleId, address assetToken, address revenueToken)
+setAuthorizedOperator(address operator, bool authorized)   // Authorize CRE receivers
+
+// --- View ---
+getPayment(uint256 paymentId) → Payment
+getVehiclePayments(uint256 vehicleId) → uint256[]
+getMilestoneStatus(uint256 paymentId) → MilestoneStatus
+getVehicleInvestmentTotal(uint256 vehicleId) → uint256
 ```
 
-**Condition Tracking**:
-```
-ConditionReport {
-  timestamp: uint256
-  mileage: uint256
-  fuelLevel: uint8 (percentage)
-  photoHashes: bytes32[] (IPFS)
-  damageNotes: string[]
-  inspectorId: address (OnchainID)
-  signature: bytes
-}
-```
+**Milestones** (must all complete before fund release):
+1. `"VEHICLE_IDENTIFIED"` — Vehicle identified and inspected
+2. `"PURCHASE_VERIFIED"` — Purchase agreement verified
+3. `"INSURANCE_OBTAINED"` — Insurance obtained
+4. `"REGISTRATION_COMPLETED"` — Registration completed
 
-**Automated Monitoring** (via Chainlink CRE):
-- Real-time GPS location
-- Mileage accumulation
-- Speed monitoring (for insurance)
-- Geofencing violations
-- Maintenance alerts
-- Unauthorized usage detection
-
-**Return Process**:
+**Investment Flow**:
 ```
-1. Renter initiates return in app
-2. Return location verification
-3. Post-rental condition inspection
-4. Damage assessment (CRE AI analysis)
-5. Cost calculation
-6. Deposit settlement
-7. Vehicle status → Available
-8. Revenue distributed to RevenueToken holders
+Investor sends ETH → RegShieldPaymentProtocol.initiateVehicleInvestment{value}()
+    → Compliance check (OnchainID + InvestorType)
+    → ETH forwarded to PaymentEscrow.createEscrow{value}()
+    → Milestones completed (by CRE or admin)
+    → releaseMilestoneFunds() releases ETH to rentor
+    → AssetToken + RevenueToken minted to investor
 ```
 
-**Dispute Resolution**:
-- Evidence submission period (48 hours)
-- CRE-based automated adjudication (minor)
-- Human arbitrator for complex cases
-- Multi-signature resolution
-- Appeals process
+#### RentalPaymentProtocol (Rental Payments)
 
-### 6. Chainlink CRE Integration Layer
+```solidity
+// Constructor: (address _paymentEscrow, address _identityRegistry, address _participantTypeRegistry, address _renterCompliance)
 
-#### CRE Services Architecture
+// --- Renter-facing ---
+createRentalBooking(uint256 bookingId, uint256 vehicleId, address rentor,
+    uint256 rentalFee, uint256 securityDeposit, uint256 startTime, uint256 endTime) payable → uint256 paymentId
+// msg.value = rentalFee + securityDeposit + escrow fee
 
-**Service 1: Identity Verification Service**
-```
-Purpose: Verify claims for OnchainID system
-Inputs:
-  - User data (name, DOB, address, SSN)
-  - Document uploads (license, passport)
-  - Investor accreditation data
-Outputs:
-  - Signed claim attestations
-  - Claim topic assignments
-  - Verification confidence scores
+// --- Operator Functions ---
+startRental(uint256 paymentId)
+completeRental(uint256 paymentId, uint256 penaltyAmount, PenaltyReason reason, string description)
+cancelRental(uint256 paymentId)
 
-APIs Accessed:
-  - KYC: Jumio, Onfido, Sumsub
-  - Accreditation: VerifyInvestor API
-  - Credit: Experian, Equifax
-  - DMV: State databases
-  - Insurance: Carrier verification APIs
+// --- View ---
+getRentalPayment(uint256 paymentId) → RentalPayment
+getVehicleRentalPayments(uint256 vehicleId) → uint256[]
+platformFeeRate() → uint256   // Default: 500 = 5%
 ```
 
-**Service 2: Compliance Validation Service**
-```
-Purpose: Real-time compliance checking
-Inputs:
-  - Transaction details
-  - Participant OnchainIDs
-  - Historical data
-Outputs:
-  - Compliance approval/rejection
-  - Risk scores
-  - Flagged conditions
+#### PaymentEscrow
 
-Checks:
-  - Sanctions screening (OFAC, UN)
-  - PEP (Politically Exposed Person)
-  - Adverse media
-  - Regional restrictions
-  - Transfer limits
-```
+```solidity
+// Constructor: (address _paymentProtocol)
 
-**Service 3: Vehicle Telematics Service**
-```
-Purpose: Aggregate and validate vehicle data
-Inputs:
-  - IoT device data (GPS, OBD-II)
-  - Vehicle API data (Tesla, connected cars)
-  - Third-party telematics
-Outputs:
-  - Real-time location
-  - Mileage updates
-  - Maintenance alerts
-  - Incident detection
-  - Usage analytics
+// --- Protocol-only ---
+createEscrow(uint256 paymentId, address payer, address payee, uint256 amount, uint256 duration) payable → uint256 escrowId
 
-IoT Providers:
-  - Geotab
-  - Samsara
-  - Verizon Connect
-  - Vehicle OEM APIs
+// --- View ---
+getEscrowDetails(uint256 escrowId) → EscrowDetails
+getEscrowByPayment(uint256 paymentId) → uint256
+isEscrowExpired(uint256 escrowId) → bool
+calculateEscrowFee(uint256 amount) → uint256    // Default: 10 bps = 0.1%
+
+// --- Public ---
+processExpiredEscrow(uint256 escrowId)
+batchProcessExpiredEscrows(uint256[] escrowIds)
 ```
 
-**Service 4: Valuation & Pricing Service**
-```
-Purpose: Dynamic vehicle valuation and pricing
-Inputs:
-  - Vehicle metadata
-  - Current mileage
-  - Market data
-  - Maintenance history
-  - Incident history
-Outputs:
-  - Current market value
-  - Depreciation rate
-  - Recommended rental rate
-  - Investment return projections
+#### RefundManager
 
-Data Sources:
-  - Kelly Blue Book API
-  - Edmunds API
-  - Black Book
-  - Local rental market data
-  - Demand forecasting
+```solidity
+// Constructor: (address _paymentProtocol, address _paymentEscrow)
+
+requestRefund(uint256 paymentId, RefundType, RefundReason, string description, bytes32 evidenceHash) → uint256 refundId
+approveRefund(uint256 refundId)           // Processor only
+processRefund(uint256 refundId)           // Execute approved refund
+canRequestRefund(uint256 paymentId, address requester) → bool
+getRefundRequest(uint256 refundId) → RefundRequest
 ```
 
-**Service 5: Damage Assessment Service**
-```
-Purpose: AI-powered damage detection
-Inputs:
-  - Pre/post rental photos
-  - Video walkarounds
-  - Inspector notes
-Outputs:
-  - Damage severity classification
-  - Repair cost estimates
-  - Liability determination
-  - Evidence package for disputes
+**RefundTypes**: `AUTOMATIC` (auto-approved), `MANUAL` (needs approval), `DISPUTE` (from arbitration), `EMERGENCY`
 
-Technologies:
-  - Computer vision (damage detection)
-  - Cost estimation models
-  - Comparative analysis
-  - Confidence scoring
+#### DisputeResolver
+
+```solidity
+// Constructor: (address _paymentProtocol)
+
+fileDispute(uint256 paymentId, string reason, bytes32 evidenceHash) → uint256 disputeId
+submitOracleVote(uint256 disputeId, bool favorsPayer, string reasoning)  // Oracle only
+resolveDispute(uint256 disputeId)                                         // Tally and resolve
+appealDispute(uint256 disputeId, string reason)
+getDispute(uint256 disputeId) → (...)
+getVoteCounts(uint256 disputeId) → (forPayer, forPayee)
 ```
 
-**Service 6: Revenue Calculation Service**
-```
-Purpose: Calculate and distribute rental revenue
-Inputs:
-  - Rental transactions
-  - Operating costs
-  - Maintenance expenses
-  - RevenueToken holder registry
-Outputs:
-  - Net revenue per vehicle
-  - Distribution amounts per holder
-  - Tax documentation data
-  - Performance metrics
+**Outcomes**: `PENDING`, `FAVOR_PAYER`, `FAVOR_PAYEE`, `PARTIAL_REFUND`, `ESCALATED`
 
-Calculations:
-  - Gross rental income
-  - Platform fees (e.g., 15%)
-  - Maintenance reserve (e.g., 10%)
-  - Insurance costs
-  - Net distributable income
-  - Per-token distribution amount
-```
+---
 
-#### CRE-to-Contract Communication
+### 4. Vehicle Registry
 
-**Attestation Pattern**:
-```
-1. CRE Service completes computation
-2. Generates attestation with:
-   - Computation result
-   - Input data hash
-   - Timestamp
-   - Cryptographic proof (TEE signature)
-3. Submits attestation on-chain
-4. Smart contract verifies proof
-5. Contract executes based on result
+#### VehicleNFT (ERC-721)
+
+Each vehicle is a unique NFT with metadata, linked to AssetToken and RevenueToken.
+
+```solidity
+// Constructor: none (name: "RegShield Vehicle", symbol: "RSVEH")
+
+// --- Rentor Functions ---
+mintVehicle(address to, VehicleMetadata metadata, address assetToken, address revenueToken) → uint256 tokenId
+
+// --- Operator/System Functions ---
+updateStatus(uint256 tokenId, VehicleStatus newStatus)         // Rental contract
+updateMileage(uint256 tokenId, uint256 newMileage)             // Operator/CRE
+recordMaintenance(uint256 tokenId, string description, uint256 cost) → uint256
+recordIncident(uint256 tokenId, string description, uint256 estimatedCost, uint256 bookingId) → uint256
+resolveIncident(uint256 tokenId, uint256 incidentId, uint256 actualCost)
+setCurrentBooking(uint256 tokenId, uint256 bookingId)          // Rental contract
+linkTokens(uint256 tokenId, address assetToken, address revenueToken)
+
+// --- View ---
+getVehicleMetadata(uint256 tokenId) → VehicleMetadata
+getVehicleInfo(uint256 tokenId) → (metadata, status, currentBooking, maintenanceCount, incidentCount)
+getLinkedTokens(uint256 tokenId) → (assetToken, revenueToken)
+isVINRegistered(string vin) → bool
+getTokenIdByVIN(string vin) → uint256
 ```
 
-**Example: Renter Approval Flow**
+**VehicleStatus**: `Available`, `Rented`, `InMaintenance`, `Retired`
+
+**VehicleMetadata**: `{ vin, make, model, year, color, mileage, registrationExpiry, insuranceExpiry }`
+
+---
+
+### 5. Rental Management
+
+#### RentalBooking
+
+```solidity
+// Constructor: (address _vehicleNFT, address _renterCompliance, address _rentalPaymentProtocol)
+
+// --- Renter Functions ---
+requestBooking(uint256 vehicleId, uint256 startTime, uint256 endTime, uint256 ratePerDay, uint256 securityDeposit) payable → uint256 bookingId
+extendRental(uint256 bookingId, uint256 additionalDays) payable → uint256 newEndTime
+initiateReturn(uint256 bookingId)
+reportIssue(uint256 bookingId, string issue)
+disputeCharges(uint256 bookingId, uint256 disputedAmount, string reason)
+
+// --- Admin/Operator Functions ---
+approveBooking(uint256 bookingId)
+startRental(uint256 bookingId, ConditionReport preCondition)
+completeReturn(uint256 bookingId, ConditionReport postCondition, uint256 damageCharges)
+
+// --- View ---
+getBooking(uint256 bookingId) → Booking
+isVehicleAvailable(uint256 vehicleId, uint256 startTime, uint256 endTime) → bool
+calculateBookingCost(uint256 startTime, uint256 endTime, uint256 ratePerDay) → uint256
 ```
-User requests booking
-    ↓
-Smart contract calls CRE
-    ↓
-CRE Service accesses:
-  - DMV API (license valid?)
-  - Insurance API (coverage active?)
-  - Credit bureau (score > threshold?)
-  - Incident database (clean record?)
-    ↓
-CRE generates attestation:
-  {
-    approved: true/false,
-    expiresAt: timestamp,
-    confidenceScore: 0-100,
-    flags: [],
-    signature: 0x...
-  }
-    ↓
-Attestation posted on-chain
-    ↓
-Smart contract verifies signature
-    ↓
-Booking approved/rejected
+
+**BookingStatus**: `REQUESTED` → `PENDING_APPROVAL` → `APPROVED` → `ACTIVE` → `PENDING_RETURN` → `COMPLETED` | `CANCELLED` | `DISPUTED`
+
+**Constraints**: Min 1 hour, max 90 days, max 5 extensions
+
+#### RentalOperations
+
+```solidity
+// Constructor: (address _rentalBooking, address _vehicleNFT)
+
+// --- Operator Functions ---
+createPreRentalReport(bookingId, vehicleId, mileage, fuelLevel, photoHashes, damageNotes) → ConditionReport
+createPostRentalReport(bookingId, vehicleId, mileage, fuelLevel, photoHashes, damageNotes) → ConditionReport
+performHandover(uint256 bookingId, ConditionReport preReport)
+processReturn(uint256 bookingId, ConditionReport postReport)
+assessDamage(bookingId, damages, costs, evidenceHashes) → uint256 assessmentId
+approveDamageAssessment(bookingId, assessmentId, finalCost)
+calculateOverdueCharges(uint256 bookingId) → uint256
 ```
 
-### 7. Revenue Distribution Mechanism
+---
 
-#### Revenue Waterfall
+### 6. Revenue Distribution
 
+#### RevenueDistributor
+
+Distributes rental revenue using a waterfall deduction model.
+
+```solidity
+// Constructor: none (sets default percentages)
+
+// --- Source Functions ---
+addRevenue(uint256 vehicleId, uint256 amount) payable        // From authorized source (rental protocol)
+registerVehicle(uint256 vehicleId, address revenueToken)     // Link vehicle to RevenueToken
+
+// --- Distribution ---
+distributeRevenue(uint256 vehicleId) → uint256 distributionId    // Apply waterfall
+claimRevenue(uint256 vehicleId) → uint256 amount                 // Token holder claims
+batchClaimRevenue(uint256[] vehicleIds) → uint256 totalClaimed
+
+// --- View ---
+getClaimableRevenue(uint256 vehicleId, address holder) → uint256
+getVehicleRevenue(uint256 vehicleId) → VehicleRevenue
+calculateWaterfall(uint256 grossRevenue) → RevenueAllocation
+```
+
+**Revenue Waterfall**:
 ```
 Gross Rental Income (100%)
-    ↓
-├─ Platform Fee (15%)
-│  └─ Protocol treasury
-├─ Maintenance Reserve (10%)
-│  └─ Per-vehicle escrow
-├─ Insurance Premium (5%)
-│  └─ Coverage payments
-├─ Operating Costs (10%)
-│  └─ Gas, cleaning, parking
-└─ Net Distributable (60%)
-   └─ To RevenueToken Holders (proportional)
+  ├── Platform Fee:        15%  → Protocol treasury
+  ├── Maintenance Reserve: 10%  → Per-vehicle escrow
+  ├── Insurance Premium:    5%  → Coverage payments
+  ├── Operating Costs:     10%  → Gas, cleaning, parking
+  └── Net Distributable:   60%  → RevenueToken holders (proportional)
 ```
 
-#### Automated Distribution
+---
 
-**Trigger**: Chainlink Automation (daily/weekly)
+### 7. Chainlink CRE Integration
 
-**Process**:
+Four receiver contracts bridge off-chain CRE computations to on-chain actions. Each receiver accepts reports from the Chainlink forwarder only.
+
+| Receiver | Target Contract | Actions |
+|----------|----------------|---------|
+| ComplianceReceiver | RenterCompliance, OperationalCompliance | RECORD_INCIDENT, BLACKLIST_RENTER, RENEW_REGISTRATION, SUSPEND_VEHICLE, etc. |
+| PaymentReceiver | RegShieldPaymentProtocol | Complete milestones: VEHICLE_IDENTIFIED, PURCHASE_VERIFIED, INSURANCE_OBTAINED, REGISTRATION_COMPLETED |
+| VehicleReceiver | VehicleNFT | UPDATE_MILEAGE, RECORD_MAINTENANCE, RECORD_INCIDENT, RESOLVE_INCIDENT |
+| OnboardingReceiver | InvestorRequestManager, RentalBooking | APPROVE_INVESTOR, REJECT_INVESTOR, APPROVE_BOOKING, REJECT_BOOKING |
+
+**CRE Report Flow**:
 ```
-1. Calculate period revenue per vehicle
-2. Apply waterfall deductions
-3. Query RevenueToken holder balances
-4. Calculate per-holder amounts
-5. Execute batch transfers
-6. Emit distribution events
-7. Update accounting records
+Off-chain CRE service → Chainlink forwarder → Receiver._processReport(bytes)
+    → Decodes action + params → Calls target contract function
 ```
 
-**Smart Contract**:
-```solidity
-contract RevenueDistributor {
-  mapping(address => uint256) public revenueTokens; // ERC-3643 addresses
-  mapping(address => uint256) public accumulatedRevenue;
-  
-  function distributeRevenue(address vehicleToken) external {
-    // Called by Chainlink Automation
-    uint256 revenue = accumulatedRevenue[vehicleToken];
-    
-    // Apply waterfall
-    uint256 platformFee = revenue * 15 / 100;
-    uint256 maintenance = revenue * 10 / 100;
-    uint256 insurance = revenue * 5 / 100;
-    uint256 operating = revenue * 10 / 100;
-    uint256 distributable = revenue - platformFee - maintenance - insurance - operating;
-    
-    // Get RevenueToken holders
-    address revenueToken = revenueTokens[vehicleToken];
-    address[] memory holders = getTokenHolders(revenueToken);
-    uint256 totalSupply = IERC20(revenueToken).totalSupply();
-    
-    // Distribute proportionally
-    for (uint i = 0; i < holders.length; i++) {
-      uint256 balance = IERC20(revenueToken).balanceOf(holders[i]);
-      uint256 amount = distributable * balance / totalSupply;
-      payable(holders[i]).transfer(amount);
-    }
-    
-    accumulatedRevenue[vehicleToken] = 0;
-  }
-}
-```
+All receivers require `CRE_FORWARDER` address set during deployment (Phase 8).
+
+---
 
 ## Data Flow Diagrams
 
 ### Investment Flow
 ```
-Investor → RegShieldPayment → Escrow → Compliance Check (CRE) 
-    → Approval → Fund Release → Vehicle Purchase 
-    → AssetToken Minted → RevenueToken Minted → Investor
+Investor
+  │
+  ├─1─→ requestInvestorStatus(RETAIL)           [InvestorRequestManager]
+  ├─2─→ lockFundsDirect{value: 0.01 ETH}()     [InvestorRequestManager]
+  │     (Admin approves → investor type assigned)
+  ├─3─→ withdrawDirectLock()                     [InvestorRequestManager] (reclaim lock)
+  │
+  ├─4─→ initiateVehicleInvestment{value}()       [RegShieldPaymentProtocol]
+  │     ├── Compliance check (OnchainID + type)
+  │     └── ETH → PaymentEscrow
+  │
+  │     (CRE completes milestones off-chain)
+  │     (Admin/CRE calls completeMilestone)
+  │
+  └─5─→ releaseMilestoneFunds()                  [RegShieldPaymentProtocol]
+        ├── ETH released to rentor
+        └── AssetToken + RevenueToken → investor
 ```
 
 ### Rental Flow
 ```
-Renter → Booking Request → Compliance Check (CRE) 
-    → Approval → Deposit Escrow → Vehicle Unlock (CRE/IoT)
-    → Active Rental → Telematics Monitoring (CRE)
-    → Return → Condition Check (CRE) → Settlement
-    → Revenue Distribution → RevenueToken Holders
+Renter
+  │
+  ├─1─→ requestBooking{value: fee + deposit}()   [RentalBooking]
+  │     (Compliance check via OnchainID)
+  │
+  ├─2─→ approveBooking()                         [RentalBooking] (admin/CRE)
+  │
+  ├─3─→ startRental() + performHandover()        [RentalBooking + RentalOperations]
+  │     ├── Pre-rental condition report
+  │     └── Vehicle status → Rented
+  │
+  ├─4─→ (Active rental: telematics via CRE)
+  │
+  ├─5─→ initiateReturn()                         [RentalBooking]
+  │
+  └─6─→ completeReturn() + processReturn()       [RentalBooking + RentalOperations]
+        ├── Post-rental condition report
+        ├── Damage assessment
+        ├── Deposit settlement
+        ├── Revenue → RevenueDistributor
+        └── Vehicle status → Available
 ```
 
-### Compliance Flow
+### Revenue Claim Flow
 ```
-User Action → OnchainID Claims → Compliance Module
-    → CRE Verification Services → External APIs
-    → Attestation Generation → On-chain Verification
-    → Approval/Rejection → User Notification
+RevenueToken Holder
+  │
+  ├─→ getClaimableRevenue(vehicleId, holder)     [RevenueDistributor] (check)
+  └─→ claimRevenue(vehicleId)                    [RevenueDistributor] (claim ETH)
 ```
+
+---
+
+## Access Control Summary
+
+| Role | Can Call |
+|------|---------|
+| **Owner** (deployer) | All admin functions, setters, operator management |
+| **Bank** | createMultiSigWallet, approveRequest, rejectRequest |
+| **Investor** (verified) | requestInvestorStatus, lockFundsDirect, confirmTokensLocked, withdrawDirectLock, initiateVehicleInvestment |
+| **Renter** (verified) | requestBooking, extendRental, initiateReturn, reportIssue, disputeCharges |
+| **Rentor** (verified) | mintVehicle, manage vehicle metadata |
+| **Operator** (authorized) | Vehicle updates, condition reports, milestone completions |
+| **CRE Forwarder** | Receiver._processReport (Chainlink only) |
+| **Payment Protocol** | recordVehicleInvestment (on InvestorRequestManager) |
+
+---
+
+## Environment Variables
+
+Key `.env` variables needed for deployment:
+
+```bash
+PRIVATE_KEY=0x...              # Deployer private key
+OWNER=0x...                    # Contract owner address
+SEPOLIA_RPC_URL=...            # Sepolia RPC endpoint
+ETHERSCAN_API_KEY=...          # For contract verification
+BANK_ADDRESS=0x...             # Banking institution (defaults to OWNER)
+CRE_FORWARDER=0x...            # Chainlink forwarder (required for Phase 8)
+```
+
+After each phase, deployed addresses are saved and referenced in subsequent phases (e.g., `IDENTITY_REGISTRY`, `COMPLIANCE_RULES`, etc.).
+
+---
 
 ## Security Considerations
 
-1. **Multi-signature Controls**: Critical operations require multiple signers
-2. **Time Locks**: Changes to core parameters have delay periods
-3. **Circuit Breakers**: Emergency pause functionality
-4. **Rate Limiting**: Prevent spam/DOS attacks
-5. **Access Control**: Role-based permissions (RBAC)
-6. **Audit Trails**: Comprehensive event logging
-7. **Oracle Security**: CRE cryptographic proofs
-8. **Private Key Management**: Hardware security modules
-9. **Smart Contract Audits**: Third-party security reviews
-10. **Bug Bounty Program**: Incentivized vulnerability disclosure
+1. **ReentrancyGuard**: All ETH-transferring functions use OpenZeppelin ReentrancyGuard
+2. **ETH Transfers**: All use `.call{value:}` pattern (not deprecated `.transfer()`)
+3. **Access Control**: Ownable + role-based checks (bank, operator, CRE forwarder)
+4. **Multi-signature**: 2-of-2 for accredited/institutional fund unlocks
+5. **Escrow Pattern**: Funds held in dedicated escrow contracts, not in protocol contracts
+6. **Compliance Gates**: All user-facing payment functions check OnchainID verification
+7. **Excess Refunds**: Payable functions refund overpayment automatically
+8. **Emergency Controls**: Pause functionality, emergency refund authority on escrows
+9. **CRE Proofs**: TEE-signed attestations verified on-chain before state changes
+10. **Event Logging**: All state transitions emit events for frontend indexing
 
-## Scalability Strategy
+---
 
-1. **Layer 2 Deployment**: Use L2 for high-frequency operations
-2. **Batch Processing**: Group operations to reduce gas costs
-3. **State Channels**: Off-chain state for active rentals
-4. **Sharding**: Separate contracts per region/fleet
-5. **IPFS**: Store large data (photos, documents) off-chain
-6. **Indexing**: The Graph protocol for efficient queries
-7. **Caching**: CRE-based caching layer for frequent reads
+## Frontend Integration Checklist
 
-## Regulatory Compliance
-
-1. **Securities Law**: RevenueTokens as registered securities
-2. **AML/KYC**: Comprehensive identity verification
-3. **Regional Regulations**: Jurisdiction-specific modules
-4. **Tax Reporting**: Automated 1099 generation
-5. **Data Privacy**: GDPR/CCPA compliance via CRE
-6. **Consumer Protection**: Transparent terms, dispute resolution
-7. **Insurance**: Adequate coverage, proof of coverage
-8. **Licensing**: Rental business permits per jurisdiction
-
-## Future Enhancements
-
-1. **Cross-chain Support**: Multi-chain deployment
-2. **Dynamic Pricing**: AI-driven rate optimization
-3. **Loyalty Programs**: Token-based rewards
-4. **Insurance Protocol**: Decentralized insurance pool
-5. **Secondary Market**: P2P token trading
-6. **Fleet Management**: Enterprise dashboard
-7. **Carbon Credits**: Offset tracking for EVs
-8. **Subscription Model**: Monthly unlimited rentals
-9. **Peer-to-Peer**: Direct renter-owner matching
-10. **DAO Governance**: Token holder voting on parameters
+1. **Connect wallet** — User's own EOA (MetaMask, WalletConnect)
+2. **Check identity** — `identityRegistry.isVerified(address)` before any action
+3. **Check investor type** — `investorRegistry.getInvestorType(address)` for investment limits
+4. **Check participant type** — `participantTypeRegistry.getParticipantType(address)` for role
+5. **Read contract addresses** — From `deployed-addresses.env` or `.env`
+6. **Send ETH with transactions** — All payment/lock functions are `payable` (use `msg.value`)
+7. **Listen to events** — Subscribe to contract events for real-time UI updates
+8. **Calculate fees** — `paymentEscrow.calculateEscrowFee(amount)` before sending
+9. **Check availability** — `rentalBooking.isVehicleAvailable(vehicleId, start, end)`
+10. **Check claimable** — `revenueDistributor.getClaimableRevenue(vehicleId, holder)`

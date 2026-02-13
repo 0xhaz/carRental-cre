@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { Vehicle, VehicleStatus } from "@/src/types";
-import { vehicleApi } from "@/src/lib/api";
+import type { Vehicle, VehicleStatus } from "@/types";
+import { vehicleApi } from "@/lib/api";
 import { toast } from "react-hot-toast";
 
 interface VehicleFilters {

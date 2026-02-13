@@ -1,7 +1,7 @@
-import { assets } from "@/public/assets/assets";
+import { assets } from "@/constants/menuLinks";
 import Image from "next/image";
 import Link from "next/link";
-import { Separator } from "@/src/components/ui";
+import { Separator } from "@/components/ui";
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -11,7 +11,13 @@ export function Footer() {
       <div className="flex flex-wrap justify-between items-start gap-8 pb-6">
         {/* Brand Section */}
         <div className="max-w-xs">
-          <Image src={assets.logo} alt="RegShield Logo" className="mb-4 h-8 md:h-9" />
+          <Image
+            src={assets.logo}
+            alt="RegShield Logo"
+            className="mb-4 h-8 md:h-9"
+            width={72}
+            height={36}
+          />
           <p className="mt-3 text-gray-600">
             Premium car rental service with a wide selection of luxury and
             everyday vehicles for all your driving needs.
@@ -22,6 +28,8 @@ export function Footer() {
                 src={assets.facebook_logo}
                 alt="Facebook"
                 className="h-5 w-5 hover:opacity-70 transition-opacity"
+                width={20}
+                height={20}
               />
             </Link>
             <Link href="#" aria-label="Instagram">
@@ -29,6 +37,8 @@ export function Footer() {
                 src={assets.instagram_logo}
                 alt="Instagram"
                 className="h-5 w-5 hover:opacity-70 transition-opacity"
+                width={20}
+                height={20}
               />
             </Link>
             <Link href="#" aria-label="Twitter">
@@ -36,6 +46,8 @@ export function Footer() {
                 src={assets.twitter_logo}
                 alt="Twitter"
                 className="h-5 w-5 hover:opacity-70 transition-opacity"
+                width={20}
+                height={20}
               />
             </Link>
             <Link href="#" aria-label="Email">
@@ -43,6 +55,8 @@ export function Footer() {
                 src={assets.gmail_logo}
                 alt="Gmail"
                 className="h-5 w-5 hover:opacity-70 transition-opacity"
+                width={20}
+                height={20}
               />
             </Link>
           </div>
@@ -60,17 +74,26 @@ export function Footer() {
               </Link>
             </li>
             <li>
-              <Link href="/renter/browse" className="hover:text-primary transition-colors">
+              <Link
+                href="/renter/browse"
+                className="hover:text-primary transition-colors"
+              >
                 Browse Cars
               </Link>
             </li>
             <li>
-              <Link href="/rentor" className="hover:text-primary transition-colors">
+              <Link
+                href="/rentor"
+                className="hover:text-primary transition-colors"
+              >
                 List Your Car
               </Link>
             </li>
             <li>
-              <Link href="/investor/marketplace" className="hover:text-primary transition-colors">
+              <Link
+                href="/investor/marketplace"
+                className="hover:text-primary transition-colors"
+              >
                 Invest
               </Link>
             </li>

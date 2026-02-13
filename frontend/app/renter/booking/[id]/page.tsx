@@ -9,11 +9,11 @@ import {
   Card,
   CardContent,
   Badge,
-} from "@/src/components/ui";
-import { ReviewModal, ReviewList, ReviewStats } from "@/src/components/shared";
-import { generateMockBookings, generateMockVehicles, generateMockReviews } from "@/src/lib/mockData";
-import { Booking, Vehicle, Review, ReviewFormData } from "@/src/types";
-import { formatCurrency, formatDate } from "@/src/lib/utils";
+} from "@/components/ui";
+import { ReviewModal, ReviewList, ReviewStats } from "@/components/shared";
+import { generateMockBookings, generateMockVehicles, generateMockReviews } from "@/lib/mockData";
+import { Booking, Vehicle, Review, ReviewFormData } from "@/types";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import Image from "next/image";
 import { toast } from "react-hot-toast";
 

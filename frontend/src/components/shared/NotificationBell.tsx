@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, X, Check, CheckCheck } from "lucide-react";
-import { useNotificationStore } from "@/src/store";
-import { Notification } from "@/src/types";
+import { useNotificationStore } from "@/store";
+import { Notification } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 
 export function NotificationBell() {
@@ -70,6 +70,9 @@ export function NotificationBell() {
       revenue_distributed: "💵",
       campaign_funded: "🎉",
       vehicle_available: "🚗",
+      kyc_approved: "✅",
+      kyc_rejected: "❌",
+      kyc_expired: "⚠️",
       system_update: "🔔",
     };
     return iconMap[type] || "🔔";

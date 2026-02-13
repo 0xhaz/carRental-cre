@@ -1,5 +1,5 @@
-import { Title, Card } from "@/src/components/ui";
-import { assets } from "@/public/assets/assets";
+import { Title, Card } from "@/components/ui";
+import { assets } from "@/constants/menuLinks";
 import Image from "next/image";
 
 const testimonials = [
@@ -50,6 +50,8 @@ export function Testimonial() {
                 className="w-12 h-12 rounded-full object-cover"
                 src={testimonial.image}
                 alt={testimonial.name}
+                width={48}
+                height={48}
               />
               <div>
                 <p className="text-xl font-semibold text-gray-900">
@@ -62,7 +64,14 @@ export function Testimonial() {
             {/* Rating */}
             <div className="flex items-center gap-1 mb-4">
               {Array.from({ length: testimonial.rating }).map((_, i) => (
-                <Image key={i} src={assets.star_icon} alt="star" className="w-5 h-5" />
+                <Image
+                  key={i}
+                  src={assets.star_icon}
+                  alt="star"
+                  className="w-5 h-5"
+                  width={20}
+                  height={20}
+                />
               ))}
             </div>
 

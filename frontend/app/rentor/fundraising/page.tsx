@@ -2,73 +2,66 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { InvestmentCard, InvestmentCardSkeleton } from "@/src/components/investor";
-import { CreateCampaignModal } from "@/src/components/rentor";
-import { Heading, Paragraph, Button, Card, CardContent, Badge } from "@/src/components/ui";
-import { generateMockVehicles, generateMockCampaigns } from "@/src/lib/mockData";
-import { Vehicle, FundraisingCampaign } from "@/src/types";
-import { formatCurrency } from "@/src/lib/utils";
+import { InvestmentCard, InvestmentCardSkeleton } from "@/components/investor";
+import { CreateCampaignModal } from "@/components/rentor";
+import { VerificationStatusBanner } from "@/components/shared/VerificationStatusBanner";
+import { Heading, Paragraph, Button, Card, CardContent, Badge } from "@/components/ui";
+import { FundraisingCampaign } from "@/types";
+import { formatCurrency } from "@/lib/utils";
 import { toast } from "react-hot-toast";
+import { useCanRentorAct } from "@/hooks/useComplianceStatus";
+import { investmentApi } from "@/lib/api";
 import Link from "next/link";
 
 export default function RentorFundraising() {
   const router = useRouter();
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const { canAct: canCreateCampaign, reason: complianceReason } = useCanRentorAct();
   const [campaigns, setCampaigns] = useState<FundraisingCampaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  useEffect(() => {
-    const loadFundraising = async () => {
-      setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+  const loadCampaigns = async () => {
+    setIsLoading(true);
+    try {
+      const response = await investmentApi.getRentorCampaigns();
 
-      const mockVehicles = generateMockVehicles(12);
-      const mockCampaigns = generateMockCampaigns(5);
-
-      // Filter vehicles with active fundraising
-      const fundraisingVehicles = mockVehicles.filter((v) => v.fundraising?.active);
-
-      setVehicles(fundraisingVehicles);
-      setCampaigns(mockCampaigns);
+      if (response.success) {
+        setCampaigns(response.data || []);
+      }
+    } catch (error: any) {
+      console.error("Failed to load campaigns:", error);
+      toast.error(error.response?.data?.message || "Failed to load campaigns");
+      setCampaigns([]);
+    } finally {
       setIsLoading(false);
-    };
-
-    loadFundraising();
-  }, []);
-
-  // Calculate stats
-  const totalRaised = vehicles.reduce(
-    (sum, v) => sum + (v.fundraising?.currentAmount || 0),
-    0
-  );
-  const totalTarget = vehicles.reduce(
-    (sum, v) => sum + (v.fundraising?.targetAmount || 0),
-    0
-  );
-  const totalInvestors = vehicles.reduce(
-    (sum, v) => sum + (v.fundraising?.investors?.length || 0),
-    0
-  );
-
-  const handleCreateCampaignSuccess = () => {
-    // Simulate refetch
-    setTimeout(() => {
-      const loadFundraising = async () => {
-        setIsLoading(true);
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        const mockVehicles = generateMockVehicles(12);
-        const fundraisingVehicles = mockVehicles.filter((v) => v.fundraising?.active);
-        setVehicles(fundraisingVehicles);
-        setIsLoading(false);
-      };
-      loadFundraising();
-    }, 500);
+    }
   };
 
-  const handleManageCampaign = (vehicleId: string) => {
-    // Navigate to vehicle detail/management page
-    router.push(`/rentor/vehicle/${vehicleId}`);
+  useEffect(() => {
+    loadCampaigns();
+  }, []);
+
+  // Calculate stats from campaigns
+  const totalRaised = campaigns.reduce((sum, c) => sum + (c.currentAmount || 0), 0);
+  const totalTarget = campaigns.reduce((sum, c) => sum + (c.targetAmount || 0), 0);
+  const totalInvestors = campaigns.reduce((sum, c) => sum + (c.investorCount || 0), 0);
+
+  const handleCreateCampaignClick = () => {
+    if (!canCreateCampaign) {
+      toast.error(complianceReason || "Please complete verification first");
+      return;
+    }
+    setShowCreateModal(true);
+  };
+
+  const handleCreateCampaignSuccess = () => {
+    // Refetch campaigns
+    loadCampaigns();
+  };
+
+  const handleManageCampaign = (campaignId: string) => {
+    // Navigate to campaign management/detail page
+    toast.info("Campaign management coming soon!");
   };
 
   return (
@@ -84,18 +77,21 @@ export default function RentorFundraising() {
               Create and manage fundraising for your vehicles
             </Paragraph>
           </div>
-          <Button onClick={() => setShowCreateModal(true)}>
-            Create Campaign
+          <Button onClick={handleCreateCampaignClick} disabled={!canCreateCampaign}>
+            {canCreateCampaign ? "Create Campaign" : "Verification Required"}
           </Button>
         </div>
       </div>
+
+      {/* Verification Status Banner */}
+      <VerificationStatusBanner roleType="rentor" className="mb-8" />
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card>
           <CardContent className="p-6">
             <p className="text-sm text-gray-600 mb-2">Active Campaigns</p>
-            <p className="text-3xl font-bold text-blue-600">{vehicles.length}</p>
+            <p className="text-3xl font-bold text-blue-600">{campaigns.length}</p>
           </CardContent>
         </Card>
         <Card>
@@ -126,7 +122,7 @@ export default function RentorFundraising() {
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <Heading as="h2">Active Campaigns</Heading>
-          <Badge variant="primary">{vehicles.length} Active</Badge>
+          <Badge variant="primary">{campaigns.length} Active</Badge>
         </div>
 
         {isLoading ? (
@@ -135,13 +131,13 @@ export default function RentorFundraising() {
               <InvestmentCardSkeleton key={i} />
             ))}
           </div>
-        ) : vehicles.length > 0 ? (
+        ) : campaigns.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {vehicles.map((vehicle) => (
+            {campaigns.map((campaign) => (
               <InvestmentCard
-                key={vehicle._id}
-                vehicle={vehicle}
-                onInvest={handleManageCampaign}
+                key={campaign._id}
+                vehicle={typeof campaign.vehicle === "object" ? campaign.vehicle : undefined}
+                onInvest={() => handleManageCampaign(campaign._id)}
                 basePath="rentor"
               />
             ))}
@@ -156,9 +152,10 @@ export default function RentorFundraising() {
             </Paragraph>
             <Button
               className="mt-4"
-              onClick={() => setShowCreateModal(true)}
+              onClick={handleCreateCampaignClick}
+              disabled={!canCreateCampaign}
             >
-              Create Your First Campaign
+              {canCreateCampaign ? "Create Your First Campaign" : "Complete Verification First"}
             </Button>
           </div>
         )}

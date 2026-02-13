@@ -1,8 +1,8 @@
 "use client";
 
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/src/components/ui";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { formatCurrency } from "@/src/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 
 export interface RevenueData {
   month: string;

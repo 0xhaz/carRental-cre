@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useUserStore } from "@/src/store";
-import { UserRole } from "@/src/types";
+import { useUserStore } from "@/store";
+import { UserRole } from "@/types";
 import { toast } from "react-hot-toast";
 
 interface ProtectedRouteProps {

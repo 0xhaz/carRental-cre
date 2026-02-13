@@ -26,7 +26,7 @@ contract TrustedIssuersRegistry is ITrustedIssuerRegistry, Ownable {
     /// @inheritdoc ITrustedIssuerRegistry
     function addTrustedIssuer(address _trustedIssuer, uint256[] calldata _claimTopics) external override onlyOwner {
         if (_trustedIssuer == address(0)) revert TrustedIssuerRegistry__InvalidIssuerAddress();
-        if (!_isTrustedIssuer[_trustedIssuer]) revert TrustedIssuerRegistry__IssuerAlreadyTrusted();
+        if (_isTrustedIssuer[_trustedIssuer]) revert TrustedIssuerRegistry__IssuerAlreadyTrusted();
         if (_claimTopics.length == 0) revert TrustedIssuerRegistry__MustSpecifyClaimTopics();
 
         _trustedIssuers.push(_trustedIssuer);

@@ -19,35 +19,62 @@ contract DeployCompliance is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address owner = vm.envAddress("OWNER");
 
+        // NOTE: This script requires addresses from previous deployments
+        address investorTypeRegistry = vm.envAddress("INVESTOR_TYPE_REGISTRY"); // From script 02
+        address identityRegistry = vm.envAddress("IDENTITY_REGISTRY");           // From script 04 (deploy that first!)
+
         console.log("=== Deploying Compliance Modules ===");
         console.log("Deployer:", vm.addr(deployerPrivateKey));
         console.log("Owner:", owner);
+        console.log("InvestorTypeRegistry:", investorTypeRegistry);
+        console.log("IdentityRegistry:", identityRegistry);
 
         vm.startBroadcast(deployerPrivateKey);
 
         // 1. Deploy ComplianceRules (base module)
         console.log("\n1. Deploying ComplianceRules...");
-        ComplianceRules complianceRules = new ComplianceRules();
+
+        // Setup default allowed countries (US, UK, EU major countries)
+        uint256[] memory allowedCountries = new uint256[](5);
+        allowedCountries[0] = 1;   // US
+        allowedCountries[1] = 44;  // UK
+        allowedCountries[2] = 49;  // Germany
+        allowedCountries[3] = 33;  // France
+        allowedCountries[4] = 39;  // Italy
+
+        // Setup default blocked countries (sanctioned countries)
+        uint256[] memory blockedCountries = new uint256[](0);  // Empty initially
+
+        ComplianceRules complianceRules = new ComplianceRules(
+            owner,
+            allowedCountries,
+            blockedCountries
+        );
         console.log("ComplianceRules deployed at:", address(complianceRules));
 
         // 2. Deploy InvestorTypeCompliance
         console.log("\n2. Deploying InvestorTypeCompliance...");
-        InvestorTypeCompliance investorTypeCompliance = new InvestorTypeCompliance();
+        InvestorTypeCompliance investorTypeCompliance = new InvestorTypeCompliance(
+            investorTypeRegistry
+        );
         console.log("InvestorTypeCompliance deployed at:", address(investorTypeCompliance));
 
-        // 3. Deploy RenterCompliance
+        // 3. Deploy RenterCompliance (requires IdentityRegistry from script 04)
         console.log("\n3. Deploying RenterCompliance...");
-        RenterCompliance renterCompliance = new RenterCompliance();
+        RenterCompliance renterCompliance = new RenterCompliance(
+            identityRegistry,
+            owner
+        );
         console.log("RenterCompliance deployed at:", address(renterCompliance));
 
         // 4. Deploy OperationalCompliance
         console.log("\n4. Deploying OperationalCompliance...");
-        OperationalCompliance operationalCompliance = new OperationalCompliance();
+        OperationalCompliance operationalCompliance = new OperationalCompliance(owner);
         console.log("OperationalCompliance deployed at:", address(operationalCompliance));
 
         // 5. Deploy TransferRestrictions
         console.log("\n5. Deploying TransferRestrictions...");
-        TransferRestrictions transferRestrictions = new TransferRestrictions();
+        TransferRestrictions transferRestrictions = new TransferRestrictions(owner);
         console.log("TransferRestrictions deployed at:", address(transferRestrictions));
 
         // 6. Deploy ComplianceRegistry

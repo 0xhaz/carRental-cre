@@ -1,44 +1,74 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { VehicleStatsCard, QuickStats } from "@/src/components/rentor";
-import { RevenueChart } from "@/src/components/investor";
-import { Heading, Paragraph, Card, CardContent, Button } from "@/src/components/ui";
-import { generateMockRevenueData } from "@/src/lib/mockData";
+import { VehicleStatsCard, QuickStats } from "@/components/rentor";
+import { RevenueChart } from "@/components/investor";
+import { VerificationStatusBanner } from "@/components/shared/VerificationStatusBanner";
+import { Heading, Paragraph, Card, CardContent, Button } from "@/components/ui";
+import { useComplianceStatus } from "@/hooks/useComplianceStatus";
+import { rentorApi, type RentorDashboardData } from "@/lib/api";
+import { toast } from "react-hot-toast";
 import Link from "next/link";
 
 export default function RentorDashboard() {
+  const compliance = useComplianceStatus();
+  const [dashboardData, setDashboardData] = useState<RentorDashboardData | null>(null);
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadDashboard = async () => {
       setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      try {
+        const response = await rentorApi.getDashboard();
 
-      const mockData = generateMockRevenueData(6);
-      setRevenueData(mockData);
-      setIsLoading(false);
+        if (response.success) {
+          setDashboardData(response.dashboardData);
+
+          // Only show revenue chart when there's actual data from backend
+          // Revenue data will be populated from actual bookings in the future
+          setRevenueData([]);
+        }
+      } catch (error: any) {
+        console.error("Failed to load dashboard:", error);
+        toast.error(error.response?.data?.message || "Failed to load dashboard data");
+
+        // Set empty data on error
+        setDashboardData({
+          totalCars: 0,
+          totalBookings: 0,
+          pendingBookings: 0,
+          completedBookings: 0,
+          recentBookings: [],
+          monthlyRevenue: 0,
+        });
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     loadDashboard();
   }, []);
 
-  // Mock stats
+  // Calculate stats from real data
   const stats = {
-    totalRevenue: 15000,
-    totalBookings: 42,
-    activeBookings: 5,
-    utilizationRate: 78.5,
+    totalRevenue: dashboardData?.monthlyRevenue || 0,
+    totalBookings: dashboardData?.totalBookings || 0,
+    activeBookings: dashboardData?.pendingBookings || 0,
+    utilizationRate: dashboardData?.totalCars
+      ? parseFloat(((dashboardData.totalBookings / (dashboardData.totalCars * 30)) * 100).toFixed(1))
+      : 0,
   };
 
   const vehicleStats = {
-    totalRevenue: 15000,
-    totalBookings: 42,
-    activeBookings: 5,
-    completedBookings: 37,
-    utilizationRate: 78.5,
-    averageRating: 4.8,
+    totalRevenue: dashboardData?.monthlyRevenue || 0,
+    totalBookings: dashboardData?.totalBookings || 0,
+    activeBookings: dashboardData?.pendingBookings || 0,
+    completedBookings: dashboardData?.completedBookings || 0,
+    utilizationRate: dashboardData?.totalCars
+      ? parseFloat(((dashboardData.totalBookings / (dashboardData.totalCars * 30)) * 100).toFixed(1))
+      : 0,
+    averageRating: 0, // Will be calculated from real reviews when available
   };
 
   return (
@@ -52,6 +82,9 @@ export default function RentorDashboard() {
           Manage your fleet, track revenue, and monitor performance
         </Paragraph>
       </div>
+
+      {/* Verification Status Banner */}
+      <VerificationStatusBanner roleType="rentor" className="mb-8" />
 
       {/* Quick Stats */}
       <QuickStats stats={stats} />

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/src/components/ui";
-import { generateMockAddress } from "@/src/lib/utils";
+import { Button } from "@/components/ui";
+import { generateMockAddress } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 
 export interface ConnectWalletProps {

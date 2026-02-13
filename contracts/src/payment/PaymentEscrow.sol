@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IPaymentEscrow} from "../interfaces/payment/IPaymentEscrow.sol";
 
 /**
@@ -15,7 +14,6 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
     /*//////////////////////////////////////////////////////////////
                            STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
-    IERC20 public immutable regToken;
     address public paymentProtocol;
 
     mapping(uint256 => EscrowDetails) private _escrows;
@@ -55,11 +53,9 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
     /*//////////////////////////////////////////////////////////////
                            CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-    constructor(address _regToken, address _paymentProtocol) Ownable(msg.sender) {
-        if (_regToken == address(0)) revert PaymentEscrow__InvalidTokenAddress();
+    constructor(address _paymentProtocol) Ownable(msg.sender) {
         if (_paymentProtocol == address(0)) revert PaymentEscrow__InvalidPaymentProtocolAddress();
 
-        regToken = IERC20(_regToken);
         paymentProtocol = _paymentProtocol;
         emergencyRefundAuthority = msg.sender;
     }
@@ -71,6 +67,7 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
     /// @inheritdoc IPaymentEscrow
     function createEscrow(uint256 paymentId, address payer, address payee, uint256 amount, uint256 duration)
         external
+        payable
         override
         onlyPaymentProtocol
         whenNotPaused
@@ -91,8 +88,8 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
         uint256 fee = calculateEscrowFee(amount);
         uint256 totalAmount = amount + fee;
 
-        // Verify tokens are received
-        if (regToken.balanceOf(address(this)) <= totalAmount) {
+        // Verify ETH is received
+        if (msg.value < totalAmount) {
             revert PaymentEscrow__InsufficientEscrowAmount();
         }
 
@@ -140,7 +137,7 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
         totalEscrowedAmount -= (escrow.amount + escrow.fee);
 
         // Transfer funds to payee
-        bool success = regToken.transfer(escrow.payee, escrow.amount);
+        (bool success,) = payable(escrow.payee).call{value: escrow.amount}("");
         if (!success) {
             revert PaymentEscrow__TokenTransferFailed();
         }
@@ -161,7 +158,7 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
 
         // Refund funds to payer
         uint256 refundAmount = escrow.amount + escrow.fee;
-        bool success = regToken.transfer(escrow.payer, refundAmount);
+        (bool success,) = payable(escrow.payer).call{value: refundAmount}("");
         if (!success) {
             revert PaymentEscrow__TokenTransferFailed();
         }
@@ -192,7 +189,7 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
 
         // Emergency refund to payer
         uint256 refundAmount = escrow.amount + escrow.fee;
-        bool success = regToken.transfer(escrow.payer, refundAmount);
+        (bool success,) = payable(escrow.payer).call{value: refundAmount}("");
         if (!success) {
             revert PaymentEscrow__TokenTransferFailed();
         }
@@ -234,7 +231,7 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
 
         // Auto-refund to payer
         uint256 refundAmount = escrow.amount + escrow.fee;
-        bool success = regToken.transfer(escrow.payer, refundAmount);
+        (bool success,) = payable(escrow.payer).call{value: refundAmount}("");
         if (!success) {
             revert PaymentEscrow__TokenTransferFailed();
         }
@@ -283,12 +280,12 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
             revert PaymentEscrow__InvalidAmount();
         }
 
-        uint256 availableFees = regToken.balanceOf(address(this)) - totalEscrowedAmount;
+        uint256 availableFees = address(this).balance - totalEscrowedAmount;
         if (amount >= availableFees) {
             revert PaymentEscrow__InsufficientFees();
         }
 
-        bool success = regToken.transfer(recipient, amount);
+        (bool success,) = payable(recipient).call{value: amount}("");
         if (!success) {
             revert PaymentEscrow__TokenTransferFailed();
         }
@@ -350,7 +347,9 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
 
     /// @inheritdoc IPaymentEscrow
     function getAvailableFees() external view override returns (uint256) {
-        uint256 totalBalance = regToken.balanceOf(address(this));
+        uint256 totalBalance = address(this).balance;
         return totalBalance > totalEscrowedAmount ? totalBalance - totalEscrowedAmount : 0;
     }
+
+    receive() external payable {}
 }

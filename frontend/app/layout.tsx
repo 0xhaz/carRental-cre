@@ -4,6 +4,7 @@ import "./globals.css";
 import { AppProvider } from "@/context/AppContext";
 import { MotionConfig } from "motion/react";
 import RootLayoutContent from "./RootLayoutContent";
+import { Providers } from "./providers";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -24,11 +25,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${outfit.variable} antialiased`}>
-        <AppProvider>
-          <MotionConfig>
-            <RootLayoutContent>{children}</RootLayoutContent>
-          </MotionConfig>
-        </AppProvider>
+        <Providers>
+          <AppProvider>
+            <MotionConfig>
+              <RootLayoutContent>{children}</RootLayoutContent>
+            </MotionConfig>
+          </AppProvider>
+        </Providers>
       </body>
     </html>
   );

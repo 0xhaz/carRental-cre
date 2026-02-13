@@ -159,7 +159,7 @@ interface IRentalPaymentProtocol {
         uint256 securityDeposit,
         uint256 startTime,
         uint256 endTime
-    ) external returns (uint256 paymentId);
+    ) external payable returns (uint256 paymentId);
 
     /**
      * @notice Start an active rental

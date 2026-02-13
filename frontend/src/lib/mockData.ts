@@ -1,4 +1,4 @@
-import type { Vehicle, User, Booking, Investment, FundraisingCampaign, Review, Notification } from "@/src/types";
+import type { Vehicle, User, Booking, Investment, FundraisingCampaign, Review, Notification } from "@/types";
 import {
   VEHICLE_STATUS,
   VEHICLE_CATEGORIES,

@@ -1,4 +1,4 @@
-import { cn } from "@/src/lib/utils";
+import { cn } from "@/lib/utils";
 import { InputHTMLAttributes, forwardRef } from "react";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, CardContent, Heading, Paragraph } from "@/src/components/ui";
-import { ReviewFormData } from "@/src/types";
+import { Button, Card, CardContent, Heading, Paragraph } from "@/components/ui";
+import { ReviewFormData } from "@/types";
 import { X } from "lucide-react";
 import toast from "react-hot-toast";
 

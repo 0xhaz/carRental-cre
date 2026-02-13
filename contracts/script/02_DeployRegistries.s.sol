@@ -49,9 +49,11 @@ contract DeployRegistries is Script {
             console.log("ClaimIssuer added with all claim topics");
         }
 
-        // 2. Deploy ClaimTopicsRegistry
+        // 2. Deploy ClaimTopicsRegistry (ParticipantType.CUSTOM = 3)
         console.log("\n2. Deploying ClaimTopicsRegistry...");
-        ClaimTopicsRegistry claimTopicsRegistry = new ClaimTopicsRegistry();
+        ClaimTopicsRegistry claimTopicsRegistry = new ClaimTopicsRegistry(
+            ClaimTopicsRegistry.ParticipantType.CUSTOM
+        );
         console.log("ClaimTopicsRegistry deployed at:", address(claimTopicsRegistry));
 
         // Register standard claim topics
@@ -73,7 +75,7 @@ contract DeployRegistries is Script {
 
         // 4. Deploy ParticipantTypeRegistry
         console.log("\n4. Deploying ParticipantTypeRegistry...");
-        ParticipantTypeRegistry participantTypeRegistry = new ParticipantTypeRegistry();
+        ParticipantTypeRegistry participantTypeRegistry = new ParticipantTypeRegistry(owner);
         console.log("ParticipantTypeRegistry deployed at:", address(participantTypeRegistry));
 
         vm.stopBroadcast();

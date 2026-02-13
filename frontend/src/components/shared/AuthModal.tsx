@@ -2,8 +2,8 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Input, Card } from "@/src/components/ui";
-import { useUserStore } from "@/src/store";
+import { Button, Input, Card } from "@/components/ui";
+import { useUserStore } from "@/store";
 import { useAppContext } from "@/context/AppContext";
 import { toast } from "react-hot-toast";
 
@@ -22,7 +22,7 @@ export function AuthModal({ onClose, defaultState = "login" }: AuthModalProps) {
   const router = useRouter();
 
   // Use both Zustand and Context during migration
-  const { login: zustandLogin } = useUserStore();
+  const { setUser: setZustandUser, setToken: setZustandToken } = useUserStore();
   const { setShowLogin, axios, setToken } = useAppContext();
 
   const onSubmitHandler = async (e: FormEvent<HTMLFormElement>) => {
@@ -38,7 +38,8 @@ export function AuthModal({ onClose, defaultState = "login" }: AuthModalProps) {
 
       if (data.success) {
         // Update both Zustand and Context stores during migration
-        zustandLogin(data.user, data.token);
+        setZustandUser(data.user);
+        setZustandToken(data.token);
         setToken(data.token);
         localStorage.setItem("token", data.token);
 

@@ -1,8 +1,12 @@
-import { Vehicle } from "@/src/types";
-import { Card, CardContent, CardFooter, Button, Badge, Progress } from "@/src/components/ui";
-import { formatCurrency } from "@/src/lib/utils";
+"use client";
+
+import { Vehicle } from "@/types";
+import { Card, CardContent, CardFooter, Button, Badge, Progress } from "@/components/ui";
+import { formatCurrency } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
+import { useVehicleInvestmentInfo } from "@/hooks/useInvestment";
+import { formatUnits } from "viem";
 
 export interface InvestmentCardProps {
   vehicle: Vehicle;
@@ -14,6 +18,11 @@ export interface InvestmentCardProps {
 export function InvestmentCard({ vehicle, onInvest, className, basePath = "investor" }: InvestmentCardProps) {
   const { fundraising } = vehicle;
 
+  // Fetch blockchain investment data
+  const { data: investmentInfo, isLoading: isLoadingInvestment } = useVehicleInvestmentInfo(
+    vehicle.tokenId ? BigInt(vehicle.tokenId) : undefined
+  );
+
   if (!fundraising || !fundraising.active) {
     return null;
   }
@@ -22,6 +31,11 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
   const remainingAmount = fundraising.targetAmount - fundraising.currentAmount;
   // Mock days left (endDate not in FundraisingInfo type yet)
   const daysLeft = Math.floor(Math.random() * 60) + 10;
+
+  // Extract blockchain data if available
+  const hasBlockchainData = investmentInfo && !isLoadingInvestment;
+  const assetTokenAddress = (vehicle as any).assetTokenAddress as string | undefined;
+  const revenueTokenAddress = (vehicle as any).revenueTokenAddress as string | undefined;
 
   const handleInvest = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -56,12 +70,44 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
         <CardContent className="p-6">
           {/* Vehicle Info */}
           <div className="mb-4">
-            <h3 className="text-xl font-semibold text-gray-900">
-              {vehicle.brand} {vehicle.model}
-            </h3>
-            <p className="text-sm text-gray-600">
-              {vehicle.year} · {vehicle.category} · {vehicle.location}
-            </p>
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {vehicle.brand} {vehicle.model}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {vehicle.year} · {vehicle.category} · {vehicle.location}
+                </p>
+              </div>
+              {/* Blockchain Status Badge */}
+              {hasBlockchainData && assetTokenAddress && (
+                <Badge variant="success" className="ml-2">
+                  ⛓️ On-Chain
+                </Badge>
+              )}
+            </div>
+
+            {/* Token Addresses (if deployed) */}
+            {hasBlockchainData && (assetTokenAddress || revenueTokenAddress) && (
+              <div className="mt-3 p-2 bg-gray-50 rounded-lg space-y-1">
+                {assetTokenAddress && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-medium text-gray-700">Asset Token:</span>
+                    <code className="text-gray-600 font-mono">
+                      {assetTokenAddress.slice(0, 6)}...{assetTokenAddress.slice(-4)}
+                    </code>
+                  </div>
+                )}
+                {revenueTokenAddress && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-medium text-gray-700">Revenue Token:</span>
+                    <code className="text-gray-600 font-mono">
+                      {revenueTokenAddress.slice(0, 6)}...{revenueTokenAddress.slice(-4)}
+                    </code>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Funding Progress */}

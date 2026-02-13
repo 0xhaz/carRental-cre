@@ -7,9 +7,57 @@ const bookingSchema = new mongoose.Schema(
     car: { type: ObjectId, ref: "Car", required: true },
     user: { type: ObjectId, ref: "User", required: true },
     owner: { type: ObjectId, ref: "User", required: true },
+    renterProfile: { type: ObjectId, ref: "RenterProfile" },
     pickupDate: { type: Date, required: true },
     returnDate: { type: Date, required: true },
+    pickupLocation: { type: String },
+    days: { type: Number, required: true },
     price: { type: Number, required: true },
+
+    // Pricing breakdown
+    pricing: {
+      basePrice: { type: Number },
+      insuranceCost: { type: Number },
+      additionalDriverCost: { type: Number, default: 0 },
+      insuranceUpgradeCost: { type: Number, default: 0 },
+      totalPrice: { type: Number },
+    },
+
+    // Add-ons
+    addons: {
+      additionalDriver: { type: Boolean, default: false },
+      insuranceUpgrade: { type: Boolean, default: false },
+    },
+
+    // Payment information
+    paymentMethod: {
+      type: String,
+      enum: ["offline", "bank_transfer", "crypto"],
+      required: true,
+    },
+    paymentDetails: {
+      // Bank transfer details (if payment method is bank_transfer)
+      bankDetails: {
+        bankName: String,
+        accountNumber: String,
+        accountName: String,
+      },
+      // Crypto payment details (if payment method is crypto)
+      cryptoDetails: {
+        selectedToken: {
+          type: String,
+          enum: ["ETH", "USDC", "USDT", "DAI"],
+        },
+        walletAddress: String,
+        amount: Number,
+        txHash: String,
+      },
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "refunded", "failed"],
+      default: "pending",
+    },
 
     // UPDATE: Expand status options
     status: {

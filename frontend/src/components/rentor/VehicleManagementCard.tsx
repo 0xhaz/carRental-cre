@@ -1,6 +1,6 @@
-import { Vehicle } from "@/src/types";
-import { Card, CardContent, Button, Badge, Progress } from "@/src/components/ui";
-import { formatCurrency } from "@/src/lib/utils";
+import { Vehicle } from "@/types";
+import { Card, CardContent, Button, Badge, Progress } from "@/components/ui";
+import { formatCurrency } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
 

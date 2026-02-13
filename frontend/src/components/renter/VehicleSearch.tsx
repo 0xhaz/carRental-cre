@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Input, Select, Button, Card } from "@/src/components/ui";
-import { useVehicleStore, useBookingFlowStore } from "@/src/store";
-import { CITIES, VEHICLE_CATEGORIES, FUEL_TYPES, TRANSMISSION_TYPES } from "@/src/lib/constants";
+import { Input, Select, Button, Card } from "@/components/ui";
+import { useVehicleStore, useBookingFlowStore } from "@/store";
+import { CITIES, VEHICLE_CATEGORIES, FUEL_TYPES, TRANSMISSION_TYPES } from "@/lib/constants";
 
 export interface VehicleSearchProps {
   onSearch?: () => void;

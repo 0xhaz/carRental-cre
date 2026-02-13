@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Vehicle } from "@/src/types";
+import { useState, useEffect } from "react";
+import { Vehicle } from "@/types";
 import {
   Card,
   Button,
@@ -9,10 +9,13 @@ import {
   Badge,
   Progress,
   Separator,
-} from "@/src/components/ui";
-import { TransactionButton } from "@/src/components/web3";
-import { formatCurrency } from "@/src/lib/utils";
+} from "@/components/ui";
+import { TransactionButton } from "@/components/web3";
+import { formatCurrency } from "@/lib/utils";
 import { toast } from "react-hot-toast";
+import { useCreateInvestment } from "@/hooks/useInvestment";
+import { useAccount } from "wagmi";
+import { useCanInvestorAct } from "@/hooks/useComplianceStatus";
 
 export interface InvestmentModalProps {
   vehicle: Vehicle;
@@ -27,6 +30,10 @@ export function InvestmentModal({
 }: InvestmentModalProps) {
   const [amount, setAmount] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  const { isConnected } = useAccount();
+  const { createInvestment, isConfirming, isSuccess, hash } = useCreateInvestment();
+  const { canAct: canInvest, reason: complianceReason } = useCanInvestorAct();
 
   const fundraising = vehicle.fundraising;
 
@@ -44,16 +51,38 @@ export function InvestmentModal({
     investmentAmount >= minInvestment &&
     investmentAmount <= remainingAmount;
 
+  // Handle successful investment
+  useEffect(() => {
+    if (isSuccess && hash) {
+      toast.success(`Investment successful! Tx: ${hash.slice(0, 10)}...`);
+      onSuccess?.(investmentAmount);
+      onClose();
+    }
+  }, [isSuccess, hash, investmentAmount, onSuccess, onClose]);
+
   const handleInvest = async () => {
     if (!isValidAmount || !agreedToTerms) {
       toast.error("Please enter a valid amount and agree to terms");
       return;
     }
 
-    // Simulate investment transaction
-    toast.success(`Investment of ${formatCurrency(investmentAmount)} successful!`);
-    onSuccess?.(investmentAmount);
-    onClose();
+    if (!isConnected) {
+      toast.error("Please connect your wallet first");
+      return;
+    }
+
+    if (!vehicle.tokenId) {
+      toast.error("This vehicle is not yet tokenized on-chain");
+      return;
+    }
+
+    try {
+      // Create on-chain investment
+      createInvestment(BigInt(vehicle.tokenId), amount);
+    } catch (error) {
+      console.error("Investment error:", error);
+      toast.error("Investment failed. Please try again.");
+    }
   };
 
   return (
@@ -186,20 +215,59 @@ export function InvestmentModal({
             </label>
           </div>
 
+          {/* Compliance Warning */}
+          {!canInvest && complianceReason && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800">
+                🚫 <strong>Verification Required:</strong> {complianceReason}
+              </p>
+            </div>
+          )}
+
+          {/* Wallet Connection Warning */}
+          {!isConnected && canInvest && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                ⚠️ Please connect your wallet to invest on-chain
+              </p>
+            </div>
+          )}
+
+          {/* Blockchain Transaction Info */}
+          {hash && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                Transaction submitted! Hash:{" "}
+                <code className="font-mono">{hash.slice(0, 10)}...{hash.slice(-8)}</code>
+              </p>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex gap-3">
-            <Button variant="outline" onClick={onClose} className="flex-1">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="flex-1"
+              disabled={isConfirming}
+            >
               Cancel
             </Button>
-            <TransactionButton
+            <Button
               onClick={handleInvest}
-              disabled={!isValidAmount || !agreedToTerms}
+              disabled={!isValidAmount || !agreedToTerms || !isConnected || isConfirming || !canInvest}
               className="flex-1"
-              loadingText="Processing investment..."
-              successText="Investment successful!"
             >
-              Invest {isValidAmount ? formatCurrency(investmentAmount) : "Now"}
-            </TransactionButton>
+              {isConfirming ? (
+                "Processing..."
+              ) : !canInvest ? (
+                "Verification Required"
+              ) : isValidAmount ? (
+                `Invest ${formatCurrency(investmentAmount)}`
+              ) : (
+                "Invest Now"
+              )}
+            </Button>
           </div>
         </div>
       </Card>

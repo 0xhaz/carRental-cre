@@ -1,45 +1,57 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PortfolioCard, PortfolioCardSkeleton } from "@/src/components/investor";
-import { Heading, Paragraph, Badge } from "@/src/components/ui";
-import { generateMockInvestments, generateMockVehicles } from "@/src/lib/mockData";
-import { Investment, Vehicle } from "@/src/types";
-import { formatCurrency } from "@/src/lib/utils";
+import { PortfolioCard, PortfolioCardSkeleton } from "@/components/investor";
+import { TokenPortfolio } from "@/components/investor/TokenPortfolio";
+import { TransactionHistory } from "@/components/investor/TransactionHistory";
+import { VerificationStatusBanner } from "@/components/shared/VerificationStatusBanner";
+import { Heading, Paragraph, Badge, Separator } from "@/components/ui";
+import { Investment } from "@/types";
+import { formatCurrency } from "@/lib/utils";
+import { useAccount } from "wagmi";
+import { useComplianceStatus } from "@/hooks/useComplianceStatus";
+import { investmentApi } from "@/lib/api";
+import { toast } from "react-hot-toast";
 
 export default function InvestorPortfolio() {
+  const { isConnected } = useAccount();
+  const compliance = useComplianceStatus();
   const [investments, setInvestments] = useState<Investment[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [totalInvested, setTotalInvested] = useState(0);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [roi, setRoi] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Simulate loading portfolio
-    const loadPortfolio = async () => {
-      setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+  const loadPortfolio = async () => {
+    setIsLoading(true);
+    try {
+      const response = await investmentApi.getPortfolio();
 
-      const mockInvestments = generateMockInvestments(6);
-      const mockVehicles = generateMockVehicles(12);
-
-      setInvestments(mockInvestments);
-      setVehicles(mockVehicles);
+      if (response.success) {
+        setInvestments(response.data.investments || []);
+        setTotalInvested(response.data.totalInvested || 0);
+        setTotalRevenue(response.data.totalRevenue || 0);
+        setRoi(parseFloat(response.data.roi as any) || 0);
+      }
+    } catch (error: any) {
+      console.error("Failed to load portfolio:", error);
+      toast.error(error.response?.data?.message || "Failed to load portfolio");
+      setInvestments([]);
+      setTotalInvested(0);
+      setTotalRevenue(0);
+      setRoi(0);
+    } finally {
       setIsLoading(false);
-    };
+    }
+  };
 
+  useEffect(() => {
     loadPortfolio();
   }, []);
 
   // Calculate portfolio stats
-  const totalInvested = investments.reduce((sum, inv) => sum + inv.amount, 0);
-  // Current value is investment amount plus appreciation (mock: 10% increase)
-  const totalValue = investments.reduce(
-    (sum, inv) => sum + inv.amount * 1.1,
-    0
-  );
-  const totalRevenue = investments.reduce(
-    (sum, inv) => sum + inv.totalRevenueEarned,
-    0
-  );
+  // Current value is investment amount plus appreciation (estimated: 10% increase)
+  const totalValue = investments.reduce((sum, inv) => sum + inv.amount * 1.1, 0);
   const profitLoss = totalValue - totalInvested + totalRevenue;
   const profitLossPercentage = totalInvested ? (profitLoss / totalInvested) * 100 : 0;
 
@@ -54,6 +66,9 @@ export default function InvestorPortfolio() {
           Track your investments and earnings
         </Paragraph>
       </div>
+
+      {/* Verification Status Banner */}
+      <VerificationStatusBanner roleType="investor" className="mb-8" />
 
       {/* Portfolio Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -103,16 +118,13 @@ export default function InvestorPortfolio() {
           </div>
         ) : investments.length > 0 ? (
           <div className="space-y-4">
-            {investments.map((investment) => {
-              const vehicle = vehicles.find((v) => v._id === investment.vehicle);
-              return (
-                <PortfolioCard
-                  key={investment._id}
-                  investment={investment}
-                  vehicle={vehicle}
-                />
-              );
-            })}
+            {investments.map((investment) => (
+              <PortfolioCard
+                key={investment._id}
+                investment={investment}
+                vehicle={typeof investment.vehicle === "object" ? investment.vehicle : undefined}
+              />
+            ))}
           </div>
         ) : (
           <div className="text-center py-12 bg-gray-50 rounded-lg">
@@ -125,6 +137,49 @@ export default function InvestorPortfolio() {
           </div>
         )}
       </div>
+
+      {/* Blockchain Data Section */}
+      {isConnected && (
+        <>
+          <Separator className="my-8" />
+
+          {/* Token Portfolio */}
+          <div className="mb-8">
+            <Heading as="h2" className="mb-4">
+              Token Holdings
+            </Heading>
+            <TokenPortfolio />
+          </div>
+
+          <Separator className="my-8" />
+
+          {/* Transaction History */}
+          <div className="mb-8">
+            <Heading as="h2" className="mb-4">
+              Transaction History
+            </Heading>
+            <TransactionHistory limit={5} />
+          </div>
+        </>
+      )}
+
+      {/* Wallet Connection Prompt */}
+      {!isConnected && investments.length > 0 && (
+        <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+          <div className="flex items-center gap-4">
+            <div className="text-5xl">🔗</div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                Connect Your Wallet for Blockchain Features
+              </h3>
+              <p className="text-sm text-gray-600">
+                View your token balances, track on-chain transactions, and claim revenue
+                distributions by connecting your wallet.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

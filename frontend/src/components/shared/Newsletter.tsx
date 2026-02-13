@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { Button, Input } from "@/src/components/ui";
+import { Button, Input } from "@/components/ui";
 import { toast } from "react-hot-toast";
 
 export function Newsletter() {

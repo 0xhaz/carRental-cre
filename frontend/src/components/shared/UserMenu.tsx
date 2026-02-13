@@ -2,10 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useUserStore } from "@/src/store";
+import { useUserStore } from "@/store";
 import { useAppContext } from "@/context/AppContext";
-import { UserRole } from "@/src/types";
-import { Button } from "@/src/components/ui";
+import { UserRole } from "@/types";
+import { Button } from "@/components/ui";
 import { toast } from "react-hot-toast";
 
 export function UserMenu() {

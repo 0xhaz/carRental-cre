@@ -48,8 +48,10 @@ contract DeployIdentityRegistry is Script {
         }
 
         if (complianceRules != address(0)) {
-            console.log("Setting ComplianceRules...");
-            identityRegistry.setComplianceRules(complianceRules);
+            console.log("Skipping ComplianceRules configuration (requires token address)...");
+            // Note: setComplianceRules(address complianceRules, address token) requires a token
+            // This should be configured after token deployment
+            // identityRegistry.setComplianceRules(complianceRules, tokenAddress);
         }
 
         // Add deployer as agent (can register identities)
