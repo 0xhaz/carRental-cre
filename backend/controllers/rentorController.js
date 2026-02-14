@@ -1,5 +1,7 @@
 import Car from "../models/Car.js";
 import User from "../models/User.js";
+import Campaign from "../models/Campaign.js";
+import Investment from "../models/Investment.js";
 import imageKit from "../configs/imageKit.js";
 import fs from "fs";
 import Booking from "../models/Booking.js";
@@ -27,35 +29,12 @@ export const addCar = async (req, res) => {
   try {
     const { _id } = req.user;
     let car = JSON.parse(req.body.carData);
-    const imageFile = req.file;
 
-    const fileBuffer = fs.readFileSync(imageFile.path);
+    if (!car.image) {
+      return res.json({ success: false, message: "Image URL is required" });
+    }
 
-    // Upload image to ImageKit
-    const response = await imageKit.upload({
-      file: fileBuffer,
-      fileName: imageFile.originalname,
-      folder: "/cars",
-    });
-
-    // For URL generation, works for both images and videos
-    const optimizedImageUrl = imageKit.url({
-      path: response.filePath,
-      transformation: [
-        {
-          width: "1280",
-        },
-        {
-          quality: "auto",
-        },
-        {
-          format: "webp",
-        },
-      ],
-    });
-
-    const image = optimizedImageUrl;
-    await Car.create({ ...car, owner: _id, image });
+    await Car.create({ ...car, owner: _id });
 
     res.json({ success: true, message: "Car Added" });
   } catch (error) {
@@ -71,6 +50,49 @@ export const getRentorCars = async (req, res) => {
     const cars = await Car.find({ owner: _id });
 
     res.json({ success: true, cars });
+  } catch (error) {
+    console.log(error.message);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// API to update a car
+export const updateCar = async (req, res) => {
+  try {
+    const { _id } = req.user;
+    const { carId } = req.params;
+    const car = await Car.findById(carId);
+
+    if (!car) {
+      return res.json({ success: false, message: "Car not found" });
+    }
+
+    if (car.owner.toString() !== _id.toString()) {
+      return res.json({
+        success: false,
+        message: "Not authorized to update this car",
+      });
+    }
+
+    const updates = JSON.parse(req.body.carData);
+
+    // Only allow updating editable fields
+    const allowedFields = [
+      "brand", "model", "year", "category", "seating_capacity",
+      "fuel_type", "transmission", "pricePerDay", "location",
+      "description", "image", "isAvailable",
+    ];
+
+    const sanitized = {};
+    for (const key of allowedFields) {
+      if (updates[key] !== undefined) {
+        sanitized[key] = updates[key];
+      }
+    }
+
+    const updated = await Car.findByIdAndUpdate(carId, sanitized, { new: true });
+
+    res.json({ success: true, message: "Car updated", car: updated });
   } catch (error) {
     console.log(error.message);
     res.json({ success: false, message: error.message });
@@ -109,11 +131,27 @@ export const deleteCar = async (req, res) => {
     const { carId } = req.body;
     const car = await Car.findById(carId);
 
+    if (!car) {
+      return res.json({ success: false, message: "Car not found" });
+    }
+
     // Check if the car belongs to the rentor
     if (car.owner.toString() !== _id.toString()) {
       return res.json({
         success: false,
         message: "Not authorized to delete this car",
+      });
+    }
+
+    // Block deletion if vehicle has any non-cancelled campaign
+    const activeCampaign = await Campaign.findOne({
+      vehicle: carId,
+      status: { $in: ["draft", "active", "funded"] },
+    });
+    if (activeCampaign) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete a vehicle with an active fundraising campaign. Cancel the campaign first.",
       });
     }
 
@@ -174,6 +212,46 @@ export const getDashboardData = async (req, res) => {
   }
 };
 
+// API to get a single vehicle with campaign and investment data
+export const getVehicleById = async (req, res) => {
+  try {
+    const { _id } = req.user;
+    const { vehicleId } = req.params;
+
+    const vehicle = await Car.findById(vehicleId);
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+
+    if (!vehicle.owner || vehicle.owner.toString() !== _id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
+    // Fetch active campaign for this vehicle (if any)
+    const campaign = await Campaign.findOne({
+      vehicle: vehicleId,
+      status: { $in: ["draft", "active", "funded"] },
+    });
+
+    // Fetch investments for this vehicle
+    const investments = await Investment.find({ vehicle: vehicleId, status: "active" })
+      .populate("investor", "name walletAddress")
+      .sort({ investedAt: -1 });
+
+    res.json({
+      success: true,
+      data: {
+        vehicle,
+        campaign,
+        investments,
+      },
+    });
+  } catch (error) {
+    console.error("Get vehicle by ID error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // API to update user profile
 export const updateUserImage = async (req, res) => {
   try {
@@ -189,23 +267,7 @@ export const updateUserImage = async (req, res) => {
       folder: "/users",
     });
 
-    // For URL generation, works for both images and videos
-    const optimizedImageUrl = imageKit.url({
-      path: response.filePath,
-      transformation: [
-        {
-          width: "400",
-        },
-        {
-          quality: "auto",
-        },
-        {
-          format: "webp",
-        },
-      ],
-    });
-
-    const image = optimizedImageUrl;
+    const image = response.url;
 
     await User.findByIdAndUpdate(_id, { image });
 

@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import { PortfolioCard, PortfolioCardSkeleton } from "@/components/investor";
 import { TokenPortfolio } from "@/components/investor/TokenPortfolio";
 import { TransactionHistory } from "@/components/investor/TransactionHistory";
+import { RevenueClaimCard } from "@/components/investor/RevenueClaimCard";
 import { VerificationStatusBanner } from "@/components/shared/VerificationStatusBanner";
-import { Heading, Paragraph, Badge, Separator } from "@/components/ui";
+import { Heading, Paragraph, Badge, Button, Separator } from "@/components/ui";
 import { Investment } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { useAccount } from "wagmi";
@@ -150,6 +151,46 @@ export default function InvestorPortfolio() {
             </Heading>
             <TokenPortfolio />
           </div>
+
+          {/* Revenue Claiming */}
+          {investments.length > 0 && (
+            <>
+              <Separator className="my-8" />
+              <div className="mb-8">
+                <Heading as="h2" className="mb-4">
+                  Revenue Distribution
+                </Heading>
+                <p className="text-sm text-gray-600 mb-4">
+                  Claim your share of rental revenue for each invested vehicle.
+                </p>
+                <div className="space-y-3">
+                  {investments
+                    .filter((inv) => {
+                      const v = inv.vehicle as any;
+                      return v && typeof v === "object" && v.tokenId;
+                    })
+                    .map((inv) => {
+                      const v = inv.vehicle as any;
+                      return (
+                        <RevenueClaimCard
+                          key={inv._id}
+                          vehicleId={BigInt(v.tokenId)}
+                          vehicleName={`${v.brand || "Vehicle"} ${v.model || ""}`}
+                        />
+                      );
+                    })}
+                  {investments.filter((inv) => {
+                    const v = inv.vehicle as any;
+                    return v && typeof v === "object" && v.tokenId;
+                  }).length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      No tokenized vehicles in your portfolio yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           <Separator className="my-8" />
 

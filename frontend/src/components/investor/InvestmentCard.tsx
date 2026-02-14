@@ -3,10 +3,8 @@
 import { Vehicle } from "@/types";
 import { Card, CardContent, CardFooter, Button, Badge, Progress } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils";
-import Image from "next/image";
 import Link from "next/link";
-import { useVehicleInvestmentInfo } from "@/hooks/useInvestment";
-import { formatUnits } from "viem";
+import { useVehicleInvestmentTotal } from "@/hooks/useInvestment";
 
 export interface InvestmentCardProps {
   vehicle: Vehicle;
@@ -19,8 +17,8 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
   const { fundraising } = vehicle;
 
   // Fetch blockchain investment data
-  const { data: investmentInfo, isLoading: isLoadingInvestment } = useVehicleInvestmentInfo(
-    vehicle.tokenId ? BigInt(vehicle.tokenId) : undefined
+  const { data: investmentTotal, formatted: investmentFormatted, isLoading: isLoadingInvestment } = useVehicleInvestmentTotal(
+    (vehicle as any).tokenId ? BigInt((vehicle as any).tokenId) : undefined
   );
 
   if (!fundraising || !fundraising.active) {
@@ -33,7 +31,7 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
   const daysLeft = Math.floor(Math.random() * 60) + 10;
 
   // Extract blockchain data if available
-  const hasBlockchainData = investmentInfo && !isLoadingInvestment;
+  const hasBlockchainData = investmentTotal !== undefined && !isLoadingInvestment;
   const assetTokenAddress = (vehicle as any).assetTokenAddress as string | undefined;
   const revenueTokenAddress = (vehicle as any).revenueTokenAddress as string | undefined;
 
@@ -48,12 +46,10 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
       <Card className={`overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer ${className}`}>
         {/* Vehicle Image */}
         <div className="relative h-48 overflow-hidden">
-          <Image
+          <img
             src={vehicle.image || "/assets/car_image1.png"}
             alt={`${vehicle.brand} ${vehicle.model}`}
             className="w-full h-full object-cover"
-            width={400}
-            height={300}
           />
           <div className="absolute top-4 left-4">
             <Badge variant="default" className="shadow-lg">

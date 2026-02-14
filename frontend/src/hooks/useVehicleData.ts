@@ -1,34 +1,41 @@
 /**
  * Vehicle Data Hooks
- * Hooks for reading vehicle NFT data from the blockchain
+ * Hooks for reading vehicle NFT data from the blockchain.
+ * Matches the refactored VehicleNFT contract interface.
  */
 
-import { useReadContract, useReadContracts } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { useVehicleNFT } from "./useContracts";
 
 /**
- * Get total number of vehicles minted
+ * Get vehicle metadata by token ID
+ * Returns: VehicleMetadata { vin, make, model, year, color, mileage, registrationExpiry, insuranceExpiry }
  */
-export function useTotalVehicles() {
+export function useVehicleMetadata(tokenId?: bigint) {
   const { address, abi } = useVehicleNFT();
 
   return useReadContract({
     address,
     abi,
-    functionName: "totalSupply",
+    functionName: "getVehicleMetadata",
+    args: tokenId !== undefined ? [tokenId] : undefined,
+    query: {
+      enabled: tokenId !== undefined,
+    },
   });
 }
 
 /**
- * Get vehicle details by token ID
+ * Get full vehicle info (metadata + status + booking + counts)
+ * Returns: (metadata, status, currentBooking, maintenanceCount, incidentCount)
  */
-export function useVehicleDetails(tokenId: bigint | undefined) {
+export function useVehicleInfo(tokenId?: bigint) {
   const { address, abi } = useVehicleNFT();
 
   return useReadContract({
     address,
     abi,
-    functionName: "getVehicleDetails",
+    functionName: "getVehicleInfo",
     args: tokenId !== undefined ? [tokenId] : undefined,
     query: {
       enabled: tokenId !== undefined,
@@ -39,7 +46,7 @@ export function useVehicleDetails(tokenId: bigint | undefined) {
 /**
  * Get vehicle owner
  */
-export function useVehicleOwner(tokenId: bigint | undefined) {
+export function useVehicleOwner(tokenId?: bigint) {
   const { address, abi } = useVehicleNFT();
 
   return useReadContract({
@@ -54,15 +61,16 @@ export function useVehicleOwner(tokenId: bigint | undefined) {
 }
 
 /**
- * Check if vehicle is available for rent
+ * Get linked AssetToken and RevenueToken for a vehicle
+ * Returns: (assetToken address, revenueToken address)
  */
-export function useVehicleAvailability(tokenId: bigint | undefined) {
+export function useLinkedTokens(tokenId?: bigint) {
   const { address, abi } = useVehicleNFT();
 
   return useReadContract({
     address,
     abi,
-    functionName: "isAvailableForRent",
+    functionName: "getLinkedTokens",
     args: tokenId !== undefined ? [tokenId] : undefined,
     query: {
       enabled: tokenId !== undefined,
@@ -71,9 +79,43 @@ export function useVehicleAvailability(tokenId: bigint | undefined) {
 }
 
 /**
- * Get all vehicles owned by an address
+ * Check if a VIN is already registered
  */
-export function useUserVehicles(userAddress: `0x${string}` | undefined) {
+export function useIsVINRegistered(vin?: string) {
+  const { address, abi } = useVehicleNFT();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "isVINRegistered",
+    args: vin ? [vin] : undefined,
+    query: {
+      enabled: !!vin,
+    },
+  });
+}
+
+/**
+ * Get token ID by VIN
+ */
+export function useTokenIdByVIN(vin?: string) {
+  const { address, abi } = useVehicleNFT();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getTokenIdByVIN",
+    args: vin ? [vin] : undefined,
+    query: {
+      enabled: !!vin,
+    },
+  });
+}
+
+/**
+ * Get number of vehicles owned by an address (ERC-721 balanceOf)
+ */
+export function useUserVehicleCount(userAddress?: `0x${string}`) {
   const { address, abi } = useVehicleNFT();
 
   return useReadContract({
@@ -88,18 +130,13 @@ export function useUserVehicles(userAddress: `0x${string}` | undefined) {
 }
 
 /**
- * Get vehicle rental price per day
+ * Get my vehicle count
  */
-export function useVehicleRentalPrice(tokenId: bigint | undefined) {
-  const { address, abi } = useVehicleNFT();
-
-  return useReadContract({
-    address,
-    abi,
-    functionName: "getRentalPricePerDay",
-    args: tokenId !== undefined ? [tokenId] : undefined,
-    query: {
-      enabled: tokenId !== undefined,
-    },
-  });
+export function useMyVehicleCount() {
+  const { address: userAddress } = useAccount();
+  return useUserVehicleCount(userAddress);
 }
+
+// Backward-compatible aliases
+export const useVehicleDetails = useVehicleInfo;
+export const useTotalVehicles = useMyVehicleCount;

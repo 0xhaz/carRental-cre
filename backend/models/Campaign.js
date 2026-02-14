@@ -25,6 +25,15 @@ const campaignSchema = new mongoose.Schema(
     expectedROI: { type: Number, required: true },
     duration: { type: Number, required: true }, // Days
 
+    fundraisingType: {
+      type: String,
+      enum: ["full_fundraise", "co_invest"],
+      default: "full_fundraise",
+    },
+    rentorInvestment: { type: Number, default: 0 }, // Rentor's own planned co-investment amount
+
+    minFundingRequired: { type: Number, default: 60 }, // Minimum % of targetAmount to proceed (0-100)
+
     status: {
       type: String,
       enum: ["draft", "active", "funded", "closed", "cancelled"],

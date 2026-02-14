@@ -8,3 +8,6 @@ export * from "./PortfolioCard";
 export * from "./RevenueChart";
 export * from "./InvestmentModal";
 export * from "./TransferTokensModal";
+export * from "./InvestorTypeSelector";
+export * from "./InvestorOnboardingWizard";
+export * from "./RevenueClaimCard";

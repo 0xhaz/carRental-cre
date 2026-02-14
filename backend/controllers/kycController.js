@@ -8,6 +8,45 @@ import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 
 /**
+ * @desc    Get all investor users with wallet + KYC status (for admin investor management)
+ * @route   GET /api/kyc/investors
+ * @access  Admin
+ */
+export const getInvestorUsers = async (req, res) => {
+  try {
+    const investors = await User.find(
+      { role: "investor", walletAddress: { $exists: true, $ne: null } },
+      "name email walletAddress role createdAt"
+    ).lean();
+
+    // Enrich with KYC status
+    const investorIds = investors.map((i) => i._id);
+    const kycDocs = await KYC.find(
+      { user: { $in: investorIds } },
+      "user status investorInfo"
+    ).lean();
+
+    const kycMap = {};
+    for (const doc of kycDocs) {
+      kycMap[doc.user.toString()] = {
+        kycStatus: doc.status,
+        investorType: doc.investorInfo?.investorType || doc.investorInfo?.accreditationType || null,
+      };
+    }
+
+    const enriched = investors.map((inv) => ({
+      ...inv,
+      kyc: kycMap[inv._id.toString()] || { kycStatus: "none", investorType: null },
+    }));
+
+    res.json({ success: true, data: enriched });
+  } catch (error) {
+    console.error("Get investor users error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/**
  * @desc    Submit KYC documents
  * @route   POST /api/kyc/submit
  * @access  Private
@@ -256,6 +295,11 @@ export const approveKYC = async (req, res) => {
     // Approve KYC
     await kyc.approve(reviewerId, notes);
 
+    // Update user's compliance status in the User model
+    await User.findByIdAndUpdate(kyc.user._id, {
+      "compliance.kycVerified": true,
+    });
+
     // Create notification for user
     await Notification.create({
       userId: kyc.user._id,
@@ -327,6 +371,11 @@ export const rejectKYC = async (req, res) => {
 
     // Reject KYC
     await kyc.reject(reviewerId, reason);
+
+    // Reset user's compliance status
+    await User.findByIdAndUpdate(kyc.user._id, {
+      "compliance.kycVerified": false,
+    });
 
     // Create notification for user
     await Notification.create({

@@ -12,6 +12,7 @@ import {
   approveKYC,
   rejectKYC,
   updateBlockchainStatus,
+  getInvestorUsers,
 } from "../controllers/kycController.js";
 import { protect, admin } from "../middleware/auth.js";
 import multer from "multer";
@@ -80,6 +81,7 @@ kycRouter.post(
 kycRouter.get("/status", protect, getKYCStatus);
 
 // Admin routes (require admin privileges)
+kycRouter.get("/investors", protect, admin, getInvestorUsers);
 kycRouter.get("/pending", protect, admin, getPendingKYC);
 kycRouter.get("/:id", protect, admin, getKYCById);
 kycRouter.post("/:id/approve", protect, admin, approveKYC);

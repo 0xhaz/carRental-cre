@@ -1,24 +1,18 @@
 /**
- * Payment Token Hooks
- * Hooks for interacting with the RegShield payment token (ERC20)
+ * Native ETH Payment Hooks
+ * All payments in RegShield use native ETH (no ERC-20 tokens).
+ * These hooks provide ETH balance and formatting utilities.
  */
 
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { usePaymentToken as usePaymentTokenContract } from "./useContracts";
-import { parseUnits, formatUnits } from "viem";
-import { PAYMENT_TOKEN_DECIMALS } from "@/constants";
+import { useAccount, useBalance } from "wagmi";
+import { formatEther, parseEther } from "viem";
 
 /**
- * Get payment token balance for an address
+ * Get native ETH balance for an address
  */
 export function useTokenBalance(address?: `0x${string}`) {
-  const { address: tokenAddress, abi } = usePaymentTokenContract();
-
-  const result = useReadContract({
-    address: tokenAddress,
-    abi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
+  const result = useBalance({
+    address,
     query: {
       enabled: !!address,
     },
@@ -26,12 +20,13 @@ export function useTokenBalance(address?: `0x${string}`) {
 
   return {
     ...result,
-    formatted: result.data ? formatUnits(result.data as bigint, PAYMENT_TOKEN_DECIMALS) : "0",
+    formatted: result.data ? formatEther(result.data.value) : "0",
+    symbol: result.data?.symbol ?? "ETH",
   };
 }
 
 /**
- * Get current user's token balance
+ * Get current user's ETH balance
  */
 export function useMyTokenBalance() {
   const { address } = useAccount();
@@ -39,118 +34,18 @@ export function useMyTokenBalance() {
 }
 
 /**
- * Get token allowance for a spender
- */
-export function useTokenAllowance(owner?: `0x${string}`, spender?: `0x${string}`) {
-  const { address: tokenAddress, abi } = usePaymentTokenContract();
-
-  const result = useReadContract({
-    address: tokenAddress,
-    abi,
-    functionName: "allowance",
-    args: owner && spender ? [owner, spender] : undefined,
-    query: {
-      enabled: !!(owner && spender),
-    },
-  });
-
-  return {
-    ...result,
-    formatted: result.data ? formatUnits(result.data as bigint, PAYMENT_TOKEN_DECIMALS) : "0",
-  };
-}
-
-/**
- * Approve token spending
- */
-export function useApproveToken() {
-  const { address: tokenAddress, abi } = usePaymentTokenContract();
-  const { data: hash, writeContract, ...rest } = useWriteContract();
-
-  const approve = (spender: `0x${string}`, amount: string) => {
-    const amountWei = parseUnits(amount, PAYMENT_TOKEN_DECIMALS);
-    writeContract({
-      address: tokenAddress,
-      abi,
-      functionName: "approve",
-      args: [spender, amountWei],
-    });
-  };
-
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
-
-  return {
-    approve,
-    hash,
-    isConfirming,
-    isSuccess,
-    ...rest,
-  };
-}
-
-/**
- * Transfer tokens
- */
-export function useTransferToken() {
-  const { address: tokenAddress, abi } = usePaymentTokenContract();
-  const { data: hash, writeContract, ...rest } = useWriteContract();
-
-  const transfer = (to: `0x${string}`, amount: string) => {
-    const amountWei = parseUnits(amount, PAYMENT_TOKEN_DECIMALS);
-    writeContract({
-      address: tokenAddress,
-      abi,
-      functionName: "transfer",
-      args: [to, amountWei],
-    });
-  };
-
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
-
-  return {
-    transfer,
-    hash,
-    isConfirming,
-    isSuccess,
-    ...rest,
-  };
-}
-
-/**
- * Get total token supply
- */
-export function useTotalSupply() {
-  const { address: tokenAddress, abi } = usePaymentTokenContract();
-
-  const result = useReadContract({
-    address: tokenAddress,
-    abi,
-    functionName: "totalSupply",
-  });
-
-  return {
-    ...result,
-    formatted: result.data ? formatUnits(result.data as bigint, PAYMENT_TOKEN_DECIMALS) : "0",
-  };
-}
-
-/**
- * Helper to format token amount
+ * Helper to format ETH amount from wei
  */
 export function formatTokenAmount(amount: bigint | string): string {
   if (typeof amount === "string") {
     return amount;
   }
-  return formatUnits(amount, PAYMENT_TOKEN_DECIMALS);
+  return formatEther(amount);
 }
 
 /**
- * Helper to parse token amount from user input
+ * Helper to parse ETH amount from user input to wei
  */
 export function parseTokenAmount(amount: string): bigint {
-  return parseUnits(amount, PAYMENT_TOKEN_DECIMALS);
+  return parseEther(amount);
 }

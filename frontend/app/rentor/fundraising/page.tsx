@@ -3,10 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { InvestmentCard, InvestmentCardSkeleton } from "@/components/investor";
-import { CreateCampaignModal } from "@/components/rentor";
-import { VerificationStatusBanner } from "@/components/shared/VerificationStatusBanner";
+import { CreateCampaignModal, ManageCampaignModal } from "@/components/rentor";
 import { Heading, Paragraph, Button, Card, CardContent, Badge } from "@/components/ui";
-import { FundraisingCampaign } from "@/types";
+import { FundraisingCampaign, Vehicle } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 import { useCanRentorAct } from "@/hooks/useComplianceStatus";
@@ -19,6 +18,7 @@ export default function RentorFundraising() {
   const [campaigns, setCampaigns] = useState<FundraisingCampaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [manageCampaign, setManageCampaign] = useState<{ campaign: FundraisingCampaign; vehicle?: Vehicle } | null>(null);
 
   const loadCampaigns = async () => {
     setIsLoading(true);
@@ -44,7 +44,7 @@ export default function RentorFundraising() {
   // Calculate stats from campaigns
   const totalRaised = campaigns.reduce((sum, c) => sum + (c.currentAmount || 0), 0);
   const totalTarget = campaigns.reduce((sum, c) => sum + (c.targetAmount || 0), 0);
-  const totalInvestors = campaigns.reduce((sum, c) => sum + (c.investorCount || 0), 0);
+  const totalInvestors = campaigns.reduce((sum, c) => sum + ((c as any).investorCount || 0), 0);
 
   const handleCreateCampaignClick = () => {
     if (!canCreateCampaign) {
@@ -59,9 +59,9 @@ export default function RentorFundraising() {
     loadCampaigns();
   };
 
-  const handleManageCampaign = (campaignId: string) => {
-    // Navigate to campaign management/detail page
-    toast.info("Campaign management coming soon!");
+  const handleManageCampaign = (campaign: FundraisingCampaign) => {
+    const vehicle = typeof campaign.vehicle === "object" ? (campaign.vehicle as unknown as Vehicle) : undefined;
+    setManageCampaign({ campaign, vehicle });
   };
 
   return (
@@ -82,9 +82,6 @@ export default function RentorFundraising() {
           </Button>
         </div>
       </div>
-
-      {/* Verification Status Banner */}
-      <VerificationStatusBanner roleType="rentor" className="mb-8" />
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -133,14 +130,16 @@ export default function RentorFundraising() {
           </div>
         ) : campaigns.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {campaigns.map((campaign) => (
-              <InvestmentCard
-                key={campaign._id}
-                vehicle={typeof campaign.vehicle === "object" ? campaign.vehicle : undefined}
-                onInvest={() => handleManageCampaign(campaign._id)}
-                basePath="rentor"
-              />
-            ))}
+            {campaigns
+              .filter((c) => typeof c.vehicle === "object" && c.vehicle)
+              .map((campaign) => (
+                <InvestmentCard
+                  key={campaign._id}
+                  vehicle={campaign.vehicle as unknown as Vehicle}
+                  onInvest={() => handleManageCampaign(campaign)}
+                  basePath="rentor"
+                />
+              ))}
           </div>
         ) : (
           <div className="text-center py-12 bg-gray-50 rounded-lg">
@@ -182,6 +181,16 @@ export default function RentorFundraising() {
         <CreateCampaignModal
           onClose={() => setShowCreateModal(false)}
           onSuccess={handleCreateCampaignSuccess}
+        />
+      )}
+
+      {/* Manage Campaign Modal */}
+      {manageCampaign && (
+        <ManageCampaignModal
+          campaign={manageCampaign.campaign}
+          vehicle={manageCampaign.vehicle}
+          onClose={() => setManageCampaign(null)}
+          onCampaignUpdated={loadCampaigns}
         />
       )}
     </div>

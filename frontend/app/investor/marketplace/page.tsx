@@ -4,9 +4,31 @@ import { useState, useEffect } from "react";
 import { InvestmentCard, InvestmentCardSkeleton } from "@/components/investor";
 import { InvestmentModal } from "@/components/investor";
 import { Heading, Paragraph, Badge } from "@/components/ui";
-import { generateMockVehicles } from "@/lib/mockData";
-import { Vehicle } from "@/types";
+import { investmentApi } from "@/lib/api";
+import { Vehicle, FundraisingCampaign } from "@/types";
 import { useAccount } from "wagmi";
+import { toast } from "react-hot-toast";
+
+// Map a campaign (with populated vehicle) to a Vehicle with fundraising info
+function campaignToVehicle(campaign: FundraisingCampaign & { vehicle: any }): Vehicle | null {
+  const v = campaign.vehicle;
+  if (!v || typeof v === "string") return null;
+
+  return {
+    ...v,
+    _id: v._id,
+    fundraising: {
+      active: true,
+      targetAmount: campaign.targetAmount,
+      currentAmount: campaign.currentAmount,
+      minInvestment: campaign.minInvestment,
+      maxInvestment: campaign.maxInvestment,
+      expectedROI: campaign.expectedROI,
+      investorCount: v.fundraising?.investorCount ?? 0,
+      investors: v.fundraising?.investors ?? [],
+    },
+  } as Vehicle;
+}
 
 export default function InvestorMarketplace() {
   const { isConnected } = useAccount();
@@ -14,22 +36,25 @@ export default function InvestorMarketplace() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
+  const loadMarketplace = async () => {
+    setIsLoading(true);
+    try {
+      const res = await investmentApi.getMarketplace();
+      if (res.success && res.data) {
+        const mapped = res.data
+          .map((campaign: any) => campaignToVehicle(campaign))
+          .filter((v): v is Vehicle => v !== null);
+        setVehicles(mapped);
+      }
+    } catch (error) {
+      console.error("Failed to load marketplace:", error);
+      toast.error("Failed to load marketplace");
+    }
+    setIsLoading(false);
+  };
+
   useEffect(() => {
-    // Simulate loading vehicles with fundraising
-    const loadVehicles = async () => {
-      setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const allVehicles = generateMockVehicles(12);
-      // Filter only vehicles with active fundraising
-      const fundraisingVehicles = allVehicles.filter(
-        (v) => v.fundraising?.active
-      );
-      setVehicles(fundraisingVehicles);
-      setIsLoading(false);
-    };
-
-    loadVehicles();
+    loadMarketplace();
   }, []);
 
   const handleInvest = (vehicleId: string) => {
@@ -40,8 +65,9 @@ export default function InvestorMarketplace() {
   };
 
   const handleInvestmentSuccess = (amount: number) => {
-    // In a real app, this would update the backend and refresh data
     console.log("Investment successful:", amount);
+    // Refresh marketplace data after successful investment
+    loadMarketplace();
   };
 
   return (

@@ -152,6 +152,14 @@ export const kycApi = {
   },
 
   /**
+   * Get all investor users with wallet + KYC status (Admin only)
+   */
+  getInvestorUsers: async (): Promise<{ success: boolean; data: any[] }> => {
+    const { data } = await apiClient.get("/kyc/investors");
+    return data;
+  },
+
+  /**
    * Update blockchain registration status (Admin only)
    */
   updateBlockchainStatus: async (

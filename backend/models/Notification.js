@@ -19,6 +19,8 @@ const notificationSchema = new mongoose.Schema(
         "investment_confirmed",
         "revenue_distributed",
         "campaign_funded",
+        "campaign_expired",
+        "campaign_failed",
         "vehicle_available",
         "kyc_approved",
         "kyc_rejected",

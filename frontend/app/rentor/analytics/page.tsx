@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { RevenueChart } from "@/components/investor";
 import { VehicleStatsCard } from "@/components/rentor";
-import { VerificationStatusBanner } from "@/components/shared/VerificationStatusBanner";
 import { Heading, Paragraph, Card, CardContent, Badge, Select } from "@/components/ui";
 import { generateMockRevenueData } from "@/lib/mockData";
 import { formatCurrency } from "@/lib/utils";
@@ -106,9 +105,6 @@ export default function RentorAnalytics() {
           </div>
         </div>
       </div>
-
-      {/* Verification Status Banner */}
-      <VerificationStatusBanner roleType="rentor" className="mb-8" />
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">

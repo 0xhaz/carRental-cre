@@ -9,3 +9,4 @@ export * from "./NetworkSelector";
 export * from "./TransactionButton";
 export * from "./TokenBalance";
 export * from "./AddressDisplay";
+export * from "./EthUsdDisplay";

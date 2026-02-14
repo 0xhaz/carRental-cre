@@ -463,16 +463,20 @@ Distributes rental revenue using a waterfall deduction model.
 // --- Source Functions ---
 addRevenue(uint256 vehicleId, uint256 amount) payable        // From authorized source (rental protocol)
 registerVehicle(uint256 vehicleId, address revenueToken)     // Link vehicle to RevenueToken
+setVehicleOperator(uint256 vehicleId, address operator)      // Set rentor as vehicle operator
 
 // --- Distribution ---
 distributeRevenue(uint256 vehicleId) → uint256 distributionId    // Apply waterfall
 claimRevenue(uint256 vehicleId) → uint256 amount                 // Token holder claims
 batchClaimRevenue(uint256[] vehicleIds) → uint256 totalClaimed
+withdrawOperatorFees(uint256 vehicleId)                          // Operator claims their fee
 
 // --- View ---
 getClaimableRevenue(uint256 vehicleId, address holder) → uint256
 getVehicleRevenue(uint256 vehicleId) → VehicleRevenue
 calculateWaterfall(uint256 grossRevenue) → RevenueAllocation
+getOperatorFees(uint256 vehicleId) → uint256
+getVehicleOperator(uint256 vehicleId) → address
 ```
 
 **Revenue Waterfall**:
@@ -482,7 +486,8 @@ Gross Rental Income (100%)
   ├── Maintenance Reserve: 10%  → Per-vehicle escrow
   ├── Insurance Premium:    5%  → Coverage payments
   ├── Operating Costs:     10%  → Gas, cleaning, parking
-  └── Net Distributable:   60%  → RevenueToken holders (proportional)
+  ├── Operator Fee:        10%  → Vehicle operator (rentor)
+  └── Net Distributable:   50%  → RevenueToken holders (proportional)
 ```
 
 ---

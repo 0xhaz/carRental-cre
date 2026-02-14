@@ -16,8 +16,9 @@ export const vehicleApi = {
 
   // Get rentor's vehicles
   getRentorVehicles: async (): Promise<{ success: boolean; data: Vehicle[] }> => {
-    const { data} = await apiClient.get("/rentor/cars");
-    return data;
+    const { data } = await apiClient.get("/rentor/cars");
+    // Backend returns { success, cars } — normalize to { success, data }
+    return { success: data.success, data: data.cars || data.data || [] };
   },
 
   // Add new vehicle
@@ -28,6 +29,16 @@ export const vehicleApi = {
       },
     });
     return data;
+  },
+
+  // Update vehicle
+  updateVehicle: async (vehicleId: string, vehicleData: FormData): Promise<{ success: boolean; data: Vehicle }> => {
+    const { data } = await apiClient.post(`/rentor/update-car/${vehicleId}`, vehicleData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return { success: data.success, data: data.car || data.data };
   },
 
   // Toggle vehicle availability

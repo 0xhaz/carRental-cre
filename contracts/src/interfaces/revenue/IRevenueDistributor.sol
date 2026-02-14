@@ -17,7 +17,8 @@ interface IRevenueDistributor {
         uint256 maintenanceReserve; // 10% - Per-vehicle escrow
         uint256 insuranceFee; // 5% - Coverage payments
         uint256 operatingCosts; // 10% - Gas, cleaning, parking
-        uint256 netDistributable; // 60% - To RevenueToken holders
+        uint256 operatorFee; // 10% - Vehicle operator (rentor)
+        uint256 netDistributable; // 50% - To RevenueToken holders
         uint256 timestamp; // Distribution timestamp
     }
 
@@ -62,6 +63,7 @@ interface IRevenueDistributor {
         uint256 maintenanceReserve,
         uint256 insuranceFee,
         uint256 operatingCosts,
+        uint256 operatorFee,
         uint256 netDistributable
     );
 
@@ -135,12 +137,14 @@ interface IRevenueDistributor {
      * @param maintenancePercent Maintenance reserve percentage (basis points)
      * @param insurancePercent Insurance fee percentage (basis points)
      * @param operatingPercent Operating costs percentage (basis points)
+     * @param operatorPercent Operator fee percentage (basis points)
      */
     function updateFeePercentages(
         uint256 platformFeePercent,
         uint256 maintenancePercent,
         uint256 insurancePercent,
-        uint256 operatingPercent
+        uint256 operatingPercent,
+        uint256 operatorPercent
     ) external;
 
     /**

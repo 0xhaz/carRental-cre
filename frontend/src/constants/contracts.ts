@@ -1,12 +1,12 @@
 /**
  * RegShield Smart Contract Addresses
  * Deployed on Sepolia Testnet (Chain ID: 11155111)
- * Last Updated: 2025-02-12
+ * Last Updated: 2026-02-14
  */
 
 // Chain configuration
 export const SEPOLIA_CHAIN_ID = 11155111;
-export const SUPPORTED_CHAINS = [SEPOLIA_CHAIN_ID] as const;
+export const SUPPORTED_CHAIN_IDS = [SEPOLIA_CHAIN_ID] as const;
 
 // Contract addresses type
 export type ContractAddresses = {
@@ -51,11 +51,12 @@ export type ContractAddresses = {
   investorRequestManager: `0x${string}`;
   multiSigWallet: `0x${string}`;
 
-  // Payment Receivers (for off-chain use)
+  // CRE Receivers (for off-chain use)
   complianceReceiver: `0x${string}`;
   paymentReceiver: `0x${string}`;
   vehicleReceiver: `0x${string}`;
   onboardingReceiver: `0x${string}`;
+  campaignMonitorReceiver: `0x${string}`;
 };
 
 // Sepolia Testnet Addresses
@@ -97,15 +98,16 @@ export const SEPOLIA_CONTRACTS: ContractAddresses = {
   disputeResolver: "0x138d4fb3286ccb682a6a226f16d8a0b59d4b4e4f",
 
   // Revenue & Investor Management
-  revenueDistributor: "0x9ad1c5ce20fdd13bd549c5d85817e4a8dc2b9c29",
-  investorRequestManager: "0xe4cdeedc4e21e46092391cb54969cf3dfee03956",
-  multiSigWallet: "0x095682a629123a3e6f8c7b49bd1911977743fa2b",
+  revenueDistributor: "0xD08bc548f31557bB897eD91476d0c8d48297538D",
+  investorRequestManager: "0x94e0bB934fD3F9c2E8798FF70D7C6931d76C6b4d",
+  multiSigWallet: "0x9D05853223fC9dc32FEc293a410A9E74Ab8c3E7A",
 
-  // Payment Receivers (for off-chain use)
-  complianceReceiver: "0x179a9560a3ffb00f96685f052c2dc33b6ae7aff9",
-  paymentReceiver: "0xf3fec3fea53b2e3039c2ce5550029b0a6bf2cda4",
-  vehicleReceiver: "0x439a7819c78113f9b32ebafcfbad79bf69d4f45d",
-  onboardingReceiver: "0x7eb0cfb5e213233622f818cd9bf0a4c3c93330e1",
+  // CRE Receivers (redeployed with CampaignMonitorReceiver)
+  complianceReceiver: "0x0ea9cd084287107bca0f9785b030c22db72301fd",
+  paymentReceiver: "0x2f7f8ed26b72a43988afa1f3088bd4969f39b7c2",
+  vehicleReceiver: "0x73c58b5ba299faaa64103e453ba55b408c91e81b",
+  onboardingReceiver: "0xf080a8b7ee2e83c9bee26a795e43d70b1d093850",
+  campaignMonitorReceiver: "0x84a9b21b7d2ba6120923edaa32b283fd2e35fb94",
 };
 
 // Get contracts for current chain
@@ -164,4 +166,5 @@ export const CONTRACT_NAMES: Record<keyof ContractAddresses, string> = {
   paymentReceiver: "Payment Receiver",
   vehicleReceiver: "Vehicle Receiver",
   onboardingReceiver: "Onboarding Receiver",
+  campaignMonitorReceiver: "Campaign Monitor Receiver",
 };

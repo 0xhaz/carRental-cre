@@ -2,7 +2,7 @@
 
 /**
  * Token Balance Component
- * Displays user's payment token balance
+ * Displays user's native ETH balance
  */
 
 import { useMyTokenBalance } from "@/hooks/usePaymentToken";
@@ -37,7 +37,7 @@ export function TokenBalance({ showFull = false, className = "" }: TokenBalanceP
     );
   }
 
-  const displayBalance = showFull ? formatted : parseFloat(formatted).toFixed(2);
+  const displayBalance = showFull ? formatted : parseFloat(formatted).toFixed(4);
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
@@ -45,7 +45,7 @@ export function TokenBalance({ showFull = false, className = "" }: TokenBalanceP
         {showFull && <span className="text-xs text-gray-500">Balance</span>}
         <div className="flex items-center gap-1">
           <span className="font-semibold">{displayBalance}</span>
-          <span className="text-sm text-gray-600">RGSD</span>
+          <span className="text-sm text-gray-600">ETH</span>
         </div>
       </div>
     </div>

@@ -17,7 +17,8 @@ import {IRevenueToken} from "../interfaces/erc3643/IRevenueToken.sol";
  * - 10% Maintenance Reserve → Per-vehicle escrow
  * - 5% Insurance → Coverage payments
  * - 10% Operating Costs → Gas, cleaning, parking
- * - 60% Net Distributable → RevenueToken holders (proportional)
+ * - 10% Operator Fee → Vehicle operator (rentor)
+ * - 50% Net Distributable → RevenueToken holders (proportional)
  */
 contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
@@ -50,6 +51,15 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
 
     /// @notice Operating costs percentage (basis points, 1000 = 10%)
     uint256 public operatingPercent;
+
+    /// @notice Operator fee percentage (basis points, 1000 = 10%)
+    uint256 public operatorPercent;
+
+    /// @notice Mapping from vehicle ID to operator (rentor) address
+    mapping(uint256 => address) private _vehicleOperators;
+
+    /// @notice Accumulated operator fees per vehicle
+    mapping(uint256 => uint256) private _operatorFeesAccumulated;
 
     /// @notice Authorized revenue sources (RentalOperations, PaymentProtocol)
     mapping(address => bool) public authorizedSources;
@@ -100,7 +110,8 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
         maintenancePercent = 1000; // 10%
         insurancePercent = 500; // 5%
         operatingPercent = 1000; // 10%
-        // Remaining 60% goes to token holders
+        operatorPercent = 1000; // 10%
+        // Remaining 50% goes to token holders
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -115,10 +126,12 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
         uint256 platformFeePercent_,
         uint256 maintenancePercent_,
         uint256 insurancePercent_,
-        uint256 operatingPercent_
+        uint256 operatingPercent_,
+        uint256 operatorPercent_
     ) external override onlyOwner {
         // Total must not exceed 100%
-        uint256 total = platformFeePercent_ + maintenancePercent_ + insurancePercent_ + operatingPercent_;
+        uint256 total =
+            platformFeePercent_ + maintenancePercent_ + insurancePercent_ + operatingPercent_ + operatorPercent_;
 
         if (total >= BASIS_POINTS) {
             revert RevenueDistributor__InvalidFeePercentage();
@@ -128,6 +141,7 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
         maintenancePercent = maintenancePercent_;
         insurancePercent = insurancePercent_;
         operatingPercent = operatingPercent_;
+        operatorPercent = operatorPercent_;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -156,6 +170,15 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
         }
 
         emit VehicleRegistered(vehicleId, revenueToken);
+    }
+
+    /**
+     * @notice Set or update the operator (rentor) address for a vehicle
+     * @param vehicleId Vehicle NFT token ID
+     * @param operator Address of the vehicle operator who receives the operator fee
+     */
+    function setVehicleOperator(uint256 vehicleId, address operator) external onlyOwner {
+        _vehicleOperators[vehicleId] = operator;
     }
 
     /**
@@ -204,6 +227,9 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
         // Store maintenance reserve for this vehicle
         _maintenanceReserves[vehicleId] += allocation.maintenanceReserve;
 
+        // Store operator fees for this vehicle
+        _operatorFeesAccumulated[vehicleId] += allocation.operatorFee;
+
         // Emit waterfall event
         emit WaterfallApplied(
             vehicleId,
@@ -212,6 +238,7 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
             allocation.maintenanceReserve,
             allocation.insuranceFee,
             allocation.operatingCosts,
+            allocation.operatorFee,
             allocation.netDistributable
         );
 
@@ -309,6 +336,35 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
         emit FeesWithdrawn(recipient, 0, amount);
     }
 
+    /**
+     * @notice Withdraw accumulated operator fees for a vehicle
+     * @dev Only the vehicle operator or contract owner can withdraw
+     * @param vehicleId Vehicle NFT token ID
+     */
+    function withdrawOperatorFees(uint256 vehicleId)
+        external
+        nonReentrant
+        vehicleRegistered(vehicleId)
+    {
+        address operator = _vehicleOperators[vehicleId];
+        if (msg.sender != operator && msg.sender != owner()) {
+            revert RevenueDistributor__Unauthorized();
+        }
+
+        uint256 amount = _operatorFeesAccumulated[vehicleId];
+        if (amount == 0) {
+            revert RevenueDistributor__NoRevenueToDistribute();
+        }
+
+        _operatorFeesAccumulated[vehicleId] = 0;
+
+        address recipient = operator != address(0) ? operator : msg.sender;
+        (bool success,) = payable(recipient).call{value: amount}("");
+        if (!success) {
+            revert RevenueDistributor__WithdrawalFailed();
+        }
+    }
+
     /*//////////////////////////////////////////////////////////////
                         VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -348,10 +404,11 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
         allocation.maintenanceReserve = (grossRevenue * maintenancePercent) / BASIS_POINTS;
         allocation.insuranceFee = (grossRevenue * insurancePercent) / BASIS_POINTS;
         allocation.operatingCosts = (grossRevenue * operatingPercent) / BASIS_POINTS;
+        allocation.operatorFee = (grossRevenue * operatorPercent) / BASIS_POINTS;
 
         // Net distributable is remainder
         allocation.netDistributable = grossRevenue - allocation.platformFee - allocation.maintenanceReserve
-            - allocation.insuranceFee - allocation.operatingCosts;
+            - allocation.insuranceFee - allocation.operatingCosts - allocation.operatorFee;
 
         allocation.timestamp = block.timestamp;
     }
@@ -362,6 +419,14 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
 
     function getMaintenanceReserve(uint256 vehicleId) external view override returns (uint256 reserve) {
         return _maintenanceReserves[vehicleId];
+    }
+
+    function getOperatorFees(uint256 vehicleId) external view returns (uint256 fees) {
+        return _operatorFeesAccumulated[vehicleId];
+    }
+
+    function getVehicleOperator(uint256 vehicleId) external view returns (address operator) {
+        return _vehicleOperators[vehicleId];
     }
 
     function getTotalDistributed() external view override returns (uint256 total) {

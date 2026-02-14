@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { BookingCard, BookingCardSkeleton } from "@/components/renter";
-import { VerificationStatusBanner } from "@/components/shared/VerificationStatusBanner";
 import { Heading, Paragraph, Button, Badge } from "@/components/ui";
 import { Booking } from "@/types";
 import { formatCurrency } from "@/lib/utils";
@@ -90,9 +89,6 @@ export default function RentorBookings() {
           View and manage all bookings for your vehicles
         </Paragraph>
       </div>
-
-      {/* Verification Status Banner */}
-      <VerificationStatusBanner roleType="rentor" className="mb-8" />
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">

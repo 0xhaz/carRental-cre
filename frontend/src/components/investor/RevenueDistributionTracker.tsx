@@ -7,11 +7,11 @@ import { Card, CardContent, Button, Badge, Progress, Separator } from "@/compone
 import { formatCurrency } from "@/lib/utils";
 import {
   useMyClaimableRevenue,
-  useTotalRevenueDistributed,
+  useVehicleRevenue,
   useClaimRevenue,
 } from "@/hooks/useInvestment";
 import { toast } from "react-hot-toast";
-import { PAYMENT_TOKEN_DECIMALS } from "@/constants";
+import { formatEther } from "viem";
 
 export interface RevenueDistributionTrackerProps {
   vehicleId: bigint;
@@ -42,13 +42,17 @@ export function RevenueDistributionTracker({
     isLoading: claimableLoading,
   } = useMyClaimableRevenue(vehicleId);
 
-  // Fetch total revenue distributed
+  // Fetch vehicle revenue info
   const {
-    data: totalDistributed,
-    formatted: totalFormatted,
+    data: vehicleRevenueData,
     refetch: refetchTotal,
     isLoading: totalLoading,
-  } = useTotalRevenueDistributed(vehicleId);
+  } = useVehicleRevenue(vehicleId);
+
+  // Extract total distributed from vehicle revenue data
+  const totalFormatted = vehicleRevenueData
+    ? formatEther((vehicleRevenueData as any).totalRevenue || BigInt(0))
+    : "0";
 
   // Claim revenue hook
   const {

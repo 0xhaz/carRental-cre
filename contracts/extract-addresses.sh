@@ -105,6 +105,7 @@ extract_address "08_DeployCREReceivers" "ComplianceReceiver" "COMPLIANCE_RECEIVE
 extract_address "08_DeployCREReceivers" "PaymentReceiver" "PAYMENT_RECEIVER"
 extract_address "08_DeployCREReceivers" "VehicleReceiver" "VEHICLE_RECEIVER"
 extract_address "08_DeployCREReceivers" "OnboardingReceiver" "ONBOARDING_RECEIVER"
+extract_address "08_DeployCREReceivers" "CampaignMonitorReceiver" "CAMPAIGN_MONITOR_RECEIVER"
 
 echo ""
 echo -e "${GREEN}Addresses saved to: $OUTPUT_FILE${NC}"

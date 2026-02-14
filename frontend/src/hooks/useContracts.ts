@@ -4,7 +4,7 @@
  */
 
 import { useChainId } from "wagmi";
-import { getContracts } from "@/constants/contracts";
+import { getContracts, type ContractAddresses } from "@/constants/contracts";
 import { ABIS } from "@/contracts/abis";
 
 /**
@@ -21,16 +21,23 @@ export function useContractAddresses() {
 export function useContract<T extends keyof typeof ABIS>(contractName: T) {
   const contracts = useContractAddresses();
 
-  // Map contract names to their respective keys in the contracts object
-  const addressKey: Record<keyof typeof ABIS, keyof typeof contracts> = {
+  // Map ABI keys to their respective contract address keys
+  const addressKey: Record<keyof typeof ABIS, keyof ContractAddresses> = {
     vehicleNFT: "vehicleNFT",
     rentalBooking: "rentalBooking",
     rentalOperations: "rentalOperations",
-    paymentToken: "paymentToken",
+    identityRegistry: "identityRegistry",
+    regShieldPaymentProtocol: "investmentPaymentProtocol",
     rentalPaymentProtocol: "rentalPaymentProtocol",
+    paymentEscrow: "investmentEscrow",
+    refundManager: "investmentRefundManager",
+    disputeResolver: "disputeResolver",
     investorRequestManager: "investorRequestManager",
     revenueDistributor: "revenueDistributor",
-    identityRegistry: "identityRegistry",
+    multiSigWallet: "multiSigWallet",
+    complianceRules: "complianceRules",
+    investorTypeRegistry: "investorTypeRegistry",
+    participantTypeRegistry: "participantTypeRegistry",
   };
 
   return {
@@ -40,13 +47,27 @@ export function useContract<T extends keyof typeof ABIS>(contractName: T) {
 }
 
 /**
- * Export individual contract hooks for convenience
+ * Individual contract hooks
  */
+// Core
 export const useVehicleNFT = () => useContract("vehicleNFT");
 export const useRentalBooking = () => useContract("rentalBooking");
 export const useRentalOperations = () => useContract("rentalOperations");
-export const usePaymentToken = () => useContract("paymentToken");
+export const useIdentityRegistry = () => useContract("identityRegistry");
+
+// Payment system (native ETH)
+export const useRegShieldPaymentProtocol = () => useContract("regShieldPaymentProtocol");
 export const useRentalPaymentProtocol = () => useContract("rentalPaymentProtocol");
+export const usePaymentEscrow = () => useContract("paymentEscrow");
+export const useRefundManager = () => useContract("refundManager");
+export const useDisputeResolver = () => useContract("disputeResolver");
+
+// Investor & Revenue
 export const useInvestorRequestManager = () => useContract("investorRequestManager");
 export const useRevenueDistributor = () => useContract("revenueDistributor");
-export const useIdentityRegistry = () => useContract("identityRegistry");
+export const useMultiSigWallet = () => useContract("multiSigWallet");
+
+// Compliance & Registries
+export const useComplianceRules = () => useContract("complianceRules");
+export const useInvestorTypeRegistry = () => useContract("investorTypeRegistry");
+export const useParticipantTypeRegistry = () => useContract("participantTypeRegistry");

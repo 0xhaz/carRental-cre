@@ -1,41 +1,22 @@
 /**
  * Rental Operations Hooks
- * Hooks for interacting with the rental booking system
+ * Hooks for interacting with RentalBooking, RentalPaymentProtocol,
+ * and RentalOperations contracts.
+ * All payments use native ETH (no ERC-20 tokens).
  */
 
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useRentalBooking, useRentalPaymentProtocol } from "./useContracts";
-import { parseUnits } from "viem";
+import { parseEther, formatEther } from "viem";
 
-/**
- * Get active bookings for a user
- */
-export function useUserBookings(userAddress?: `0x${string}`) {
-  const { address, abi } = useRentalBooking();
-
-  return useReadContract({
-    address,
-    abi,
-    functionName: "getUserBookings",
-    args: userAddress ? [userAddress] : undefined,
-    query: {
-      enabled: !!userAddress,
-    },
-  });
-}
-
-/**
- * Get my active bookings
- */
-export function useMyBookings() {
-  const { address: userAddress } = useAccount();
-  return useUserBookings(userAddress);
-}
+// ═══════════════════════════════════════════════
+// Booking Queries (RentalBooking)
+// ═══════════════════════════════════════════════
 
 /**
  * Get booking details by ID
  */
-export function useBookingDetails(bookingId: bigint | undefined) {
+export function useBookingDetails(bookingId?: bigint) {
   const { address, abi } = useRentalBooking();
 
   return useReadContract({
@@ -53,9 +34,9 @@ export function useBookingDetails(bookingId: bigint | undefined) {
  * Check if a vehicle is available for specific dates
  */
 export function useCheckVehicleAvailability(
-  vehicleId: bigint | undefined,
-  startDate: bigint | undefined,
-  endDate: bigint | undefined
+  vehicleId?: bigint,
+  startTime?: bigint,
+  endTime?: bigint
 ) {
   const { address, abi } = useRentalBooking();
 
@@ -63,150 +44,239 @@ export function useCheckVehicleAvailability(
     address,
     abi,
     functionName: "isVehicleAvailable",
-    args: vehicleId !== undefined && startDate !== undefined && endDate !== undefined
-      ? [vehicleId, startDate, endDate]
+    args: vehicleId !== undefined && startTime !== undefined && endTime !== undefined
+      ? [vehicleId, startTime, endTime]
       : undefined,
     query: {
-      enabled: vehicleId !== undefined && startDate !== undefined && endDate !== undefined,
+      enabled: vehicleId !== undefined && startTime !== undefined && endTime !== undefined,
     },
   });
 }
 
 /**
- * Calculate rental cost
+ * Calculate booking cost (startTime, endTime, ratePerDay) => totalCost
  */
-export function useCalculateRentalCost(
-  vehicleId: bigint | undefined,
-  startDate: bigint | undefined,
-  endDate: bigint | undefined
+export function useCalculateBookingCost(
+  startTime?: bigint,
+  endTime?: bigint,
+  ratePerDay?: bigint
 ) {
   const { address, abi } = useRentalBooking();
+
+  const result = useReadContract({
+    address,
+    abi,
+    functionName: "calculateBookingCost",
+    args: startTime !== undefined && endTime !== undefined && ratePerDay !== undefined
+      ? [startTime, endTime, ratePerDay]
+      : undefined,
+    query: {
+      enabled: startTime !== undefined && endTime !== undefined && ratePerDay !== undefined,
+    },
+  });
+
+  return {
+    ...result,
+    formatted: result.data ? formatEther(result.data as bigint) : "0",
+  };
+}
+
+// ═══════════════════════════════════════════════
+// Renter Actions (RentalBooking)
+// ═══════════════════════════════════════════════
+
+/**
+ * Request a booking (sends ETH: ratePerDay * days + securityDeposit)
+ */
+export function useRequestBooking() {
+  const { address, abi } = useRentalBooking();
+  const { data: hash, writeContract, isSuccess: _ws, ...rest } = useWriteContract();
+
+  const requestBooking = (
+    vehicleId: bigint,
+    startTime: bigint,
+    endTime: bigint,
+    ratePerDay: bigint,
+    securityDeposit: bigint,
+    totalValue: bigint,
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "requestBooking",
+      args: [vehicleId, startTime, endTime, ratePerDay, securityDeposit],
+      value: totalValue,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { requestBooking, hash, isConfirming, isSuccess, ...rest };
+}
+
+/**
+ * Extend an active rental
+ */
+export function useExtendRental() {
+  const { address, abi } = useRentalBooking();
+  const { data: hash, writeContract, isSuccess: _ws, ...rest } = useWriteContract();
+
+  const extendRental = (bookingId: bigint, additionalDays: bigint, additionalPayment: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "extendRental",
+      args: [bookingId, additionalDays],
+      value: additionalPayment,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { extendRental, hash, isConfirming, isSuccess, ...rest };
+}
+
+/**
+ * Initiate return (renter signals they want to return the vehicle)
+ */
+export function useInitiateReturn() {
+  const { address, abi } = useRentalBooking();
+  const { data: hash, writeContract, isSuccess: _ws, ...rest } = useWriteContract();
+
+  const initiateReturn = (bookingId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "initiateReturn",
+      args: [bookingId],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { initiateReturn, hash, isConfirming, isSuccess, ...rest };
+}
+
+/**
+ * Report an issue with a rental
+ */
+export function useReportIssue() {
+  const { address, abi } = useRentalBooking();
+  const { data: hash, writeContract, isSuccess: _ws, ...rest } = useWriteContract();
+
+  const reportIssue = (bookingId: bigint, issue: string) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "reportIssue",
+      args: [bookingId, issue],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { reportIssue, hash, isConfirming, isSuccess, ...rest };
+}
+
+/**
+ * Dispute charges on a booking
+ */
+export function useDisputeCharges() {
+  const { address, abi } = useRentalBooking();
+  const { data: hash, writeContract, isSuccess: _ws, ...rest } = useWriteContract();
+
+  const disputeCharges = (bookingId: bigint, disputedAmount: bigint, reason: string) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "disputeCharges",
+      args: [bookingId, disputedAmount, reason],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { disputeCharges, hash, isConfirming, isSuccess, ...rest };
+}
+
+// ═══════════════════════════════════════════════
+// Rental Payment (RentalPaymentProtocol)
+// ═══════════════════════════════════════════════
+
+/**
+ * Get rental payment details by payment ID
+ */
+export function useRentalPaymentDetails(paymentId?: bigint) {
+  const { address, abi } = useRentalPaymentProtocol();
 
   return useReadContract({
     address,
     abi,
-    functionName: "calculateRentalCost",
-    args: vehicleId !== undefined && startDate !== undefined && endDate !== undefined
-      ? [vehicleId, startDate, endDate]
-      : undefined,
+    functionName: "getRentalPayment",
+    args: paymentId !== undefined ? [paymentId] : undefined,
     query: {
-      enabled: vehicleId !== undefined && startDate !== undefined && endDate !== undefined,
+      enabled: paymentId !== undefined,
     },
   });
 }
 
 /**
- * Create a rental booking
+ * Get all rental payment IDs for a vehicle
  */
-export function useCreateBooking() {
-  const { address, abi } = useRentalBooking();
-  const { data: hash, writeContract, ...rest } = useWriteContract();
+export function useVehicleRentalPayments(vehicleId?: bigint) {
+  const { address, abi } = useRentalPaymentProtocol();
 
-  const createBooking = (vehicleId: bigint, startDate: bigint, endDate: bigint) => {
-    writeContract({
-      address,
-      abi,
-      functionName: "createBooking",
-      args: [vehicleId, startDate, endDate],
-    });
-  };
-
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getVehicleRentalPayments",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
+    },
   });
-
-  return {
-    createBooking,
-    hash,
-    isConfirming,
-    isSuccess,
-    ...rest,
-  };
 }
 
 /**
- * Cancel a booking
+ * Get platform fee rate (basis points, e.g. 500 = 5%)
  */
-export function useCancelBooking() {
-  const { address, abi } = useRentalBooking();
-  const { data: hash, writeContract, ...rest } = useWriteContract();
+export function usePlatformFeeRate() {
+  const { address, abi } = useRentalPaymentProtocol();
 
-  const cancelBooking = (bookingId: bigint) => {
-    writeContract({
-      address,
-      abi,
-      functionName: "cancelBooking",
-      args: [bookingId],
-    });
-  };
-
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
+  return useReadContract({
+    address,
+    abi,
+    functionName: "platformFeeRate",
   });
-
-  return {
-    cancelBooking,
-    hash,
-    isConfirming,
-    isSuccess,
-    ...rest,
-  };
 }
 
 /**
- * Complete a rental (mark as returned)
+ * Create a rental booking payment (sends ETH: rentalFee + securityDeposit + escrowFee)
  */
-export function useCompleteRental() {
-  const { address, abi } = useRentalBooking();
-  const { data: hash, writeContract, ...rest } = useWriteContract();
+export function useCreateRentalBookingPayment() {
+  const { address, abi } = useRentalPaymentProtocol();
+  const { data: hash, writeContract, isSuccess: _ws, ...rest } = useWriteContract();
 
-  const completeRental = (bookingId: bigint) => {
+  const createPayment = (
+    bookingId: bigint,
+    vehicleId: bigint,
+    rentor: `0x${string}`,
+    rentalFee: bigint,
+    securityDeposit: bigint,
+    startTime: bigint,
+    endTime: bigint,
+    totalValue: bigint,
+  ) => {
     writeContract({
       address,
       abi,
-      functionName: "completeRental",
-      args: [bookingId],
+      functionName: "createRentalBooking",
+      args: [bookingId, vehicleId, rentor, rentalFee, securityDeposit, startTime, endTime],
+      value: totalValue,
     });
   };
 
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-  return {
-    completeRental,
-    hash,
-    isConfirming,
-    isSuccess,
-    ...rest,
-  };
-}
-
-/**
- * Start a rental (pickup vehicle)
- */
-export function useStartRental() {
-  const { address, abi } = useRentalBooking();
-  const { data: hash, writeContract, ...rest } = useWriteContract();
-
-  const startRental = (bookingId: bigint) => {
-    writeContract({
-      address,
-      abi,
-      functionName: "startRental",
-      args: [bookingId],
-    });
-  };
-
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
-
-  return {
-    startRental,
-    hash,
-    isConfirming,
-    isSuccess,
-    ...rest,
-  };
+  return { createPayment, hash, isConfirming, isSuccess, ...rest };
 }

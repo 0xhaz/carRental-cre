@@ -124,6 +124,9 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
     /// @notice Emitted when an operator is authorized or revoked
     event AuthorizedOperatorUpdated(address indexed operator, bool authorized);
 
+    /// @notice Emitted when all PENDING payments for a vehicle campaign are batch-cancelled
+    event CampaignPaymentsBatchCancelled(uint256 indexed vehicleId, uint256 refundedCount);
+
     /*//////////////////////////////////////////////////////////////
                              MODIFIERS
     //////////////////////////////////////////////////////////////*/
@@ -626,6 +629,39 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
         }
 
         _releaseMilestoneFunds(paymentId);
+    }
+
+    /**
+     * @notice Batch cancel all PENDING payments for a vehicle (campaign failed/cancelled)
+     * @dev Only callable by owner or authorized operators (e.g. CampaignMonitorReceiver)
+     *      Automatically refunds each investor via escrow
+     * @param vehicleId ID of the vehicle whose campaign is being cancelled
+     * @return refundedCount Number of payments successfully refunded
+     */
+    function batchCancelVehiclePayments(uint256 vehicleId)
+        external
+        onlyOwnerOrOperator
+        nonReentrant
+        returns (uint256 refundedCount)
+    {
+        uint256[] storage paymentIds = _vehiclePayments[vehicleId];
+        uint256 len = paymentIds.length;
+
+        for (uint256 i = 0; i < len; i++) {
+            uint256 paymentId = paymentIds[i];
+            Payment storage payment = _payments[paymentId];
+
+            // Only refund PENDING payments (CONFIRMED ones already released funds)
+            if (payment.state != PaymentState.PENDING) continue;
+
+            payment.state = PaymentState.CANCELLED;
+            refundManager.processAutomaticRefund(paymentId, IRefundManager.RefundReason.PAYMENT_CANCELLATION);
+
+            emit PaymentCancelled(paymentId, msg.sender);
+            refundedCount++;
+        }
+
+        emit CampaignPaymentsBatchCancelled(vehicleId, refundedCount);
     }
 
     /**

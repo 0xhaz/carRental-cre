@@ -4,7 +4,7 @@ import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { investorMenuLinks } from '@/constants/menuLinks';
-import { RoleSwitcher, ProtectedRoute } from '@/components/shared';
+import { RoleSwitcher, ProtectedRoute, NotificationBell } from '@/components/shared';
 import { UserRole } from '@/types';
 
 export default function InvestorLayout({ children }: { children: ReactNode }) {
@@ -35,6 +35,7 @@ export default function InvestorLayout({ children }: { children: ReactNode }) {
                     </Link>
                   );
                 })}
+                <NotificationBell />
                 <RoleSwitcher />
               </div>
             </div>

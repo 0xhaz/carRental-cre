@@ -3,7 +3,7 @@
  * Checks user's compliance status for investor/rentor roles
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { useUserStore } from "@/store/userStore";
 import { useIdentityRegistry } from "./useContracts";
@@ -17,6 +17,7 @@ export interface ComplianceStatus {
 
   // KYC verification status
   isKYCApproved: boolean; // KYC approved in database
+  kycStatus: string | null; // Raw KYC status from API
 
   // Blockchain verification status
   isVerifiedOnChain: boolean; // Identity verified in IdentityRegistry contract
@@ -25,7 +26,13 @@ export interface ComplianceStatus {
   // Overall compliance
   isFullyCompliant: boolean; // All requirements met
   missingSteps: string[]; // List of missing requirements
+
+  // Actions
+  refetchKYC: () => Promise<void>; // Manually refetch KYC status
 }
+
+// Polling interval for KYC status (30 seconds)
+const KYC_POLL_INTERVAL = 30_000;
 
 /**
  * Hook to check user's compliance status
@@ -37,34 +44,60 @@ export function useComplianceStatus(): ComplianceStatus {
   const { address: identityRegistryAddress, abi } = useIdentityRegistry();
 
   const [isKYCApproved, setIsKYCApproved] = useState(false);
+  const [kycStatus, setKycStatus] = useState<string | null>(null);
   const [isLoadingKYC, setIsLoadingKYC] = useState(true);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get bound wallet from user profile (stored in database)
   const boundWalletAddress = user?.walletAddress as `0x${string}` | undefined;
   const hasWalletBound = !!boundWalletAddress;
 
-  // Check KYC status from database
-  useEffect(() => {
-    const checkKYCStatus = async () => {
-      if (!user) {
-        setIsKYCApproved(false);
-        setIsLoadingKYC(false);
-        return;
-      }
+  // Fetch KYC status from database
+  const fetchKYCStatus = useCallback(async () => {
+    if (!user) {
+      setIsKYCApproved(false);
+      setKycStatus(null);
+      setIsLoadingKYC(false);
+      return;
+    }
 
-      try {
-        const response = await kycApi.getStatus();
-        setIsKYCApproved(response.success && response.data.status === "approved");
-      } catch (error) {
-        console.error("Failed to check KYC status:", error);
-        setIsKYCApproved(false);
-      } finally {
-        setIsLoadingKYC(false);
+    try {
+      const response = await kycApi.getStatus();
+      const status = response.success ? response.data.status : "not_submitted";
+      setKycStatus(status);
+      setIsKYCApproved(status === "approved");
+    } catch (error) {
+      console.error("Failed to check KYC status:", error);
+      setIsKYCApproved(false);
+      setKycStatus(null);
+    } finally {
+      setIsLoadingKYC(false);
+    }
+  }, [user]);
+
+  // Initial fetch + polling for KYC status
+  useEffect(() => {
+    fetchKYCStatus();
+
+    // Poll for updates when KYC is not yet approved (pending/under_review)
+    pollIntervalRef.current = setInterval(() => {
+      fetchKYCStatus();
+    }, KYC_POLL_INTERVAL);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
       }
     };
+  }, [fetchKYCStatus]);
 
-    checkKYCStatus();
-  }, [user]);
+  // Stop polling once KYC is approved
+  useEffect(() => {
+    if (isKYCApproved && pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, [isKYCApproved]);
 
   // Check if bound wallet is verified in IdentityRegistry
   const {
@@ -98,7 +131,13 @@ export function useComplianceStatus(): ComplianceStatus {
     missingSteps.push("Connect your registered wallet");
   }
   if (hasWalletBound && !isKYCApproved && !isVerifiedOnChain) {
-    missingSteps.push("Complete KYC verification");
+    if (kycStatus === "pending" || kycStatus === "under_review") {
+      missingSteps.push("KYC documents under review — awaiting approval");
+    } else if (kycStatus === "rejected") {
+      missingSteps.push("KYC was rejected — please resubmit documents");
+    } else {
+      missingSteps.push("Complete KYC verification");
+    }
   }
 
   // User is fully compliant if:
@@ -113,15 +152,18 @@ export function useComplianceStatus(): ComplianceStatus {
     isWalletConnected: isConnected,
     walletAddress: boundWalletAddress || null,
     isKYCApproved,
+    kycStatus,
     isVerifiedOnChain,
     isLoading: isLoadingKYC || isLoadingBlockchain,
     isFullyCompliant,
     missingSteps,
+    refetchKYC: fetchKYCStatus,
   };
 }
 
 /**
  * Hook to check if user can perform investor actions
+ * Gates on KYC approval — wallet match is enforced at the blockchain operation level
  */
 export function useCanInvestorAct(): {
   canAct: boolean;
@@ -143,10 +185,10 @@ export function useCanInvestorAct(): {
     };
   }
 
-  if (!compliance.isFullyCompliant) {
+  if (!compliance.isKYCApproved && !compliance.isVerifiedOnChain) {
     return {
       canAct: false,
-      reason: compliance.missingSteps[0] || "Compliance requirements not met",
+      reason: compliance.missingSteps[0] || "Complete KYC verification",
       isLoading: false,
     };
   }
@@ -156,6 +198,7 @@ export function useCanInvestorAct(): {
 
 /**
  * Hook to check if user can perform rentor actions
+ * Gates on KYC approval — wallet match is enforced at the blockchain operation level
  */
 export function useCanRentorAct(): {
   canAct: boolean;
@@ -177,10 +220,10 @@ export function useCanRentorAct(): {
     };
   }
 
-  if (!compliance.isFullyCompliant) {
+  if (!compliance.isKYCApproved && !compliance.isVerifiedOnChain) {
     return {
       canAct: false,
-      reason: compliance.missingSteps[0] || "Compliance requirements not met",
+      reason: compliance.missingSteps[0] || "Complete KYC verification",
       isLoading: false,
     };
   }

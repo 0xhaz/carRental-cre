@@ -8,6 +8,11 @@ export enum CampaignStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum FundraisingType {
+  FULL_FUNDRAISE = 'full_fundraise',
+  CO_INVEST = 'co_invest',
+}
+
 export interface Milestone {
   _id?: string;
   name: string;
@@ -31,6 +36,10 @@ export interface FundraisingCampaign {
 
   expectedROI: number;
   duration: number; // Days
+
+  fundraisingType: FundraisingType;
+  rentorInvestment: number;
+  minFundingRequired: number; // Minimum % of targetAmount to proceed (0-100)
 
   status: CampaignStatus;
 

@@ -5,8 +5,7 @@ import { useAccount } from "wagmi";
 import { formatUnits } from "viem";
 import { Card, CardContent, Badge, Button, Separator } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils";
-import { useMyInvestments } from "@/hooks/useInvestment";
-import { PAYMENT_TOKEN_DECIMALS } from "@/constants";
+import { useMyTotalInvestment, useMyInvestorRequest } from "@/hooks/useInvestment";
 
 // Transaction types
 type TransactionType = "investment" | "withdrawal" | "revenue_claim" | "token_transfer";
@@ -172,50 +171,32 @@ export interface TransactionHistoryProps {
  */
 export function TransactionHistory({ className, limit }: TransactionHistoryProps) {
   const { address: userAddress, isConnected } = useAccount();
-  const { data: investments, isLoading } = useMyInvestments();
+  const { data: totalInvestment, isLoading: totalLoading } = useMyTotalInvestment();
+  const { data: investorRequest, isLoading: requestLoading } = useMyInvestorRequest();
+  const isLoading = totalLoading || requestLoading;
 
   const [filterType, setFilterType] = useState<TransactionType | "all">("all");
   const [showAll, setShowAll] = useState(false);
 
-  // Mock transaction data (in production, this would come from blockchain events/API)
-  // For now, we'll generate from investments
+  // Transaction data will come from blockchain events in production.
+  // For now, derive basic info from on-chain investment state.
   const generateMockTransactions = (): Transaction[] => {
-    if (!investments) return [];
-
-    const investmentsList = Array.isArray(investments) ? investments : [];
     const transactions: Transaction[] = [];
 
-    investmentsList.forEach((investment: any, index: number) => {
-      // Investment transaction
+    // If we have investment data, create a summary transaction entry
+    if (totalInvestment && (totalInvestment as bigint) > BigInt(0)) {
       transactions.push({
-        id: `inv-${index}`,
+        id: "inv-total",
         type: "investment",
-        amount: investment.amount || 1000 + index * 500,
-        vehicleId: investment.vehicleId?.toString() || `${index + 1}`,
-        vehicleName: investment.vehicleName,
-        timestamp: Date.now() - (index * 86400000), // Spread over days
-        txHash: investment.txHash || `0x${Math.random().toString(16).slice(2, 66)}`,
+        amount: Number(totalInvestment) / 1e18, // Convert wei to ETH
+        vehicleId: "portfolio",
+        vehicleName: "Portfolio Total",
+        timestamp: Date.now() - 86400000,
         status: "confirmed",
-        details: `Invested in ${investment.vehicleName || "vehicle"}`,
+        details: "Total portfolio investment (on-chain)",
       });
+    }
 
-      // Random revenue claim (50% chance)
-      if (Math.random() > 0.5) {
-        transactions.push({
-          id: `claim-${index}`,
-          type: "revenue_claim",
-          amount: (investment.amount || 1000) * 0.05, // 5% return
-          vehicleId: investment.vehicleId?.toString() || `${index + 1}`,
-          vehicleName: investment.vehicleName,
-          timestamp: Date.now() - (index * 86400000) + 3600000, // 1 hour after investment
-          txHash: `0x${Math.random().toString(16).slice(2, 66)}`,
-          status: "confirmed",
-          details: "Revenue distribution claimed",
-        });
-      }
-    });
-
-    // Sort by timestamp descending
     return transactions.sort((a, b) => b.timestamp - a.timestamp);
   };
 

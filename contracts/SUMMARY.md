@@ -88,7 +88,8 @@ Gross Rental Income (100%)
   ├── Maintenance Reserve: 10%
   ├── Insurance Premium:    5%
   ├── Operating Costs:     10%
-  └── Net to Investors:    60%  (proportional to RevenueToken holdings)
+  ├── Operator Fee:        10%  (vehicle operator / rentor)
+  └── Net to Investors:    50%  (proportional to RevenueToken holdings)
 ```
 
 ## Investor Types & Onboarding
@@ -190,9 +191,10 @@ Four receiver contracts bridge off-chain CRE computations to on-chain state chan
 | Maintenance Reserve | 10% | 0.51 ETH |
 | Insurance | 5% | 0.255 ETH |
 | Operating Costs | 10% | 0.51 ETH |
-| **Net to Investors** | **60%** | **3.06 ETH** |
-| Per investor (10 equal shares) | | **0.306 ETH** |
-| **ROI** | | **~61%** |
+| Operator Fee (rentor) | 10% | 0.51 ETH |
+| **Net to Investors** | **50%** | **2.55 ETH** |
+| Per investor (10 equal shares) | | **0.255 ETH** |
+| **Investor ROI** | | **~51%** |
 
 ## Implementation Status
 

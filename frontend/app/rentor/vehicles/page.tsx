@@ -16,6 +16,7 @@ export default function RentorVehicles() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadVehicles = async () => {
     setIsLoading(true);
@@ -39,9 +40,7 @@ export default function RentorVehicles() {
   }, []);
 
   const handleEdit = (vehicleId: string) => {
-    toast.info("Edit vehicle feature coming soon!");
-    // TODO: Navigate to edit page when implemented
-    // router.push(`/rentor/vehicles/edit/${vehicleId}`);
+    router.push(`/rentor/vehicles/edit/${vehicleId}`);
   };
 
   const handleViewBookings = (vehicleId: string) => {
@@ -50,8 +49,25 @@ export default function RentorVehicles() {
   };
 
   const handleManageFundraising = (vehicleId: string) => {
-    // Navigate to fundraising page
     router.push("/rentor/fundraising");
+  };
+
+  const handleDeleteVehicle = async (vehicleId: string) => {
+    setDeletingId(vehicleId);
+    try {
+      const response = await vehicleApi.deleteVehicle(vehicleId);
+      if (response.success) {
+        toast.success("Vehicle removed successfully");
+        loadVehicles();
+      } else {
+        toast.error((response as any).message || "Failed to delete vehicle");
+      }
+    } catch (error: any) {
+      console.error("Delete vehicle error:", error);
+      toast.error(error.response?.data?.message || "Failed to delete vehicle");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const availableCount = vehicles.filter((v) => v.isAvailable).length;
@@ -127,6 +143,8 @@ export default function RentorVehicles() {
                 onEdit={handleEdit}
                 onViewBookings={handleViewBookings}
                 onManageFundraising={handleManageFundraising}
+                onDelete={handleDeleteVehicle}
+                isDeleting={deletingId === vehicle._id}
               />
             ))}
           </div>

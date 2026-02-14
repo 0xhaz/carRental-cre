@@ -206,7 +206,8 @@ Gross Rental Income (100%)
   ├── Maintenance Reserve: 10%  → Per-vehicle escrow
   ├── Insurance Premium:    5%  → Coverage payments
   ├── Operating Costs:     10%  → Gas, cleaning, parking
-  └── Net Distributable:   60%  → RevenueToken holders (proportional)
+  ├── Operator Fee:        10%  → Vehicle operator (rentor)
+  └── Net Distributable:   50%  → RevenueToken holders (proportional)
 ```
 
 ## Testing

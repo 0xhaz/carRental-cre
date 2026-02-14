@@ -14,6 +14,7 @@ type OnboardingStep = "connect" | "bind" | "kyc" | "verify" | "complete";
 export interface ComplianceOnboardingFlowProps {
   roleType: "investor" | "rentor";
   onComplete?: () => void;
+  forceRestart?: boolean; // Force restart from step 1 (for resubmission)
 }
 
 /**
@@ -23,6 +24,7 @@ export interface ComplianceOnboardingFlowProps {
 export function ComplianceOnboardingFlow({
   roleType,
   onComplete,
+  forceRestart = false,
 }: ComplianceOnboardingFlowProps) {
   const { address, isConnected } = useAccount();
   const { user, setUser } = useUserStore();
@@ -37,23 +39,36 @@ export function ComplianceOnboardingFlow({
   }>({});
 
   // Determine current step based on compliance status
+  // When forceRestart is true, skip auto-detection and let user go through manually
   useEffect(() => {
+    if (forceRestart) {
+      // In resubmit mode, start from connect step and let user proceed manually
+      return;
+    }
+
     if (compliance.isFullyCompliant) {
       setCurrentStep("complete");
-    } else if (compliance.hasWalletBound && !compliance.isVerifiedOnChain) {
+    } else if (compliance.hasWalletBound && compliance.isKYCApproved) {
+      // KYC approved but not yet on-chain — show complete (or pending chain registration)
+      setCurrentStep("complete");
+    } else if (compliance.hasWalletBound && (compliance.kycStatus === "pending" || compliance.kycStatus === "under_review")) {
+      // KYC submitted, awaiting admin review
+      setCurrentStep("verify");
+    } else if (compliance.hasWalletBound && !compliance.isKYCApproved && !compliance.isVerifiedOnChain) {
+      // Wallet bound but no KYC submitted (or rejected)
       setCurrentStep("kyc");
     } else if (!compliance.hasWalletBound && isConnected) {
       setCurrentStep("bind");
     } else {
       setCurrentStep("connect");
     }
-  }, [compliance, isConnected]);
+  }, [compliance, isConnected, forceRestart]);
 
   // Step 1: Connect Wallet
   const handleConnectWallet = () => {
     // Wallet connection is handled by the ConnectButton in the navbar
     // This just provides instructions
-    toast.info("Click 'Connect Wallet' in the top navigation bar");
+    toast("Click 'Connect Wallet' in the top navigation bar", { icon: "ℹ️" });
   };
 
   // Step 2: Bind Wallet to Account
@@ -143,10 +158,9 @@ export function ComplianceOnboardingFlow({
         toast.success("KYC documents submitted successfully!");
         toast("Documents are under review. You'll be notified once approved.");
 
-        // Close the modal after successful submission
-        if (onComplete) {
-          onComplete();
-        }
+        // Refresh KYC status and transition to verify step
+        await compliance.refetchKYC();
+        setCurrentStep("verify");
       } else {
         toast.error(response.message || "Failed to submit KYC");
       }
@@ -177,10 +191,12 @@ export function ComplianceOnboardingFlow({
             {roleType === "investor" ? "💼" : "🚗"}
           </div>
           <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            {roleType === "investor" ? "Investor" : "Vehicle Owner"} Verification
+            {forceRestart ? "Resubmit " : ""}{roleType === "investor" ? "Investor" : "Vehicle Owner"} Verification
           </h2>
           <p className="text-gray-600">
-            Complete the following steps to start {roleType === "investor" ? "investing" : "listing vehicles"}
+            {forceRestart
+              ? "Connect a new wallet and resubmit your verification documents"
+              : `Complete the following steps to start ${roleType === "investor" ? "investing" : "listing vehicles"}`}
           </p>
         </div>
 
@@ -347,10 +363,18 @@ export function ComplianceOnboardingFlow({
               </p>
               <div className="bg-white rounded-lg p-4 mb-4">
                 <p className="text-sm text-gray-600">
-                  This usually takes 1-3 business days. You'll receive an email once approved.
+                  This usually takes 1-3 business days. You&apos;ll receive a notification once approved.
+                </p>
+                <p className="text-xs text-gray-400 mt-2">
+                  This page will update automatically when your status changes.
                 </p>
               </div>
               <Badge variant="default">Pending Verification</Badge>
+              <div className="mt-4">
+                <Button variant="outline" onClick={() => onComplete?.()}>
+                  Close and Wait
+                </Button>
+              </div>
             </div>
           )}
 

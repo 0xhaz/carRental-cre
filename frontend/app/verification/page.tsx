@@ -6,10 +6,22 @@ import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { useUserStore } from "@/store";
 import { authApi, kycApi } from "@/lib/api";
 import { Card, CardContent, Button, Heading, Paragraph } from "@/components/ui";
+import { InvestorTypeSelector } from "@/components/investor/InvestorTypeSelector";
 import { toast } from "react-hot-toast";
 import type { UserRole } from "@/types";
 
-type VerificationStep = "connect-wallet" | "bind-wallet" | "kyc-upload" | "pending-approval";
+type VerificationStep =
+  | "connect-wallet"
+  | "bind-wallet"
+  | "investor-type"
+  | "kyc-upload"
+  | "pending-approval";
+
+const INVESTOR_TYPE_LABELS: Record<number, string> = {
+  1: "retail",
+  2: "accredited",
+  3: "institutional",
+};
 
 export default function VerificationPage() {
   const router = useRouter();
@@ -18,6 +30,7 @@ export default function VerificationPage() {
 
   const [currentStep, setCurrentStep] = useState<VerificationStep>("connect-wallet");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedInvestorType, setSelectedInvestorType] = useState<number | null>(null);
   const [kycFiles, setKycFiles] = useState<{
     primaryDocument: File | null;
     proofOfAddress: File | null;
@@ -30,6 +43,13 @@ export default function VerificationPage() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
+
+  // Determine role-specific text
+  const roleType = roleParam || user?.role || "investor";
+  const isInvestor = roleType === "investor";
+  const documentLabel = isInvestor
+    ? "Government ID (Passport, Driver's License)"
+    : "Business Registration";
 
   // Check user's verification state and determine initial step
   useEffect(() => {
@@ -49,27 +69,16 @@ export default function VerificationPage() {
 
       // If KYC not submitted, determine wallet connection state
       if (isConnected && address) {
-        // Wallet connected via MetaMask
-        // Always show bind-wallet step for manual confirmation
-        // (even if wallet already bound in database)
         setCurrentStep("bind-wallet");
       } else if (user?.walletAddress) {
-        // User has wallet in database but MetaMask not connected
-        // Prompt them to connect their registered wallet
         setCurrentStep("connect-wallet");
       } else {
-        // No wallet at all, start from beginning
         setCurrentStep("connect-wallet");
       }
     };
 
     determineInitialStep();
   }, [user?.walletAddress, isConnected, address]);
-
-  // Determine role-specific text
-  const roleType = roleParam || user?.role || "investor";
-  const isInvestor = roleType === "investor";
-  const documentLabel = isInvestor ? "Government ID (Passport, Driver's License)" : "Business Registration";
 
   const handleConnectWallet = (connectorId: string) => {
     const connector = connectors.find((c) => c.id === connectorId);
@@ -91,7 +100,8 @@ export default function VerificationPage() {
       if (response.success) {
         setUser(response.user);
         toast.success("Wallet connected successfully!");
-        setCurrentStep("kyc-upload");
+        // Investors go to type selection; rentors skip to KYC
+        setCurrentStep(isInvestor ? "investor-type" : "kyc-upload");
       } else {
         toast.error(response.message || "Failed to bind wallet");
       }
@@ -120,7 +130,7 @@ export default function VerificationPage() {
       formData.append("primaryDocument", kycFiles.primaryDocument);
       formData.append("proofOfAddress", kycFiles.proofOfAddress);
 
-      // Add personal info (simplified for now)
+      // Add personal info
       formData.append(
         "personalInfo",
         JSON.stringify({
@@ -144,8 +154,11 @@ export default function VerificationPage() {
         formData.append(
           "investorInfo",
           JSON.stringify({
-            accreditationType: "retail",
+            accreditationType: selectedInvestorType
+              ? INVESTOR_TYPE_LABELS[selectedInvestorType]
+              : "retail",
             investmentExperience: "Beginner",
+            investorType: selectedInvestorType || 1,
           })
         );
       }
@@ -171,7 +184,36 @@ export default function VerificationPage() {
     router.push(redirectPath);
   };
 
-  const steps = [
+  // Steps configuration — investors have 5 steps, rentors have 4
+  const investorSteps = [
+    {
+      id: "connect-wallet",
+      label: "Connect Wallet",
+      completed: currentStep !== "connect-wallet",
+    },
+    {
+      id: "bind-wallet",
+      label: "Bind Wallet",
+      completed: ["investor-type", "kyc-upload", "pending-approval"].includes(currentStep),
+    },
+    {
+      id: "investor-type",
+      label: "Investor Type",
+      completed: ["kyc-upload", "pending-approval"].includes(currentStep),
+    },
+    {
+      id: "kyc-upload",
+      label: "KYC Verification",
+      completed: currentStep === "pending-approval",
+    },
+    {
+      id: "pending-approval",
+      label: "Verification",
+      completed: false,
+    },
+  ];
+
+  const rentorSteps = [
     {
       id: "connect-wallet",
       label: "Connect Wallet",
@@ -193,6 +235,8 @@ export default function VerificationPage() {
       completed: false,
     },
   ];
+
+  const steps = isInvestor ? investorSteps : rentorSteps;
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -218,7 +262,8 @@ export default function VerificationPage() {
             {roleType === "investor" ? "Investor" : "Rentor"} Verification
           </Heading>
           <Paragraph className="text-lg">
-            Complete the following steps to start {roleType === "investor" ? "investing" : "listing vehicles"}
+            Complete the following steps to start{" "}
+            {roleType === "investor" ? "investing" : "listing vehicles"}
           </Paragraph>
         </div>
 
@@ -292,7 +337,7 @@ export default function VerificationPage() {
                     >
                       <span className="flex items-center gap-3">
                         <span className="text-2xl">
-                          {connector.name.includes("MetaMask") ? "🦊" : "💼"}
+                          {connector.name.includes("MetaMask") ? "\uD83E\uDD8A" : "\uD83D\uDCBC"}
                         </span>
                         {connector.name}
                       </span>
@@ -329,8 +374,10 @@ export default function VerificationPage() {
                   Step 2: Confirm Wallet Address
                 </Heading>
                 <Paragraph className="mb-6">
-                  Please review and confirm the wallet address you want to use for your RegShield account.
-                  {roleType === "rentor" && " If you have a separate business wallet, you can change to it now."}
+                  Please review and confirm the wallet address you want to use for your RegShield
+                  account.
+                  {roleType === "rentor" &&
+                    " If you have a separate business wallet, you can change to it now."}
                 </Paragraph>
 
                 {isConnected && address && (
@@ -348,8 +395,9 @@ export default function VerificationPage() {
 
                 <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <p className="text-sm text-yellow-800">
-                    <strong>⚠️ Important:</strong> Once confirmed, this wallet will be permanently linked to your account.
-                    To change it later, you'll need to resubmit KYC documents.
+                    <strong>Important:</strong> Once confirmed, this wallet will be permanently
+                    linked to your account. To change it later, you'll need to resubmit KYC
+                    documents.
                   </p>
                 </div>
 
@@ -365,25 +413,58 @@ export default function VerificationPage() {
                     Use Different Wallet
                   </Button>
                   <Button onClick={handleBindWallet} isLoading={isLoading} className="flex-1">
-                    ✓ Confirm & Save to Database
+                    Confirm &amp; Save
                   </Button>
                 </div>
 
                 <p className="text-xs text-gray-500 text-center mt-4">
-                  This wallet will be used for {roleType === "investor" ? "receiving investment returns" : "receiving rental payments"} and identity verification.
+                  This wallet will be used for{" "}
+                  {roleType === "investor"
+                    ? "receiving investment returns"
+                    : "receiving rental payments"}{" "}
+                  and identity verification.
                 </p>
               </div>
             )}
 
-            {/* Step 3: KYC Upload */}
+            {/* Step 3 (Investor Only): Select Investor Type */}
+            {currentStep === "investor-type" && (
+              <InvestorTypeSelector
+                selectedType={selectedInvestorType}
+                onSelect={setSelectedInvestorType}
+                onContinue={() => setCurrentStep("kyc-upload")}
+              />
+            )}
+
+            {/* Step 3/4: KYC Upload */}
             {currentStep === "kyc-upload" && (
               <div>
                 <Heading as="h2" className="mb-4">
-                  Step 3: KYC Verification
+                  Step {isInvestor ? "4" : "3"}: KYC Verification
                 </Heading>
                 <Paragraph className="mb-6">
                   Upload required documents for identity verification
                 </Paragraph>
+
+                {/* Show selected investor type reminder */}
+                {isInvestor && selectedInvestorType && (
+                  <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>Investor Type:</strong>{" "}
+                      {selectedInvestorType === 1
+                        ? "Retail"
+                        : selectedInvestorType === 2
+                        ? "Accredited"
+                        : "Institutional"}
+                      <button
+                        onClick={() => setCurrentStep("investor-type")}
+                        className="ml-2 text-blue-600 underline text-xs"
+                      >
+                        Change
+                      </button>
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-6">
                   {/* Primary Document */}
@@ -401,7 +482,7 @@ export default function VerificationPage() {
                     />
                     {kycFiles.primaryDocument && (
                       <p className="mt-1 text-xs text-green-600">
-                        ✓ {kycFiles.primaryDocument.name}
+                        &#10003; {kycFiles.primaryDocument.name}
                       </p>
                     )}
                   </div>
@@ -421,7 +502,7 @@ export default function VerificationPage() {
                     />
                     {kycFiles.proofOfAddress && (
                       <p className="mt-1 text-xs text-green-600">
-                        ✓ {kycFiles.proofOfAddress.name}
+                        &#10003; {kycFiles.proofOfAddress.name}
                       </p>
                     )}
                   </div>
@@ -446,7 +527,7 @@ export default function VerificationPage() {
               </div>
             )}
 
-            {/* Step 4: Pending Approval */}
+            {/* Step 4/5: Pending Approval */}
             {currentStep === "pending-approval" && (
               <div className="text-center py-8">
                 <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -511,6 +592,16 @@ export default function VerificationPage() {
                     </div>
                   </div>
                 </div>
+
+                {isInvestor && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+                    <p className="text-sm text-blue-800">
+                      <strong>Next Step:</strong> Once your KYC is approved, you'll need to complete
+                      the on-chain investor onboarding (lock funds) from your dashboard before you
+                      can start investing.
+                    </p>
+                  </div>
+                )}
 
                 <Button onClick={handleComplete} className="w-full">
                   Go to Dashboard

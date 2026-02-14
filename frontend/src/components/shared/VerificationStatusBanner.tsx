@@ -20,11 +20,7 @@ export function VerificationStatusBanner({
 }: VerificationStatusBannerProps) {
   const compliance = useComplianceStatus();
   const [showOnboarding, setShowOnboarding] = useState(false);
-
-  // Don't show banner if fully compliant
-  if (compliance.isFullyCompliant) {
-    return null;
-  }
+  const [isResubmit, setIsResubmit] = useState(false);
 
   // Loading state
   if (compliance.isLoading) {
@@ -47,7 +43,7 @@ export function VerificationStatusBanner({
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="relative w-full max-w-4xl my-8">
           <button
-            onClick={() => setShowOnboarding(false)}
+            onClick={() => { setShowOnboarding(false); setIsResubmit(false); }}
             className="absolute -top-4 -right-4 z-10 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors"
             aria-label="Close"
           >
@@ -55,13 +51,78 @@ export function VerificationStatusBanner({
           </button>
           <ComplianceOnboardingFlow
             roleType={roleType}
-            onComplete={() => setShowOnboarding(false)}
+            onComplete={() => { setShowOnboarding(false); setIsResubmit(false); }}
+            forceRestart={isResubmit}
           />
         </div>
       </div>
     );
   }
 
+  // KYC is approved — show verified banner with resubmit option
+  // This triggers on isKYCApproved (not isFullyCompliant) because the user may have
+  // a wallet mismatch but their KYC is still valid
+  if (compliance.isKYCApproved || compliance.isVerifiedOnChain) {
+    const needsWalletFix = !compliance.isFullyCompliant;
+    return (
+      <Card className={`bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 ${className}`}>
+        <div className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-3xl">✅</span>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-xl font-bold text-gray-900">
+                  KYC Verified
+                </h3>
+                <Badge variant="success">Verified</Badge>
+              </div>
+              <p className="text-gray-700 mb-4">
+                {compliance.isFullyCompliant
+                  ? `Your account is fully verified. You can ${roleType === "investor" ? "invest in vehicles" : "list vehicles for investment"}.`
+                  : "Your KYC is approved. Please connect your registered wallet to complete verification."}
+              </p>
+
+              {/* Wallet mismatch warning */}
+              {needsWalletFix && compliance.missingSteps.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-yellow-800">
+                    {compliance.missingSteps[0]}
+                  </p>
+                </div>
+              )}
+
+              {/* Verification Status */}
+              <div className="flex gap-3 mb-4 flex-wrap">
+                <Badge variant={compliance.hasWalletBound ? "success" : "default"}>
+                  {compliance.hasWalletBound ? "✓" : "○"} Wallet Bound
+                </Badge>
+                <Badge variant={compliance.isWalletConnected ? "success" : "default"}>
+                  {compliance.isWalletConnected ? "✓" : "○"} Wallet Connected
+                </Badge>
+                <Badge variant="success">✓ KYC Verified</Badge>
+              </div>
+
+              {/* Resubmit Button */}
+              <Button
+                variant="outline"
+                size="default"
+                onClick={() => { setIsResubmit(true); setShowOnboarding(true); }}
+              >
+                Resubmit Verification
+              </Button>
+              <p className="text-xs text-gray-500 mt-2">
+                Use this to change your wallet or update your verification documents.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  // Not compliant and KYC not approved — show warning banner
   return (
     <Card className={`bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-200 ${className}`}>
       <div className="p-6">
@@ -103,15 +164,19 @@ export function VerificationStatusBanner({
             )}
 
             {/* Verification Status */}
-            <div className="flex gap-3 mb-4">
+            <div className="flex gap-3 mb-4 flex-wrap">
               <Badge variant={compliance.hasWalletBound ? "success" : "default"}>
                 {compliance.hasWalletBound ? "✓" : "○"} Wallet Bound
               </Badge>
               <Badge variant={compliance.isWalletConnected ? "success" : "default"}>
                 {compliance.isWalletConnected ? "✓" : "○"} Wallet Connected
               </Badge>
-              <Badge variant={compliance.isVerifiedOnChain ? "success" : "default"}>
-                {compliance.isVerifiedOnChain ? "✓" : "○"} KYC Verified
+              <Badge variant={compliance.kycStatus === "pending" || compliance.kycStatus === "under_review" ? "default" : "default"}>
+                {compliance.kycStatus === "pending" || compliance.kycStatus === "under_review"
+                  ? "⏳ KYC Under Review"
+                  : compliance.kycStatus === "rejected"
+                  ? "✕ KYC Rejected"
+                  : "○ KYC Pending"}
               </Badge>
             </div>
 
@@ -138,7 +203,7 @@ export function VerificationStatusBadge({
 }) {
   const compliance = useComplianceStatus();
 
-  if (compliance.isFullyCompliant) {
+  if (compliance.isKYCApproved || compliance.isVerifiedOnChain || compliance.isFullyCompliant) {
     return (
       <Badge variant="success" className="gap-1">
         ✓ Verified {roleType === "investor" ? "Investor" : "Owner"}

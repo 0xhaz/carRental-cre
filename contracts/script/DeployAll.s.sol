@@ -47,6 +47,7 @@ import {ComplianceReceiver} from "../src/cre/ComplianceReceiver.sol";
 import {PaymentReceiver} from "../src/cre/PaymentReceiver.sol";
 import {VehicleReceiver} from "../src/cre/VehicleReceiver.sol";
 import {OnboardingReceiver} from "../src/cre/OnboardingReceiver.sol";
+import {CampaignMonitorReceiver} from "../src/cre/CampaignMonitorReceiver.sol";
 
 /**
  * @title DeployAll
@@ -95,6 +96,7 @@ contract DeployAll is Script {
         address paymentReceiver;
         address vehicleReceiver;
         address onboardingReceiver;
+        address campaignMonitorReceiver;
     }
 
     function run() external returns (Deployment memory) {
@@ -425,6 +427,14 @@ contract DeployAll is Script {
         );
         console.log("OnboardingReceiver:", deployment.onboardingReceiver);
 
+        deployment.campaignMonitorReceiver = address(
+            new CampaignMonitorReceiver(
+                creForwarder,
+                deployment.investmentPaymentProtocol
+            )
+        );
+        console.log("CampaignMonitorReceiver:", deployment.campaignMonitorReceiver);
+
         // Configure CRE authorization
         console.log("\nConfiguring CRE authorization...");
         RenterCompliance(deployment.renterCompliance).setAuthorizedOperator(
@@ -438,6 +448,9 @@ contract DeployAll is Script {
         RegShieldPaymentProtocol(deployment.investmentPaymentProtocol).setAuthorizedOperator(
             deployment.paymentReceiver, true
         );
+        RegShieldPaymentProtocol(deployment.investmentPaymentProtocol).setAuthorizedOperator(
+            deployment.campaignMonitorReceiver, true
+        );
         console.log("CRE receivers authorized on target contracts");
 
         vm.stopBroadcast();
@@ -445,7 +458,7 @@ contract DeployAll is Script {
         console.log("\n====================================================");
         console.log("    Deployment Complete!");
         console.log("====================================================");
-        console.log("Total contracts deployed: 32");
+        console.log("Total contracts deployed: 33");
         console.log("====================================================\n");
 
         // Print summary
@@ -503,6 +516,7 @@ contract DeployAll is Script {
         console.log("PAYMENT_RECEIVER=", d.paymentReceiver);
         console.log("VEHICLE_RECEIVER=", d.vehicleReceiver);
         console.log("ONBOARDING_RECEIVER=", d.onboardingReceiver);
+        console.log("CAMPAIGN_MONITOR_RECEIVER=", d.campaignMonitorReceiver);
 
         console.log("\n====================================================");
     }

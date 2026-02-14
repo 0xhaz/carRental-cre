@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { Card, Button, Input, Select } from "@/components/ui";
 import { toast } from "react-hot-toast";
 import { cityList } from "@/constants/menuLinks";
+import { vehicleApi } from "@/lib/api";
 
 export interface AddVehicleModalProps {
   onClose: () => void;
@@ -27,7 +28,7 @@ export function AddVehicleModal({ onClose, onSuccess }: AddVehicleModalProps) {
     pricePerDay: "",
     location: cityList[0],
     description: "",
-    imageUrl: "",
+    image: "",
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -46,6 +47,11 @@ export function AddVehicleModal({ onClose, onSuccess }: AddVehicleModalProps) {
         return;
       }
 
+      if (!formData.image) {
+        toast.error("Please provide a vehicle image URL");
+        return;
+      }
+
       const pricePerDay = parseFloat(formData.pricePerDay);
       if (isNaN(pricePerDay) || pricePerDay <= 0) {
         toast.error("Please enter a valid price");
@@ -58,18 +64,38 @@ export function AddVehicleModal({ onClose, onSuccess }: AddVehicleModalProps) {
         return;
       }
 
-      // Simulate API call to add vehicle
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Build carData matching backend Car model field names
+      const carData = {
+        brand: formData.brand,
+        model: formData.model,
+        year,
+        category: formData.category,
+        seating_capacity: parseInt(formData.seatingCapacity),
+        fuel_type: formData.fuelType,
+        transmission: formData.transmission,
+        pricePerDay,
+        location: formData.location,
+        description: formData.description || `${formData.brand} ${formData.model} ${year}`,
+        image: formData.image,
+      };
 
-      toast.success(
-        `${formData.brand} ${formData.model} added successfully!`
-      );
+      const payload = new FormData();
+      payload.append("carData", JSON.stringify(carData));
 
-      onSuccess?.();
-      onClose();
-    } catch (error) {
+      const response = await vehicleApi.addVehicle(payload);
+
+      if (response.success) {
+        toast.success(
+          `${formData.brand} ${formData.model} added successfully!`
+        );
+        onSuccess?.();
+        onClose();
+      } else {
+        toast.error((response as any).message || "Failed to add vehicle");
+      }
+    } catch (error: any) {
       console.error("Add vehicle error:", error);
-      toast.error("Failed to add vehicle. Please try again.");
+      toast.error(error.response?.data?.message || "Failed to add vehicle. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -274,22 +300,25 @@ export function AddVehicleModal({ onClose, onSuccess }: AddVehicleModalProps) {
             />
           </div>
 
-          <Input
-            label="Image URL (Optional)"
-            type="url"
-            name="imageUrl"
-            placeholder="https://..."
-            value={formData.imageUrl}
-            onChange={handleChange}
-            disabled={isLoading}
-          />
-
-          {/* Info Box */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-            <p className="text-xs text-yellow-800">
-              <strong>Note:</strong> This is a mock implementation. In production,
-              this would save the vehicle to the database and upload images.
-            </p>
+          {/* Image URL */}
+          <div>
+            <Input
+              label="Image URL *"
+              type="text"
+              name="image"
+              placeholder="https://example.com/car-image.jpg"
+              value={formData.image}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+            />
+            {formData.image && (
+              <img
+                src={formData.image}
+                alt="Preview"
+                className="mt-2 w-full h-40 object-cover rounded-lg border border-borderColor"
+              />
+            )}
           </div>
 
           {/* Submit Buttons */}

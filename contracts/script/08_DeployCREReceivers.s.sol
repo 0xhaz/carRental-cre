@@ -6,6 +6,7 @@ import {ComplianceReceiver} from "../src/cre/ComplianceReceiver.sol";
 import {PaymentReceiver} from "../src/cre/PaymentReceiver.sol";
 import {VehicleReceiver} from "../src/cre/VehicleReceiver.sol";
 import {OnboardingReceiver} from "../src/cre/OnboardingReceiver.sol";
+import {CampaignMonitorReceiver} from "../src/cre/CampaignMonitorReceiver.sol";
 
 // Target contracts for authorization setup
 import {RenterCompliance} from "../src/compliance/RenterCompliance.sol";
@@ -26,10 +27,11 @@ import {RegShieldPaymentProtocol} from "../src/payment/RegShieldPaymentProtocol.
  *   - CRE_FORWARDER address must be set (Chainlink Forwarder on target chain)
  *
  * Authorization setup:
- *   - ComplianceReceiver → authorized operator on RenterCompliance & OperationalCompliance
- *   - VehicleReceiver    → operator on VehicleNFT
- *   - OnboardingReceiver → approver on RentalBooking
- *   - PaymentReceiver    → authorized operator on RegShieldPaymentProtocol
+ *   - ComplianceReceiver        → authorized operator on RenterCompliance & OperationalCompliance
+ *   - VehicleReceiver           → operator on VehicleNFT
+ *   - OnboardingReceiver        → approver on RentalBooking
+ *   - PaymentReceiver           → authorized operator on RegShieldPaymentProtocol
+ *   - CampaignMonitorReceiver   → authorized operator on RegShieldPaymentProtocol
  */
 contract DeployCREReceivers is Script {
     function run() external {
@@ -86,6 +88,14 @@ contract DeployCREReceivers is Script {
         );
         console.log("OnboardingReceiver deployed at:", address(onboardingReceiver));
 
+        // 5. Deploy CampaignMonitorReceiver
+        console.log("\n5. Deploying CampaignMonitorReceiver...");
+        CampaignMonitorReceiver campaignMonitorReceiver = new CampaignMonitorReceiver(
+            creForwarder,
+            investmentPaymentProtocol
+        );
+        console.log("CampaignMonitorReceiver deployed at:", address(campaignMonitorReceiver));
+
         // =================================================================
         // Authorization Setup
         // =================================================================
@@ -121,6 +131,14 @@ contract DeployCREReceivers is Script {
         );
         console.log("  -> RegShieldPaymentProtocol: authorized");
 
+        // CampaignMonitorReceiver needs to be an authorized operator on RegShieldPaymentProtocol
+        // so it can call batchCancelVehiclePayments()
+        console.log("Setting CampaignMonitorReceiver as authorized operator on RegShieldPaymentProtocol...");
+        RegShieldPaymentProtocol(investmentPaymentProtocol).setAuthorizedOperator(
+            address(campaignMonitorReceiver), true
+        );
+        console.log("  -> RegShieldPaymentProtocol: authorized (campaign monitor)");
+
         vm.stopBroadcast();
 
         console.log("\n=== CRE Receiver Deployment Complete ===");
@@ -129,5 +147,6 @@ contract DeployCREReceivers is Script {
         console.log("PAYMENT_RECEIVER=", address(paymentReceiver));
         console.log("VEHICLE_RECEIVER=", address(vehicleReceiver));
         console.log("ONBOARDING_RECEIVER=", address(onboardingReceiver));
+        console.log("CAMPAIGN_MONITOR_RECEIVER=", address(campaignMonitorReceiver));
     }
 }
