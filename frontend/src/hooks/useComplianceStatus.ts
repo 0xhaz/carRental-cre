@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { useUserStore } from "@/store/userStore";
 import { useIdentityRegistry } from "./useContracts";
-import { kycApi } from "@/lib/api";
+import { kycApi, type UpgradeRequest } from "@/lib/api";
 
 export interface ComplianceStatus {
   // Wallet status
@@ -18,6 +18,7 @@ export interface ComplianceStatus {
   // KYC verification status
   isKYCApproved: boolean; // KYC approved in database
   kycStatus: string | null; // Raw KYC status from API
+  investorType: number | null; // 1=RETAIL, 2=ACCREDITED, 3=INSTITUTIONAL
 
   // Blockchain verification status
   isVerifiedOnChain: boolean; // Identity verified in IdentityRegistry contract
@@ -26,6 +27,9 @@ export interface ComplianceStatus {
   // Overall compliance
   isFullyCompliant: boolean; // All requirements met
   missingSteps: string[]; // List of missing requirements
+
+  // Upgrade request status
+  upgradeRequest: UpgradeRequest | null;
 
   // Actions
   refetchKYC: () => Promise<void>; // Manually refetch KYC status
@@ -45,6 +49,8 @@ export function useComplianceStatus(): ComplianceStatus {
 
   const [isKYCApproved, setIsKYCApproved] = useState(false);
   const [kycStatus, setKycStatus] = useState<string | null>(null);
+  const [investorType, setInvestorType] = useState<number | null>(null);
+  const [upgradeRequest, setUpgradeRequest] = useState<UpgradeRequest | null>(null);
   const [isLoadingKYC, setIsLoadingKYC] = useState(true);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -57,6 +63,7 @@ export function useComplianceStatus(): ComplianceStatus {
     if (!user) {
       setIsKYCApproved(false);
       setKycStatus(null);
+      setUpgradeRequest(null);
       setIsLoadingKYC(false);
       return;
     }
@@ -66,10 +73,14 @@ export function useComplianceStatus(): ComplianceStatus {
       const status = response.success ? response.data.status : "not_submitted";
       setKycStatus(status);
       setIsKYCApproved(status === "approved");
+      setInvestorType(response.success ? response.data.investorType ?? null : null);
+      setUpgradeRequest(response.success ? response.data.upgradeRequest ?? null : null);
     } catch (error) {
       console.error("Failed to check KYC status:", error);
       setIsKYCApproved(false);
       setKycStatus(null);
+      setInvestorType(null);
+      setUpgradeRequest(null);
     } finally {
       setIsLoadingKYC(false);
     }
@@ -145,7 +156,7 @@ export function useComplianceStatus(): ComplianceStatus {
   // 2. Wallet is connected via MetaMask
   // 3. KYC is approved in database OR verified on blockchain
   const isFullyCompliant =
-    hasWalletBound && isCorrectWalletConnected && (isKYCApproved || isVerifiedOnChain);
+    hasWalletBound && !!isCorrectWalletConnected && (isKYCApproved || isVerifiedOnChain);
 
   return {
     hasWalletBound,
@@ -153,10 +164,12 @@ export function useComplianceStatus(): ComplianceStatus {
     walletAddress: boundWalletAddress || null,
     isKYCApproved,
     kycStatus,
+    investorType,
     isVerifiedOnChain,
     isLoading: isLoadingKYC || isLoadingBlockchain,
     isFullyCompliant,
     missingSteps,
+    upgradeRequest,
     refetchKYC: fetchKYCStatus,
   };
 }

@@ -48,6 +48,7 @@ export interface Vehicle {
 
   // NEW: Blockchain fields (empty for now)
   vehicleNftId?: number;
+  ownerAddress?: string; // Rentor's wallet address
   assetTokenAddress?: string;
   revenueTokenAddress?: string;
 

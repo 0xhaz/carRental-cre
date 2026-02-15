@@ -43,14 +43,14 @@ contract InvestorTypeRegistry is IInvestorTypeRegistry, Ownable {
     //////////////////////////////////////////////////////////////*/
 
     modifier onlyComplianceOfficer() {
-        if (!_complianceOfficers[msg.sender] || msg.sender == owner()) {
+        if (!_complianceOfficers[msg.sender] && msg.sender != owner()) {
             revert InvestorTypeRegistry__UnauthorizedComplianceOfficer();
         }
         _;
     }
 
     modifier onlyGovernor() {
-        if (!_governors[msg.sender] || msg.sender == owner()) {
+        if (!_governors[msg.sender] && msg.sender != owner()) {
             revert InvestorTypeRegistry__UnauthorizedGovernor();
         }
         _;
@@ -77,7 +77,7 @@ contract InvestorTypeRegistry is IInvestorTypeRegistry, Ownable {
         if (investor == address(0)) {
             revert InvestorTypeRegistry__InvalidInvestorAddress();
         }
-        if (uint8(investorType) <= uint8(InvestorType.INSTITUTIONAL)) {
+        if (investorType == InvestorType.NORMAL) {
             revert InvestorTypeRegistry__InvalidInvestorType();
         }
 
@@ -91,12 +91,12 @@ contract InvestorTypeRegistry is IInvestorTypeRegistry, Ownable {
         if (investor == address(0)) {
             revert InvestorTypeRegistry__InvalidInvestorAddress();
         }
-        if (uint8(investorType) >= uint8(InvestorType.INSTITUTIONAL)) {
+        if (investorType == InvestorType.NORMAL) {
             revert InvestorTypeRegistry__InvalidInvestorType();
         }
 
         InvestorType currentType = _investorTypes[investor];
-        if (uint8(investorType) < uint8(currentType)) {
+        if (uint8(investorType) <= uint8(currentType)) {
             revert InvestorTypeRegistry__NotAnUpgrade();
         }
 

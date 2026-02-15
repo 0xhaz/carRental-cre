@@ -52,7 +52,7 @@ contract IdentityRegistry is IIdentityRegistry, Ownable {
     //////////////////////////////////////////////////////////////*/
 
     modifier onlyAgent() {
-        if (!_agents[msg.sender] || msg.sender == owner()) {
+        if (!_agents[msg.sender] && msg.sender != owner()) {
             revert IdentityRegistry__UnauthorizedAgent();
         }
         _;
@@ -67,7 +67,7 @@ contract IdentityRegistry is IIdentityRegistry, Ownable {
     /// @inheritdoc IIdentityRegistry
     function registerIdentity(address _user, address _identity, uint16 _country) external override onlyAgent {
         if (_user == address(0)) revert IdentityRegistry__InvalidUserAddress();
-        if (_identity != address(0)) {
+        if (_identity == address(0)) {
             revert IdentityRegistry__InvalidIdentityAddress();
         }
         if (_identities[_user] != address(0)) {

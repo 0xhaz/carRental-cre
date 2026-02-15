@@ -10,13 +10,23 @@ import {
   CardContent,
   Badge,
   Progress,
+  Input,
+  Separator,
 } from "@/components/ui";
 import { ReviewList, ReviewStats } from "@/components/shared";
 import { Vehicle, Review, FundraisingCampaign, Investment } from "@/types";
 import { formatCurrency } from "@/lib/utils";
-import { rentorApi, reviewApi } from "@/lib/api";
+import { rentorApi, reviewApi, vehicleApi, investmentApi } from "@/lib/api";
 import Image from "next/image";
 import { toast } from "react-hot-toast";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useVehicleNFT } from "@/hooks/useContracts";
+import { parseGwei, decodeEventLog } from "viem";
+
+const SEPOLIA_GAS_OVERRIDES = {
+  maxFeePerGas: parseGwei("30"),
+  maxPriorityFeePerGas: parseGwei("2"),
+};
 
 export default function RentorVehicleDetailPage() {
   const params = useParams();
@@ -28,6 +38,32 @@ export default function RentorVehicleDetailPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [isSavingNftId, setIsSavingNftId] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    targetAmount: 0,
+    expectedROI: 0,
+    duration: 0,
+    minInvestment: 0,
+    minFundingRequired: 60,
+  });
+
+  // On-chain vehicle registration
+  const { address: walletAddress } = useAccount();
+  const vehicleNFT = useVehicleNFT();
+  const {
+    data: mintHash,
+    writeContract: writeMintVehicle,
+    error: mintError,
+    isPending: isMinting,
+  } = useWriteContract();
+  const {
+    isLoading: isMintConfirming,
+    isSuccess: mintSuccess,
+    data: mintReceipt,
+  } = useWaitForTransactionReceipt({ hash: mintHash });
 
   useEffect(() => {
     const loadVehicle = async () => {
@@ -58,25 +94,161 @@ export default function RentorVehicleDetailPage() {
     loadVehicle();
   }, [vehicleId]);
 
+  const isVehicleRegistered = !!(vehicle?.vehicleNftId !== undefined && vehicle?.vehicleNftId !== null);
+
+  // After mint confirmed, parse tokenId from Transfer event and save to backend
+  useEffect(() => {
+    if (!mintSuccess || !mintReceipt || !vehicle) return;
+
+    const saveTokenId = async () => {
+      try {
+        const transferLog = mintReceipt.logs.find((log) => {
+          try {
+            const decoded = decodeEventLog({
+              abi: [{ type: "event", name: "Transfer", inputs: [{ name: "from", type: "address", indexed: true }, { name: "to", type: "address", indexed: true }, { name: "tokenId", type: "uint256", indexed: true }] }],
+              data: log.data,
+              topics: log.topics,
+            });
+            return decoded.eventName === "Transfer";
+          } catch {
+            return false;
+          }
+        });
+
+        if (!transferLog) {
+          toast.error("Could not parse tokenId from transaction");
+          return;
+        }
+
+        const decoded = decodeEventLog({
+          abi: [{ type: "event", name: "Transfer", inputs: [{ name: "from", type: "address", indexed: true }, { name: "to", type: "address", indexed: true }, { name: "tokenId", type: "uint256", indexed: true }] }],
+          data: transferLog.data,
+          topics: transferLog.topics,
+        });
+
+        const tokenId = Number((decoded.args as any).tokenId);
+
+        setIsSavingNftId(true);
+        await vehicleApi.setVehicleNftId(vehicle._id, tokenId, walletAddress || "");
+        toast.success(`Vehicle registered on-chain! Token ID: ${tokenId}`);
+        // Refresh vehicle data
+        setVehicle((prev) => prev ? { ...prev, vehicleNftId: tokenId, ownerAddress: walletAddress || "" } : prev);
+      } catch (error: any) {
+        console.error("Save NFT ID error:", error);
+        toast.error(error.response?.data?.message || "Failed to save token ID");
+      } finally {
+        setIsSavingNftId(false);
+      }
+    };
+
+    saveTokenId();
+  }, [mintSuccess, mintReceipt]);
+
+  useEffect(() => {
+    if (mintError) {
+      console.error("Mint vehicle error:", mintError);
+      toast.error(mintError.message?.slice(0, 100) || "Failed to mint vehicle NFT");
+    }
+  }, [mintError]);
+
+  const handleRegisterOnChain = () => {
+    if (!vehicle || !walletAddress) {
+      toast.error("Please connect your wallet first");
+      return;
+    }
+
+    const vin = vehicle.vin || `VIN-${vehicle._id.slice(-8).toUpperCase()}`;
+    const oneYearFromNow = BigInt(Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60);
+
+    writeMintVehicle({
+      address: vehicleNFT.address,
+      abi: vehicleNFT.abi,
+      functionName: "mintVehicle",
+      args: [
+        walletAddress,
+        {
+          vin,
+          make: vehicle.brand,
+          model: vehicle.model,
+          year: BigInt(vehicle.year),
+          color: vehicle.color || "Unknown",
+          mileage: BigInt(vehicle.mileage || 0),
+          registrationExpiry: oneYearFromNow,
+          insuranceExpiry: oneYearFromNow,
+        },
+        "0x0000000000000000000000000000000000000001",
+        "0x0000000000000000000000000000000000000001",
+      ],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
   const handleEditCampaign = () => {
-    toast("Campaign editing feature coming soon!", {
-      duration: 3000,
-      icon: "✏️",
+    if (!campaign) return;
+    setEditForm({
+      targetAmount: campaign.targetAmount,
+      expectedROI: campaign.expectedROI,
+      duration: campaign.duration,
+      minInvestment: campaign.minInvestment,
+      minFundingRequired: campaign.minFundingRequired ?? 60,
     });
+    setShowEditModal(true);
   };
 
-  const handlePauseCampaign = () => {
-    toast("Campaign paused successfully!", {
-      duration: 3000,
-      icon: "⏸️",
-    });
+  const handleSaveEdit = async () => {
+    if (!campaign) return;
+    setIsActionLoading(true);
+    try {
+      const res = await investmentApi.updateCampaign(campaign._id, editForm);
+      if (res.success) {
+        toast.success("Campaign updated successfully");
+        setCampaign(res.data);
+        setShowEditModal(false);
+      } else {
+        toast.error(res.message || "Failed to update campaign");
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to update campaign");
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
-  const handleEndCampaign = () => {
-    toast("Campaign ended successfully!", {
-      duration: 3000,
-      icon: "🏁",
-    });
+  const handlePauseCampaign = async () => {
+    if (!campaign) return;
+    setIsActionLoading(true);
+    try {
+      const res = await investmentApi.pauseCampaign(campaign._id);
+      if (res.success) {
+        toast.success(res.message);
+        setCampaign(res.data);
+      } else {
+        toast.error(res.message || "Failed to pause campaign");
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to pause campaign");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleEndCampaign = async () => {
+    if (!campaign) return;
+    setIsActionLoading(true);
+    try {
+      const res = await investmentApi.cancelCampaign(campaign._id);
+      if (res.success) {
+        toast.success(res.message || "Campaign ended and investors refunded");
+        setCampaign((prev) => prev ? { ...prev, status: "cancelled" as any, currentAmount: 0 } : prev);
+        setShowEndConfirm(false);
+      } else {
+        toast.error(res.message || "Failed to end campaign");
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to end campaign");
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   if (isLoading) {
@@ -110,7 +282,10 @@ export default function RentorVehicleDetailPage() {
   }
 
   const { fundraising } = vehicle;
-  const hasCampaign = campaign && ["active", "funded", "draft"].includes(campaign.status);
+  const hasCampaign = campaign && ["active", "funded", "draft", "paused"].includes(campaign.status);
+  const isPaused = campaign?.status === "paused";
+  const canEditCampaign = campaign && ["active", "paused", "draft"].includes(campaign.status);
+  const canEndCampaign = campaign && campaign.status !== "funded" && campaign.status !== "cancelled";
   const fundingPercentage = hasCampaign && campaign
     ? (campaign.currentAmount / campaign.targetAmount) * 100
     : 0;
@@ -462,7 +637,7 @@ export default function RentorVehicleDetailPage() {
                   <div className="space-y-4 mb-6">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status</span>
-                      <Badge variant="success">{campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}</Badge>
+                      <Badge variant={isPaused ? "warning" : "success"}>{campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}</Badge>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Raised</span>
@@ -492,35 +667,78 @@ export default function RentorVehicleDetailPage() {
 
                   {/* Management Actions */}
                   <div className="space-y-3">
-                    <Button
-                      variant="default"
-                      className="w-full"
-                      onClick={handleEditCampaign}
-                    >
-                      ✏️ Edit Campaign
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={handlePauseCampaign}
-                    >
-                      ⏸️ Pause Campaign
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full text-red-600 border-red-300 hover:bg-red-50"
-                      onClick={handleEndCampaign}
-                    >
-                      🏁 End Campaign
-                    </Button>
+                    {canEditCampaign && (
+                      <Button
+                        variant="default"
+                        className="w-full"
+                        onClick={handleEditCampaign}
+                        disabled={isActionLoading}
+                      >
+                        Edit Campaign
+                      </Button>
+                    )}
+                    {(campaign.status === "active" || campaign.status === "paused") && (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={handlePauseCampaign}
+                        disabled={isActionLoading}
+                      >
+                        {isActionLoading ? "Processing..." : isPaused ? "Resume Campaign" : "Pause Campaign"}
+                      </Button>
+                    )}
+                    {canEndCampaign && !showEndConfirm && (
+                      <Button
+                        variant="outline"
+                        className="w-full text-red-600 border-red-300 hover:bg-red-50"
+                        onClick={() => setShowEndConfirm(true)}
+                        disabled={isActionLoading}
+                      >
+                        End Campaign
+                      </Button>
+                    )}
+
+                    {/* End Campaign Confirmation */}
+                    {showEndConfirm && (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg space-y-3">
+                        <p className="text-sm font-semibold text-red-800">Are you sure?</p>
+                        <p className="text-xs text-red-600">
+                          This will permanently end the campaign.
+                          {campaign.currentAmount > 0 && (
+                            <span className="block mt-1 font-medium">
+                              All {formatCurrency(campaign.currentAmount)} in investments will be refunded to investors.
+                            </span>
+                          )}
+                        </p>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleEndCampaign}
+                            disabled={isActionLoading}
+                            className="flex-1 bg-red-600! hover:bg-red-700! text-white!"
+                          >
+                            {isActionLoading ? "Ending..." : campaign.currentAmount > 0 ? "End & Refund" : "End Campaign"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={() => setShowEndConfirm(false)}
+                            disabled={isActionLoading}
+                            className="flex-1"
+                          >
+                            Keep
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Info Box */}
-                  <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
-                    <p className="text-xs text-green-800">
-                      <strong>Campaign Active:</strong> Investors can currently
-                      purchase tokens for this vehicle. Revenue will be distributed
-                      automatically.
+                  <div className={`mt-6 ${isPaused ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"} border rounded-lg p-4`}>
+                    <p className={`text-xs ${isPaused ? "text-yellow-800" : "text-green-800"}`}>
+                      {isPaused ? (
+                        <><strong>Campaign Paused:</strong> New investments are temporarily disabled. Resume the campaign to accept investments again.</>
+                      ) : (
+                        <><strong>Campaign Active:</strong> Investors can currently purchase tokens for this vehicle. Revenue will be distributed automatically.</>
+                      )}
                     </p>
                   </div>
                 </>
@@ -545,6 +763,48 @@ export default function RentorVehicleDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Blockchain Registration */}
+          <Card className="mt-4">
+            <CardContent className="p-6">
+              <Heading as="h3" className="mb-4">
+                Blockchain Registration
+              </Heading>
+              {isVehicleRegistered ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </span>
+                  <span className="text-sm text-green-700 font-medium">
+                    Registered on-chain (Token ID: {vehicle.vehicleNftId})
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600">
+                    Register this vehicle as an NFT on-chain to enable investor participation.
+                  </p>
+                  <Button
+                    onClick={handleRegisterOnChain}
+                    disabled={isMinting || isMintConfirming || isSavingNftId || !walletAddress}
+                    className="w-full"
+                  >
+                    {isMinting
+                      ? "Confirm in Wallet..."
+                      : isMintConfirming
+                      ? "Confirming Transaction..."
+                      : isSavingNftId
+                      ? "Saving Token ID..."
+                      : !walletAddress
+                      ? "Connect Wallet First"
+                      : "Register Vehicle On-Chain"}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -562,6 +822,103 @@ export default function RentorVehicleDetailPage() {
               <ReviewStats reviews={reviews} />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Edit Campaign Modal */}
+      {showEditModal && campaign && (
+        <div
+          onClick={() => !isActionLoading && setShowEditModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+        >
+          <Card
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg"
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <Heading as="h2">Edit Campaign</Heading>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  disabled={isActionLoading}
+                  className="text-gray-500 hover:text-gray-800"
+                  aria-label="Close"
+                >
+                  &#10005;
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <Input
+                  type="number"
+                  label="Target Amount ($)"
+                  value={editForm.targetAmount}
+                  onChange={(e) => setEditForm((f) => ({ ...f, targetAmount: Number(e.target.value) }))}
+                  min={campaign.currentAmount || 0}
+                />
+
+                <Input
+                  type="number"
+                  label="Expected ROI (%)"
+                  value={editForm.expectedROI}
+                  onChange={(e) => setEditForm((f) => ({ ...f, expectedROI: Number(e.target.value) }))}
+                  min={0}
+                  step="0.1"
+                />
+
+                <Input
+                  type="number"
+                  label="Duration (days)"
+                  value={editForm.duration}
+                  onChange={(e) => setEditForm((f) => ({ ...f, duration: Number(e.target.value) }))}
+                  min={1}
+                />
+
+                <Input
+                  type="number"
+                  label="Minimum Investment ($)"
+                  value={editForm.minInvestment}
+                  onChange={(e) => setEditForm((f) => ({ ...f, minInvestment: Number(e.target.value) }))}
+                  min={0}
+                />
+
+                <Input
+                  type="number"
+                  label="Minimum Funding Required (%)"
+                  value={editForm.minFundingRequired}
+                  onChange={(e) => setEditForm((f) => ({ ...f, minFundingRequired: Number(e.target.value) }))}
+                  min={0}
+                  max={100}
+                />
+
+                {campaign.currentAmount > 0 && (
+                  <p className="text-xs text-yellow-700 bg-yellow-50 p-2 rounded">
+                    Target amount cannot be less than {formatCurrency(campaign.currentAmount)} (already raised).
+                  </p>
+                )}
+              </div>
+
+              <Separator className="my-6" />
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowEditModal(false)}
+                  disabled={isActionLoading}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveEdit}
+                  disabled={isActionLoading}
+                  className="flex-1"
+                >
+                  {isActionLoading ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>

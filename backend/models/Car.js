@@ -26,6 +26,7 @@ const carSchema = new mongoose.Schema(
 
     // NEW: Blockchain fields (will be null for now)
     vehicleNftId: { type: Number, default: null },
+    ownerAddress: { type: String, default: null }, // Rentor's wallet address
     assetTokenAddress: { type: String, default: null },
     revenueTokenAddress: { type: String, default: null },
 

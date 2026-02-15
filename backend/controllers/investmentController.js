@@ -290,6 +290,115 @@ export const getVehiclePitch = async (req, res) => {
   }
 };
 
+// @desc    Pause or resume a campaign
+// @route   POST /api/investments/campaign/:campaignId/pause
+// @access  Private
+export const pauseCampaign = async (req, res) => {
+  try {
+    const campaign = await Campaign.findById(req.params.campaignId);
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: "Campaign not found" });
+    }
+
+    if (campaign.rentor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
+    if (campaign.status !== "active" && campaign.status !== "paused") {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot pause/resume a campaign with status "${campaign.status}"`,
+      });
+    }
+
+    const newStatus = campaign.status === "active" ? "paused" : "active";
+    campaign.status = newStatus;
+    await campaign.save();
+
+    // Update vehicle fundraising active flag
+    const vehicle = await Car.findById(campaign.vehicle);
+    if (vehicle && vehicle.fundraising) {
+      vehicle.fundraising.active = newStatus === "active";
+      await vehicle.save();
+    }
+
+    res.json({
+      success: true,
+      message: newStatus === "paused" ? "Campaign paused" : "Campaign resumed",
+      data: campaign,
+    });
+  } catch (error) {
+    console.error("Pause campaign error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update campaign details
+// @route   PUT /api/investments/campaign/:campaignId
+// @access  Private
+export const updateCampaign = async (req, res) => {
+  try {
+    const campaign = await Campaign.findById(req.params.campaignId);
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: "Campaign not found" });
+    }
+
+    if (campaign.rentor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
+    // Only allow editing active or paused campaigns
+    if (!["active", "paused", "draft"].includes(campaign.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot edit a campaign with status "${campaign.status}"`,
+      });
+    }
+
+    const { targetAmount, expectedROI, duration, minInvestment, minFundingRequired } = req.body;
+
+    // Validate: targetAmount cannot be lower than currentAmount
+    if (targetAmount !== undefined && targetAmount < campaign.currentAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Target amount cannot be less than current raised amount ($${campaign.currentAmount})`,
+      });
+    }
+
+    // Update allowed fields
+    if (targetAmount !== undefined) {
+      campaign.targetAmount = targetAmount;
+      campaign.maxInvestment = targetAmount;
+    }
+    if (expectedROI !== undefined) campaign.expectedROI = expectedROI;
+    if (duration !== undefined) {
+      campaign.duration = duration;
+      // Recalculate end date from start date
+      if (campaign.startDate) {
+        campaign.endDate = new Date(campaign.startDate.getTime() + duration * 24 * 60 * 60 * 1000);
+      }
+    }
+    if (minInvestment !== undefined) campaign.minInvestment = minInvestment;
+    if (minFundingRequired !== undefined) campaign.minFundingRequired = minFundingRequired;
+
+    await campaign.save();
+
+    // Sync vehicle fundraising data
+    const vehicle = await Car.findById(campaign.vehicle);
+    if (vehicle && vehicle.fundraising) {
+      if (targetAmount !== undefined) vehicle.fundraising.targetAmount = targetAmount;
+      if (expectedROI !== undefined) vehicle.fundraising.expectedROI = expectedROI;
+      if (minInvestment !== undefined) vehicle.fundraising.minInvestment = minInvestment;
+      await vehicle.save();
+    }
+
+    res.json({ success: true, message: "Campaign updated", data: campaign });
+  } catch (error) {
+    console.error("Update campaign error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Cancel/delete a campaign (auto-refunds investors)
 // @route   DELETE /api/investments/campaign/:campaignId
 // @access  Private

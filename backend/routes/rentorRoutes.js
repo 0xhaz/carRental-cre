@@ -10,6 +10,7 @@ import {
   toggleCarAvailability,
   updateCar,
   updateUserImage,
+  setVehicleNftId,
 } from "../controllers/rentorController.js";
 import upload from "../middleware/multer.js";
 
@@ -23,6 +24,7 @@ rentorRouter.get("/cars", protect, getRentorCars);
 rentorRouter.get("/vehicle/:vehicleId", protect, getVehicleById);
 rentorRouter.post("/toggle-car", protect, toggleCarAvailability);
 rentorRouter.post("/delete-car", protect, deleteCar);
+rentorRouter.post("/vehicle/:vehicleId/set-nft-id", protect, setVehicleNftId);
 rentorRouter.get("/dashboard", protect, getDashboardData);
 rentorRouter.post(
   "/update-image",

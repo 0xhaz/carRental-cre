@@ -80,6 +80,7 @@ const kycSchema = new mongoose.Schema(
         type: String,
         enum: ["retail", "accredited", "institutional"],
       },
+      investorType: Number, // 1=Retail, 2=Accredited, 3=Institutional
       annualIncome: Number,
       netWorth: Number,
       investmentExperience: String,
@@ -139,6 +140,29 @@ const kycSchema = new mongoose.Schema(
         checkedAt: Date,
         riskScore: Number,
       },
+    },
+
+    // Investor Type Upgrade Request
+    upgradeRequest: {
+      isUpgrade: {
+        type: Boolean,
+        default: false,
+      },
+      currentType: Number, // 1=Retail, 2=Accredited, 3=Institutional
+      targetType: Number,
+      reason: String,
+      requestedAt: Date,
+      status: {
+        type: String,
+        enum: ["pending", "approved", "rejected"],
+        default: "pending",
+      },
+      reviewedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      reviewedAt: Date,
+      rejectionReason: String,
     },
 
     // Expiration (KYC typically expires after 1 year)

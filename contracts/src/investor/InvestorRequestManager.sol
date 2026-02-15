@@ -190,6 +190,14 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
     /// @notice Emitted when RETAIL investor withdraws direct lock after finalization
     event DirectFundsWithdrawn(address indexed user, uint256 amount, uint256 timestamp);
 
+    /// @notice Emitted when a MultiSig wallet is created for an upgraded investor
+    event UpgradeMultiSigWalletCreated(
+        address indexed user,
+        address indexed wallet,
+        IInvestorTypeRegistry.InvestorType newType,
+        uint256 timestamp
+    );
+
     /*//////////////////////////////////////////////////////////////
                         CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -378,6 +386,49 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
         request.status = RequestStatus.TOKENSLOCKED;
 
         emit TokensLocked(msg.sender, request.multiSigWallet, lockedAmount, block.timestamp);
+    }
+
+    /**
+     * @dev Create MultiSig wallet for an upgraded investor
+     * @notice Used when a Retail investor upgrades to Accredited/Institutional
+     * @notice Accepts APPROVED status or NONE status (for investors upgraded on-chain
+     *         but with no request record in this contract, e.g. after redeployment)
+     * @param user Address of the investor
+     */
+    function createMultiSigWalletForUpgrade(address user) external nonReentrant {
+        if (msg.sender != bank && msg.sender != owner()) {
+            revert InvestorRequestManager__OnlyBankCanCreateWallet();
+        }
+
+        InvestorRequest storage request = requests[user];
+        // Allow APPROVED (normal upgrade flow) or NONE (investor upgraded on-chain but no request in this contract)
+        if (request.status != RequestStatus.APPROVED && request.status != RequestStatus.NONE) {
+            revert InvestorRequestManager__InvalidRequestStatus();
+        }
+        if (request.multiSigWallet != address(0)) {
+            revert InvestorRequestManager__WalletAlreadyCreated();
+        }
+
+        // Verify the investor's current on-chain type is non-Retail (upgraded)
+        IInvestorTypeRegistry.InvestorType currentType = investorRegistry.getInvestorType(user);
+        if (currentType == IInvestorTypeRegistry.InvestorType.RETAIL || currentType == IInvestorTypeRegistry.InvestorType.NORMAL) {
+            revert InvestorRequestManager__MultiSigNotRequired();
+        }
+
+        // Create multi-signature wallet
+        MultiSigWallet wallet = new MultiSigWallet(user, bank);
+
+        // Store wallet in the request and set to WALLETCREATED so investor can lock deposit
+        request.user = user;
+        request.multiSigWallet = address(wallet);
+        request.requestedType = currentType;
+        request.requiredLockAmount = lockRequirements[currentType];
+        request.status = RequestStatus.WALLETCREATED;
+        if (request.createdAt == 0) {
+            request.createdAt = block.timestamp;
+        }
+
+        emit UpgradeMultiSigWalletCreated(user, address(wallet), currentType, block.timestamp);
     }
 
     /**

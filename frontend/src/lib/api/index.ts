@@ -8,4 +8,5 @@ export { reviewApi } from "./reviewApi";
 export { notificationApi } from "./notificationApi";
 export { investmentApi } from "./investmentApi";
 export { kycApi } from "./kycApi";
+export type { UpgradeRequest, KYCStatus } from "./kycApi";
 export { default as apiClient } from "./axios";

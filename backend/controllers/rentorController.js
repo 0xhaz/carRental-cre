@@ -252,6 +252,39 @@ export const getVehicleById = async (req, res) => {
   }
 };
 
+// API to save on-chain vehicle NFT ID after minting
+export const setVehicleNftId = async (req, res) => {
+  try {
+    const { _id } = req.user;
+    const { vehicleId } = req.params;
+    const { vehicleNftId, ownerAddress } = req.body;
+
+    if (vehicleNftId === undefined || vehicleNftId === null) {
+      return res.status(400).json({ success: false, message: "vehicleNftId is required" });
+    }
+
+    const car = await Car.findById(vehicleId);
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+
+    if (!car.owner || car.owner.toString() !== _id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
+    car.vehicleNftId = Number(vehicleNftId);
+    if (ownerAddress) {
+      car.ownerAddress = ownerAddress;
+    }
+    await car.save();
+
+    res.json({ success: true, message: "Vehicle registered on-chain", data: car });
+  } catch (error) {
+    console.error("Set vehicle NFT ID error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // API to update user profile
 export const updateUserImage = async (req, res) => {
   try {

@@ -7,8 +7,8 @@ const fixIndex = async () => {
   try {
     console.log('🔧 Fixing walletAddress index...\n');
     
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('✅ Connected to MongoDB\n');
+    await mongoose.connect(`${process.env.MONGODB_URI}/car-rental`);
+    console.log('✅ Connected to MongoDB (car-rental)\n');
     
     const db = mongoose.connection.db;
     const usersCollection = db.collection('users');

@@ -7,7 +7,9 @@ import { Heading, Paragraph, Card, CardContent, Button, Badge } from "@/componen
 import { investmentApi } from "@/lib/api";
 import { Investment } from "@/types";
 import { formatCurrency } from "@/lib/utils";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
+import { useComplianceStatus } from "@/hooks/useComplianceStatus";
+import { useInvestorRequestManager } from "@/hooks/useContracts";
 import Link from "next/link";
 
 export default function InvestorDashboard() {
@@ -17,7 +19,21 @@ export default function InvestorDashboard() {
   const [roi, setRoi] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const { isConnected } = useAccount();
+  const { isConnected, address: connectedAddress } = useAccount();
+  const { investorType, isKYCApproved, upgradeRequest } = useComplianceStatus();
+  const { address: irmAddr, abi: irmAbi } = useInvestorRequestManager();
+
+  // Read on-chain request data to get MultiSig wallet address
+  const { data: onChainRequest } = useReadContract({
+    address: irmAddr,
+    abi: irmAbi,
+    functionName: "getRequest",
+    args: connectedAddress ? [connectedAddress] : undefined,
+    query: { enabled: !!connectedAddress },
+  });
+
+  const multiSigWallet = onChainRequest ? ((onChainRequest as any)[2] as string) : "";
+  const hasMultiSig = !!multiSigWallet && multiSigWallet !== "0x0000000000000000000000000000000000000000";
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -56,7 +72,7 @@ export default function InvestorDashboard() {
       {/* Investor Onboarding Status */}
       {isConnected && (
         <div className="mb-8">
-          <InvestorOnboardingWizard compact />
+          <InvestorOnboardingWizard compact investorType={investorType || undefined} />
         </div>
       )}
 
@@ -176,6 +192,50 @@ export default function InvestorDashboard() {
         </Card>
       )}
 
+      {/* MultiSig Wallet Info (Accredited/Institutional investors) */}
+      {hasMultiSig && (investorType ?? 1) >= 2 && (
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <Heading as="h3">MultiSig Wallet</Heading>
+              <Badge variant="success">Active</Badge>
+            </div>
+            <div className="p-3 bg-gray-50 rounded-lg mb-3">
+              <p className="text-xs text-gray-500 mb-1">Wallet Address</p>
+              <p className="text-sm font-mono break-all">{multiSigWallet}</p>
+            </div>
+            <p className="text-sm text-gray-600">
+              Your MultiSig wallet provides enhanced security for {(investorType ?? 1) === 2 ? "Accredited" : "Institutional"}-tier investments.
+              Both you and the platform must sign off on fund releases.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Upgrade Approved Notice */}
+      {upgradeRequest?.status === "approved" && (
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <Badge variant="success">Upgrade Approved</Badge>
+            </div>
+            <p className="text-gray-900 font-medium mb-2">
+              Your upgrade to {upgradeRequest.targetType === 2 ? "Accredited" : "Institutional"} has been approved!
+            </p>
+            <p className="text-sm text-gray-600 mb-3">
+              The admin is completing the on-chain upgrade and setting up your MultiSig wallet.
+              You will receive a notification once everything is ready.
+            </p>
+            <div className="flex items-center gap-2">
+              <div className={`w-3 h-3 rounded-full ${hasMultiSig ? "bg-green-500" : "bg-yellow-500 animate-pulse"}`} />
+              <span className="text-sm text-gray-600">
+                {hasMultiSig ? "MultiSig wallet created" : "Waiting for MultiSig wallet creation..."}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Quick Actions */}
       <Card>
         <CardContent className="p-6">
@@ -201,6 +261,35 @@ export default function InvestorDashboard() {
               Transfer Tokens
             </Button>
           </div>
+
+          {/* Upgrade Investor Type */}
+          {isKYCApproved && (investorType ?? 1) < 3 && (
+            <div className="mt-4 p-4 border rounded-lg bg-blue-50 border-blue-200">
+              {upgradeRequest?.status === "pending" ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-blue-900">Upgrade Request Pending</p>
+                    <p className="text-sm text-blue-700">
+                      Your request to upgrade to {upgradeRequest.targetType === 2 ? "Accredited" : "Institutional"} is under review.
+                    </p>
+                  </div>
+                  <Badge variant="warning">Pending Review</Badge>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-blue-900">Upgrade Investor Type</p>
+                    <p className="text-sm text-blue-700">
+                      Currently {(investorType ?? 1) === 1 ? "Retail" : "Accredited"}. Upgrade to access higher investment limits.
+                    </p>
+                  </div>
+                  <Link href="/investor/upgrade">
+                    <Button size="sm">Request Upgrade</Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

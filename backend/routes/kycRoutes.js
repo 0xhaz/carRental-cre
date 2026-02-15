@@ -13,6 +13,11 @@ import {
   rejectKYC,
   updateBlockchainStatus,
   getInvestorUsers,
+  requestUpgrade,
+  approveUpgrade,
+  rejectUpgrade,
+  notifyUpgradeWalletCreated,
+  downgradeInvestor,
 } from "../controllers/kycController.js";
 import { protect, admin } from "../middleware/auth.js";
 import multer from "multer";
@@ -79,6 +84,12 @@ kycRouter.post(
 );
 
 kycRouter.get("/status", protect, getKYCStatus);
+kycRouter.post(
+  "/request-upgrade",
+  protect,
+  upload.fields([{ name: "additionalDocuments", maxCount: 5 }]),
+  requestUpgrade
+);
 
 // Admin routes (require admin privileges)
 kycRouter.get("/investors", protect, admin, getInvestorUsers);
@@ -86,6 +97,10 @@ kycRouter.get("/pending", protect, admin, getPendingKYC);
 kycRouter.get("/:id", protect, admin, getKYCById);
 kycRouter.post("/:id/approve", protect, admin, approveKYC);
 kycRouter.post("/:id/reject", protect, admin, rejectKYC);
+kycRouter.post("/:id/approve-upgrade", protect, admin, approveUpgrade);
+kycRouter.post("/:id/reject-upgrade", protect, admin, rejectUpgrade);
+kycRouter.post("/:id/notify-upgrade-wallet", protect, admin, notifyUpgradeWalletCreated);
+kycRouter.post("/:id/downgrade", protect, admin, downgradeInvestor);
 kycRouter.post("/:id/blockchain", protect, admin, updateBlockchainStatus);
 
 export default kycRouter;

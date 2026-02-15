@@ -70,10 +70,22 @@ export interface KYCSubmission {
   };
 }
 
+export interface UpgradeRequest {
+  isUpgrade: boolean;
+  currentType: number;
+  targetType: number;
+  reason?: string;
+  requestedAt?: Date;
+  status: "pending" | "approved" | "rejected";
+  reviewedAt?: Date;
+  rejectionReason?: string;
+}
+
 export interface KYCStatus {
   hasKYC: boolean;
   status: "not_submitted" | "pending" | "under_review" | "approved" | "rejected" | "expired";
   roleType?: "investor" | "rentor";
+  investorType?: number | null; // 1=RETAIL, 2=ACCREDITED, 3=INSTITUTIONAL
   submittedAt?: Date;
   reviewedAt?: Date;
   expiresAt?: Date;
@@ -84,6 +96,7 @@ export interface KYCStatus {
     identityRegistryTxHash?: string;
   };
   rejectionReason?: string;
+  upgradeRequest?: UpgradeRequest | null;
 }
 
 export const kycApi = {
@@ -156,6 +169,66 @@ export const kycApi = {
    */
   getInvestorUsers: async (): Promise<{ success: boolean; data: any[] }> => {
     const { data } = await apiClient.get("/kyc/investors");
+    return data;
+  },
+
+  /**
+   * Request investor type upgrade (Investor only)
+   */
+  requestUpgrade: async (
+    formData: FormData
+  ): Promise<{ success: boolean; message: string; data: any }> => {
+    const { data } = await apiClient.post("/kyc/request-upgrade", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return data;
+  },
+
+  /**
+   * Approve investor type upgrade (Admin only)
+   */
+  approveUpgrade: async (
+    id: string
+  ): Promise<{ success: boolean; message: string; data: any }> => {
+    const { data } = await apiClient.post(`/kyc/${id}/approve-upgrade`);
+    return data;
+  },
+
+  /**
+   * Reject investor type upgrade (Admin only)
+   */
+  rejectUpgrade: async (
+    id: string,
+    reason: string
+  ): Promise<{ success: boolean; message: string; data: any }> => {
+    const { data } = await apiClient.post(`/kyc/${id}/reject-upgrade`, {
+      reason,
+    });
+    return data;
+  },
+
+  /**
+   * Downgrade investor type (Admin only)
+   */
+  downgradeInvestor: async (
+    id: string,
+    targetType: number
+  ): Promise<{ success: boolean; message: string; data: any }> => {
+    const { data } = await apiClient.post(`/kyc/${id}/downgrade`, {
+      targetType,
+    });
+    return data;
+  },
+
+  /**
+   * Notify investor that upgrade MultiSig wallet was created (Admin only)
+   */
+  notifyUpgradeWalletCreated: async (
+    id: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const { data } = await apiClient.post(`/kyc/${id}/notify-upgrade-wallet`);
     return data;
   },
 

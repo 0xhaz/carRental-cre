@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, Button, Badge, Progress } from "@/components/ui";
 import { toast } from "react-hot-toast";
 import { FundraisingCampaign, Vehicle } from "@/types";
-import { investmentApi } from "@/lib/api";
+import { investmentApi, vehicleApi } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useVehicleNFT } from "@/hooks/useContracts";
+import { parseGwei, decodeEventLog } from "viem";
 
 // Revenue waterfall percentages from RevenueDistributor.sol
 const WATERFALL = {
@@ -24,9 +27,119 @@ export interface ManageCampaignModalProps {
   onCampaignUpdated?: () => void;
 }
 
+const SEPOLIA_GAS_OVERRIDES = {
+  maxFeePerGas: parseGwei("30"),
+  maxPriorityFeePerGas: parseGwei("2"),
+};
+
 export function ManageCampaignModal({ campaign, vehicle, onClose, onCampaignUpdated }: ManageCampaignModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isSavingNftId, setIsSavingNftId] = useState(false);
+
+  // On-chain vehicle registration
+  const { address: walletAddress } = useAccount();
+  const vehicleNFT = useVehicleNFT();
+  const {
+    data: mintHash,
+    writeContract: writeMintVehicle,
+    error: mintError,
+    isPending: isMinting,
+  } = useWriteContract();
+  const {
+    isLoading: isMintConfirming,
+    isSuccess: mintSuccess,
+    data: mintReceipt,
+  } = useWaitForTransactionReceipt({ hash: mintHash });
+
+  const isVehicleRegistered = !!(vehicle?.vehicleNftId !== undefined && vehicle?.vehicleNftId !== null);
+
+  // After mint confirmed, parse tokenId from Transfer event and save to backend
+  useEffect(() => {
+    if (!mintSuccess || !mintReceipt || !vehicle) return;
+
+    const saveTokenId = async () => {
+      try {
+        // Parse Transfer event (ERC-721): Transfer(address from, address to, uint256 tokenId)
+        const transferLog = mintReceipt.logs.find((log) => {
+          try {
+            const decoded = decodeEventLog({
+              abi: [{ type: "event", name: "Transfer", inputs: [{ name: "from", type: "address", indexed: true }, { name: "to", type: "address", indexed: true }, { name: "tokenId", type: "uint256", indexed: true }] }],
+              data: log.data,
+              topics: log.topics,
+            });
+            return decoded.eventName === "Transfer";
+          } catch {
+            return false;
+          }
+        });
+
+        if (!transferLog) {
+          toast.error("Could not parse tokenId from transaction");
+          return;
+        }
+
+        const decoded = decodeEventLog({
+          abi: [{ type: "event", name: "Transfer", inputs: [{ name: "from", type: "address", indexed: true }, { name: "to", type: "address", indexed: true }, { name: "tokenId", type: "uint256", indexed: true }] }],
+          data: transferLog.data,
+          topics: transferLog.topics,
+        });
+
+        const tokenId = Number((decoded.args as any).tokenId);
+
+        setIsSavingNftId(true);
+        await vehicleApi.setVehicleNftId(vehicle._id, tokenId, walletAddress || "");
+        toast.success(`Vehicle registered on-chain! Token ID: ${tokenId}`);
+        onCampaignUpdated?.();
+      } catch (error: any) {
+        console.error("Save NFT ID error:", error);
+        toast.error(error.response?.data?.message || "Failed to save token ID");
+      } finally {
+        setIsSavingNftId(false);
+      }
+    };
+
+    saveTokenId();
+  }, [mintSuccess, mintReceipt]);
+
+  useEffect(() => {
+    if (mintError) {
+      console.error("Mint vehicle error:", mintError);
+      toast.error(mintError.message?.slice(0, 100) || "Failed to mint vehicle NFT");
+    }
+  }, [mintError]);
+
+  const handleRegisterOnChain = () => {
+    if (!vehicle || !walletAddress) {
+      toast.error("Please connect your wallet first");
+      return;
+    }
+
+    const vin = vehicle.vin || `VIN-${vehicle._id.slice(-8).toUpperCase()}`;
+    const oneYearFromNow = BigInt(Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60);
+
+    writeMintVehicle({
+      address: vehicleNFT.address,
+      abi: vehicleNFT.abi,
+      functionName: "mintVehicle",
+      args: [
+        walletAddress,
+        {
+          vin,
+          make: vehicle.brand,
+          model: vehicle.model,
+          year: BigInt(vehicle.year),
+          color: vehicle.color || "Unknown",
+          mileage: BigInt(vehicle.mileage || 0),
+          registrationExpiry: oneYearFromNow,
+          insuranceExpiry: oneYearFromNow,
+        },
+        "0x0000000000000000000000000000000000000001", // assetToken placeholder (contract requires non-zero)
+        "0x0000000000000000000000000000000000000001", // revenueToken placeholder (contract requires non-zero)
+      ],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
 
   const fundingPercentage = campaign.targetAmount > 0
     ? (campaign.currentAmount / campaign.targetAmount) * 100
@@ -83,6 +196,7 @@ export function ManageCampaignModal({ campaign, vehicle, onClose, onCampaignUpda
   const statusColor = {
     draft: "bg-gray-100 text-gray-700",
     active: "bg-green-100 text-green-700",
+    paused: "bg-yellow-100 text-yellow-700",
     funded: "bg-blue-100 text-blue-700",
     closed: "bg-gray-100 text-gray-700",
     cancelled: "bg-red-100 text-red-700",
@@ -297,6 +411,49 @@ export function ManageCampaignModal({ campaign, vehicle, onClose, onCampaignUpda
               </span>
             </div>
           </div>
+        </div>
+
+        {/* On-Chain Registration */}
+        <div className="mb-6 p-4 rounded-lg border border-gray-200 space-y-3">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Blockchain Registration</p>
+          {isVehicleRegistered ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                </span>
+                <span className="text-sm text-green-700 font-medium">
+                  Token ID: {vehicle?.vehicleNftId}
+                </span>
+              </div>
+              <Button disabled className="w-full opacity-60">
+                Registered
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-600">
+                Register this vehicle as an NFT on-chain to enable investor participation. You must be an operator on the VehicleNFT contract.
+              </p>
+              <Button
+                onClick={handleRegisterOnChain}
+                disabled={isMinting || isMintConfirming || isSavingNftId || !walletAddress}
+                className="w-full"
+              >
+                {isMinting
+                  ? "Confirm in Wallet..."
+                  : isMintConfirming
+                  ? "Confirming Transaction..."
+                  : isSavingNftId
+                  ? "Saving Token ID..."
+                  : !walletAddress
+                  ? "Connect Wallet First"
+                  : "Register Vehicle On-Chain"}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Actions */}

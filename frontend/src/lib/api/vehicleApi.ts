@@ -54,4 +54,17 @@ export const vehicleApi = {
     const { data } = await apiClient.post("/rentor/delete-car", { carId: vehicleId });
     return data;
   },
+
+  // Save on-chain vehicle NFT ID after minting
+  setVehicleNftId: async (
+    vehicleId: string,
+    vehicleNftId: number,
+    ownerAddress: string
+  ): Promise<{ success: boolean; message: string; data: Vehicle }> => {
+    const { data } = await apiClient.post(`/rentor/vehicle/${vehicleId}/set-nft-id`, {
+      vehicleNftId,
+      ownerAddress,
+    });
+    return data;
+  },
 };

@@ -126,6 +126,19 @@
     },
     {
       "type": "function",
+      "name": "createMultiSigWalletForUpgrade",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "directLocks",
       "inputs": [
         {
@@ -902,6 +915,37 @@
           "type": "uint256",
           "indexed": false,
           "internalType": "uint256"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "UpgradeMultiSigWalletCreated",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "wallet",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newType",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "enum IInvestorTypeRegistry.InvestorType"
         },
         {
           "name": "timestamp",

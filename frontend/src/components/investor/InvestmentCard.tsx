@@ -18,7 +18,7 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
 
   // Fetch blockchain investment data
   const { data: investmentTotal, formatted: investmentFormatted, isLoading: isLoadingInvestment } = useVehicleInvestmentTotal(
-    (vehicle as any).tokenId ? BigInt((vehicle as any).tokenId) : undefined
+    vehicle.vehicleNftId ? BigInt(vehicle.vehicleNftId) : undefined
   );
 
   if (!fundraising || !fundraising.active) {
@@ -32,8 +32,8 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
 
   // Extract blockchain data if available
   const hasBlockchainData = investmentTotal !== undefined && !isLoadingInvestment;
-  const assetTokenAddress = (vehicle as any).assetTokenAddress as string | undefined;
-  const revenueTokenAddress = (vehicle as any).revenueTokenAddress as string | undefined;
+  const assetTokenAddress = vehicle.assetTokenAddress;
+  const revenueTokenAddress = vehicle.revenueTokenAddress;
 
   const handleInvest = (e: React.MouseEvent) => {
     e.preventDefault();

@@ -41,10 +41,14 @@ export default function RentorFundraising() {
     loadCampaigns();
   }, []);
 
-  // Calculate stats from campaigns
-  const totalRaised = campaigns.reduce((sum, c) => sum + (c.currentAmount || 0), 0);
-  const totalTarget = campaigns.reduce((sum, c) => sum + (c.targetAmount || 0), 0);
-  const totalInvestors = campaigns.reduce((sum, c) => sum + ((c as any).investorCount || 0), 0);
+  // Split campaigns by status
+  const activeCampaigns = campaigns.filter((c) => c.status !== "cancelled");
+  const cancelledCampaigns = campaigns.filter((c) => c.status === "cancelled");
+
+  // Calculate stats from active campaigns only
+  const totalRaised = activeCampaigns.reduce((sum, c) => sum + (c.currentAmount || 0), 0);
+  const totalTarget = activeCampaigns.reduce((sum, c) => sum + (c.targetAmount || 0), 0);
+  const totalInvestors = activeCampaigns.reduce((sum, c) => sum + ((c as any).investorCount || 0), 0);
 
   const handleCreateCampaignClick = () => {
     if (!canCreateCampaign) {
@@ -88,7 +92,7 @@ export default function RentorFundraising() {
         <Card>
           <CardContent className="p-6">
             <p className="text-sm text-gray-600 mb-2">Active Campaigns</p>
-            <p className="text-3xl font-bold text-blue-600">{campaigns.length}</p>
+            <p className="text-3xl font-bold text-blue-600">{activeCampaigns.length}</p>
           </CardContent>
         </Card>
         <Card>
@@ -119,7 +123,7 @@ export default function RentorFundraising() {
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <Heading as="h2">Active Campaigns</Heading>
-          <Badge variant="primary">{campaigns.length} Active</Badge>
+          <Badge variant="primary">{activeCampaigns.length} Active</Badge>
         </div>
 
         {isLoading ? (
@@ -128,9 +132,9 @@ export default function RentorFundraising() {
               <InvestmentCardSkeleton key={i} />
             ))}
           </div>
-        ) : campaigns.length > 0 ? (
+        ) : activeCampaigns.filter((c) => typeof c.vehicle === "object" && c.vehicle).length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {campaigns
+            {activeCampaigns
               .filter((c) => typeof c.vehicle === "object" && c.vehicle)
               .map((campaign) => (
                 <InvestmentCard
@@ -159,6 +163,34 @@ export default function RentorFundraising() {
           </div>
         )}
       </div>
+
+      {/* Cancelled Campaigns */}
+      {!isLoading && cancelledCampaigns.filter((c) => typeof c.vehicle === "object" && c.vehicle).length > 0 && (
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <Heading as="h2">Cancelled Campaigns</Heading>
+            <Badge variant="error">{cancelledCampaigns.length} Cancelled</Badge>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {cancelledCampaigns
+              .filter((c) => typeof c.vehicle === "object" && c.vehicle)
+              .map((campaign) => (
+                <div key={campaign._id} className="relative opacity-60">
+                  <InvestmentCard
+                    vehicle={campaign.vehicle as unknown as Vehicle}
+                    onInvest={() => handleManageCampaign(campaign)}
+                    basePath="rentor"
+                  />
+                  <div className="absolute top-3 right-3">
+                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                      Cancelled
+                    </span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Info Card */}
       <Card className="bg-blue-50 border-blue-200">

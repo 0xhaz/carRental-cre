@@ -15,12 +15,11 @@ const userSchema = new mongoose.Schema(
       default: "renter"
     },
 
-    // NEW: Blockchain fields (will be null for now)
+    // Blockchain fields — no default so sparse index skips users without a wallet
     walletAddress: {
       type: String,
       unique: true,
       sparse: true,
-      default: null
     },
     onchainIdAddress: {
       type: String,

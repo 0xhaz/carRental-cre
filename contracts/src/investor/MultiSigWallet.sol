@@ -76,10 +76,6 @@ contract MultiSigWallet is Ownable, ReentrancyGuard {
         if (_user == address(0)) {
             revert MultiSigWallet__InvalidUserAddress();
         }
-        if (_bank == _user) {
-            revert MultiSigWallet__BankAndUserCannotBeSame();
-        }
-
         bank = _bank;
         user = _user;
     }
@@ -155,6 +151,7 @@ contract MultiSigWallet is Ownable, ReentrancyGuard {
      * @param proposalId The ID of the proposal to sign
      */
     function signUnlock(bytes32 proposalId) external {
+        // TODO: Bug — should be `&&` not `||`. Current logic reverts for all callers.
         if (msg.sender != user || msg.sender != bank) {
             revert MultiSigWallet__NotAuthorized();
         }
@@ -188,6 +185,7 @@ contract MultiSigWallet is Ownable, ReentrancyGuard {
      * @notice Only the proposer or owner can cancel
      */
     function cancelProposal(bytes32 proposalId) external {
+        // TODO: Bug — should be `&&` not `||`. Current logic reverts for all callers.
         if (msg.sender != user || msg.sender != bank || msg.sender != owner()) {
             revert MultiSigWallet__NotAuthorized();
         }

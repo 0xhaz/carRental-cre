@@ -12,7 +12,14 @@ import {
   useRegShieldPaymentProtocol,
   usePaymentEscrow,
 } from "./useContracts";
-import { parseEther, formatEther } from "viem";
+import { MULTI_SIG_WALLET_ABI } from "@/contracts/abis";
+import { parseEther, formatEther, parseGwei } from "viem";
+
+// Sepolia gas overrides — wagmi's default gas estimation often underestimates maxFeePerGas
+const SEPOLIA_GAS_OVERRIDES = {
+  maxFeePerGas: parseGwei("30"),
+  maxPriorityFeePerGas: parseGwei("2"),
+};
 
 // ═══════════════════════════════════════════════
 // Investor Onboarding (InvestorRequestManager)
@@ -117,6 +124,7 @@ export function useRequestInvestorStatus() {
       abi,
       functionName: "requestInvestorStatus",
       args: [investorType],
+      ...SEPOLIA_GAS_OVERRIDES,
     });
   };
 
@@ -139,6 +147,7 @@ export function useLockFundsDirect() {
       abi,
       functionName: "lockFundsDirect",
       value: parseEther(amountEth),
+      ...SEPOLIA_GAS_OVERRIDES,
     });
   };
 
@@ -159,6 +168,7 @@ export function useWithdrawDirectLock() {
       address,
       abi,
       functionName: "withdrawDirectLock",
+      ...SEPOLIA_GAS_OVERRIDES,
     });
   };
 
@@ -179,12 +189,57 @@ export function useConfirmTokensLocked() {
       address,
       abi,
       functionName: "confirmTokensLocked",
+      ...SEPOLIA_GAS_OVERRIDES,
     });
   };
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
   return { confirmLocked, hash, isConfirming, isSuccess, ...rest };
+}
+
+/**
+ * Read locked balance from an investor's MultiSig wallet
+ */
+export function useMultiSigLockedBalance(walletAddress?: string) {
+  const addr = walletAddress as `0x${string}` | undefined;
+
+  const result = useReadContract({
+    address: addr,
+    abi: MULTI_SIG_WALLET_ABI,
+    functionName: "getLockedBalance",
+    query: {
+      enabled: !!addr && addr !== "0x0000000000000000000000000000000000000000",
+      refetchInterval: 10_000,
+    },
+  });
+
+  return {
+    ...result,
+    lockedAmount: result.data as bigint | undefined,
+    formatted: result.data ? formatEther(result.data as bigint) : "0",
+  };
+}
+
+/**
+ * Lock funds in an investor's MultiSig wallet (sends ETH)
+ */
+export function useMultiSigLockFunds() {
+  const { data: hash, writeContract, isSuccess: _ws, ...rest } = useWriteContract();
+
+  const lockFundsInMultiSig = (walletAddress: string, amountEth: string) => {
+    writeContract({
+      address: walletAddress as `0x${string}`,
+      abi: MULTI_SIG_WALLET_ABI,
+      functionName: "lockFunds",
+      value: parseEther(amountEth),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { lockFundsInMultiSig, hash, isConfirming, isSuccess, ...rest };
 }
 
 // ═══════════════════════════════════════════════
@@ -285,6 +340,7 @@ export function useInitiateVehicleInvestment() {
       functionName: "initiateVehicleInvestment",
       args: [vehicleId, rentor, amount, reason],
       value: totalValueWithFee,
+      ...SEPOLIA_GAS_OVERRIDES,
     });
   };
 
@@ -435,6 +491,7 @@ export function useClaimRevenue() {
       abi,
       functionName: "claimRevenue",
       args: [vehicleId],
+      ...SEPOLIA_GAS_OVERRIDES,
     });
   };
 
@@ -456,6 +513,7 @@ export function useBatchClaimRevenue() {
       abi,
       functionName: "batchClaimRevenue",
       args: [vehicleIds],
+      ...SEPOLIA_GAS_OVERRIDES,
     });
   };
 

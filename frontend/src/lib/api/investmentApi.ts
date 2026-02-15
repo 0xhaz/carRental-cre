@@ -85,4 +85,25 @@ export const investmentApi = {
     const { data } = await apiClient.delete(`/investments/campaign/${campaignId}`);
     return data;
   },
+
+  // Pause or resume a campaign
+  pauseCampaign: async (campaignId: string): Promise<{ success: boolean; message: string; data: Campaign }> => {
+    const { data } = await apiClient.post(`/investments/campaign/${campaignId}/pause`);
+    return data;
+  },
+
+  // Update campaign details
+  updateCampaign: async (
+    campaignId: string,
+    updates: {
+      targetAmount?: number;
+      expectedROI?: number;
+      duration?: number;
+      minInvestment?: number;
+      minFundingRequired?: number;
+    }
+  ): Promise<{ success: boolean; message: string; data: Campaign }> => {
+    const { data } = await apiClient.put(`/investments/campaign/${campaignId}`, updates);
+    return data;
+  },
 };

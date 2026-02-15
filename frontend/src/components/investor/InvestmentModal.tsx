@@ -70,7 +70,7 @@ export function InvestmentModal({
   const totalValueWei = amountWei + escrowFee;
 
   // On-chain investment limit check
-  const vehicleTokenId = (vehicle as any).tokenId ? BigInt((vehicle as any).tokenId) : undefined;
+  const vehicleTokenId = vehicle.vehicleNftId ? BigInt(vehicle.vehicleNftId) : undefined;
   const { data: canInvestData } = useCanInvestInVehicle(
     vehicleTokenId,
     amountWei > BigInt(0) ? amountWei : undefined
@@ -121,15 +121,15 @@ export function InvestmentModal({
       return;
     }
 
-    if (!(vehicle as any).tokenId) {
-      toast.error("This vehicle is not yet tokenized on-chain");
+    if (!vehicle.vehicleNftId) {
+      toast.error("This vehicle is not yet tokenized on-chain. The rentor must register it first.");
       return;
     }
 
     try {
       invest(
-        BigInt((vehicle as any).tokenId || 0),
-        ((vehicle as any).ownerAddress as `0x${string}`) ||
+        BigInt(vehicle.vehicleNftId),
+        (vehicle.ownerAddress as `0x${string}`) ||
           "0x0000000000000000000000000000000000000000",
         amountWei,
         `Investment in ${vehicle.brand} ${vehicle.model}`,
@@ -206,7 +206,7 @@ export function InvestmentModal({
             <div className="bg-green-50 rounded-lg p-4">
               <p className="text-xs text-gray-600 mb-1">Min. Investment</p>
               <p className="text-xl font-bold text-green-600">
-                {fundraising.minInvestment || 0.001} ETH
+                ${fundraising.minInvestment || 100} USD
               </p>
             </div>
             <div className="bg-purple-50 rounded-lg p-4">

@@ -69,7 +69,7 @@ export const SEPOLIA_CONTRACTS: ContractAddresses = {
   // Registries
   trustedIssuersRegistry: "0x686b28fb0a06de87d4cfa1a01f9584b48022a8a1",
   claimTopicsRegistry: "0xeeba359aa1662b5255634b94cba2d8e7b1526bd7",
-  investorTypeRegistry: "0x2ad67745ea337d94187bcda13a16ffdc1e2f67a6",
+  investorTypeRegistry: "0x1Ec4cF8B3bB679eA828C46F833b748A53729Bd33",
   participantTypeRegistry: "0xafe4f08f80dfe110bd37466c9b920c6d280cb3c1",
 
   // Compliance Modules
@@ -81,7 +81,7 @@ export const SEPOLIA_CONTRACTS: ContractAddresses = {
   complianceRegistry: "0xce33f0a75681086f24e1a2ce68a3fb624cbdf9d9",
 
   // Identity Registry
-  identityRegistry: "0x6f2bf8845bb10b021e2a37d9f4bf7015f86c99f5",
+  identityRegistry: "0x188C09768E0b2D21212FCDb0faEef175e55d927A",
 
   // Vehicle & Rental System
   vehicleNFT: "0xfce0fd3671e99d65e0ff70b30b9238bb83d91814",
@@ -99,7 +99,7 @@ export const SEPOLIA_CONTRACTS: ContractAddresses = {
 
   // Revenue & Investor Management
   revenueDistributor: "0xD08bc548f31557bB897eD91476d0c8d48297538D",
-  investorRequestManager: "0x94e0bB934fD3F9c2E8798FF70D7C6931d76C6b4d",
+  investorRequestManager: "0x99198B26B1584fd8792b71BFc2Cb2E22d25482d6",
   multiSigWallet: "0x9D05853223fC9dc32FEc293a410A9E74Ab8c3E7A",
 
   // CRE Receivers (redeployed with CampaignMonitorReceiver)
