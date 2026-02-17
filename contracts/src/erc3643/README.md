@@ -26,3 +26,11 @@
   - Links to both VehicleNFT and AssetToken
   - Calculates revenue share percentages
   - Integrates with revenue distributor contract
+- [TokenFactory.sol](./TokenFactory.sol) - Per-Vehicle Token Deployment Factories
+  - **AssetTokenFactory**: Deploys AssetToken instances for each vehicle
+  - **RevenueTokenFactory**: Deploys RevenueToken instances for each vehicle
+  - Split into two contracts to stay under the EVM 24,576-byte contract size limit (EIP-170)
+  - Each factory: deploys token → adds PaymentProtocol as minting agent → transfers ownership to caller
+  - Constructor params: `identityRegistry`, `compliance`, `paymentProtocol`
+  - Emits `AssetTokenDeployed` / `RevenueTokenDeployed` events with deployed token address
+  - Token supply uses 1:1 ratio with investment amounts (1 ETH invested = 1 token minted)

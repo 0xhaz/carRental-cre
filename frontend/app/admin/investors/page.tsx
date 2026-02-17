@@ -9,10 +9,13 @@ import {
   Button,
   Badge,
 } from "@/components/ui";
-import { EthUsdDisplay } from "@/components/web3";
+import { EthUsdDisplay, ExplorerLink } from "@/components/web3";
+import { ClaimsList } from "@/components/shared";
 import { kycApi } from "@/lib/api";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useInvestorRequestManager, useIdentityRegistry, useInvestorTypeRegistry } from "@/hooks/useContracts";
+import { useWatchOnboardingReports } from "@/hooks/useCRE";
+import { OnboardingAction } from "@/types/cre";
 import { useReadContract } from "wagmi";
 import { formatEther, parseGwei } from "viem";
 import { toast } from "react-hot-toast";
@@ -140,22 +143,22 @@ export default function AdminInvestorsPage() {
         </div>
       ) : isAuthorized ? (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-sm text-green-800">
+          <p className="text-sm text-green-800 flex items-center gap-1 flex-wrap">
             <strong>Wallet Connected:</strong>{" "}
-            <code className="text-xs bg-green-100 px-1 rounded">{connectedAddress}</code>{" "}
+            <ExplorerLink value={connectedAddress!} type="address" className="text-xs" />{" "}
             ({isOwner ? "Owner" : "Agent"})
           </p>
         </div>
       ) : (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-800">
+          <p className="text-sm text-red-800 flex items-center gap-1 flex-wrap">
             <strong>Unauthorized Wallet:</strong> Connected wallet{" "}
-            <code className="text-xs bg-red-100 px-1 rounded">{connectedAddress}</code>{" "}
+            <ExplorerLink value={connectedAddress!} type="address" className="text-xs text-red-700" />{" "}
             is not the contract owner or an authorized agent.
           </p>
           {!!contractOwner && (
-            <p className="text-sm text-red-700 mt-1">
-              Contract owner: <code className="text-xs bg-red-100 px-1 rounded">{String(contractOwner)}</code>
+            <p className="text-sm text-red-700 mt-1 flex items-center gap-1 flex-wrap">
+              Contract owner: <ExplorerLink value={String(contractOwner)} type="address" className="text-xs text-red-700" />
             </p>
           )}
           {(ownerError || agentError) && (
@@ -164,11 +167,14 @@ export default function AdminInvestorsPage() {
               {agentError ? `isAgent() error: ${agentError.message}` : ""}
             </p>
           )}
-          <p className="text-xs text-red-600 mt-1">
-            Registry: {identityRegistryAddr} | owner={String(contractOwner)} | isAgent={String(isAgentRaw)}
+          <p className="text-xs text-red-600 mt-1 flex items-center gap-1 flex-wrap">
+            Registry: <ExplorerLink value={identityRegistryAddr} type="address" className="text-xs text-red-600" /> | owner={String(contractOwner)} | isAgent={String(isAgentRaw)}
           </p>
         </div>
       )}
+
+      {/* CRE Auto-Processing Indicator */}
+      <CREInvestorIndicator onRefresh={loadInvestors} />
 
       {/* Filters */}
       <div className="flex gap-2 mb-6">
@@ -303,6 +309,7 @@ function InvestorRequestCard({
   const [isApprovingUpgrade, setIsApprovingUpgrade] = useState(false);
   const [isRejectingUpgrade, setIsRejectingUpgrade] = useState(false);
   const [isDowngradingDB, setIsDowngradingDB] = useState(false);
+  const [showClaims, setShowClaims] = useState(false);
 
   useEffect(() => {
     if (registerSuccess) {
@@ -548,9 +555,7 @@ function InvestorRequestCard({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
             <p className="text-xs text-gray-500">Wallet</p>
-            <p className="text-sm font-mono truncate" title={investor.walletAddress}>
-              {investor.walletAddress.slice(0, 8)}...{investor.walletAddress.slice(-6)}
-            </p>
+            <ExplorerLink value={investor.walletAddress} type="address" className="text-sm" />
           </div>
           <div>
             <p className="text-xs text-gray-500">Investor Type</p>
@@ -576,7 +581,7 @@ function InvestorRequestCard({
         {multiSigWallet && multiSigWallet !== "0x0000000000000000000000000000000000000000" && (
           <div className="mb-4 p-3 bg-gray-50 rounded-lg">
             <p className="text-xs text-gray-500">MultiSig Wallet</p>
-            <p className="text-sm font-mono">{multiSigWallet}</p>
+            <ExplorerLink value={multiSigWallet} type="address" className="text-sm" />
           </div>
         )}
 
@@ -595,7 +600,20 @@ function InvestorRequestCard({
           ) : investor.kyc.kycStatus === "approved" ? (
             <Badge variant="warning">Not Registered On-Chain</Badge>
           ) : null}
+          {isVerifiedOnChain && (
+            <button
+              onClick={() => setShowClaims(!showClaims)}
+              className="text-xs text-primary hover:text-primary-dull transition-colors"
+            >
+              {showClaims ? "Hide Claims" : "View Claims"}
+            </button>
+          )}
         </div>
+
+        {/* Identity Claims */}
+        {showClaims && isVerifiedOnChain && (
+          <ClaimsList userAddress={investor.walletAddress} className="mb-4" />
+        )}
 
         {/* Upgrade Request Section */}
         {upgradeReq?.isUpgrade && (
@@ -655,7 +673,7 @@ function InvestorRequestCard({
                 {registryType < upgradeReq.targetType
                   ? "Step 1: Upgrade type on-chain. Step 2: Create MultiSig wallet."
                   : multiSigWallet && multiSigWallet !== "0x0000000000000000000000000000000000000000"
-                  ? `Type upgraded. MultiSig wallet: ${multiSigWallet.slice(0, 10)}...${multiSigWallet.slice(-8)}`
+                  ? `Type upgraded. MultiSig wallet created.`
                   : "Type upgraded on-chain. Now create MultiSig wallet for the investor."
                 }
               </p>
@@ -747,5 +765,47 @@ function InvestorRequestCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function CREInvestorIndicator({ onRefresh }: { onRefresh: () => void }) {
+  const onboardingEvents = useWatchOnboardingReports((event) => {
+    if (
+      event.action === OnboardingAction.APPROVE_INVESTOR ||
+      event.action === OnboardingAction.REJECT_INVESTOR
+    ) {
+      // Auto-refresh investor list when CRE processes an investor
+      onRefresh();
+    }
+  });
+
+  const investorEvents = onboardingEvents.filter(
+    (e) =>
+      e.action === OnboardingAction.APPROVE_INVESTOR ||
+      e.action === OnboardingAction.REJECT_INVESTOR,
+  );
+
+  if (investorEvents.length === 0) return null;
+
+  const approvals = investorEvents.filter(
+    (e) => e.action === OnboardingAction.APPROVE_INVESTOR,
+  ).length;
+  const rejections = investorEvents.filter(
+    (e) => e.action === OnboardingAction.REJECT_INVESTOR,
+  ).length;
+
+  return (
+    <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-2">
+      <svg className="w-4 h-4 text-blue-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+      </svg>
+      <span className="text-sm text-blue-800">
+        Chainlink CRE auto-processed{" "}
+        <strong>{investorEvents.length}</strong> investor request{investorEvents.length !== 1 ? "s" : ""} this session
+        {approvals > 0 && <span className="text-green-700"> ({approvals} approved)</span>}
+        {rejections > 0 && <span className="text-red-700"> ({rejections} rejected)</span>}
+      </span>
+      <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse ml-auto shrink-0" />
+    </div>
   );
 }

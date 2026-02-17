@@ -54,7 +54,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   href="/admin/kyc"
                   className="text-gray-700 hover:text-primary transition-colors"
                 >
-                  KYC Management
+                  KYC
+                </Link>
+                <Link
+                  href="/admin/milestones"
+                  className="text-gray-700 hover:text-primary transition-colors"
+                >
+                  Milestones
+                </Link>
+                <Link
+                  href="/admin/revenue"
+                  className="text-gray-700 hover:text-primary transition-colors"
+                >
+                  Revenue
+                </Link>
+                <Link
+                  href="/admin/bookings"
+                  className="text-gray-700 hover:text-primary transition-colors"
+                >
+                  Bookings
+                </Link>
+                <Link
+                  href="/admin/disputes"
+                  className="text-gray-700 hover:text-primary transition-colors"
+                >
+                  Disputes
                 </Link>
               </nav>
             </div>

@@ -689,10 +689,10 @@ contract InvestorRequestManager is Ownable, ReentrancyGuard {
         uint256 newVehicleInvestment = currentVehicleInvestment + amount;
 
         // ETH-denominated investment limits for testnet demos
-        // Type 1: Retail Accredited - Min 0.001 ETH, Max 1 ETH per vehicle
+        // Type 1: Retail Accredited - Min 0.001 ETH, Max 10 ETH per vehicle
         if (investorType == IInvestorTypeRegistry.InvestorType.RETAIL) {
             if (amount < 0.001 ether) return (false, 1);
-            if (newVehicleInvestment > 1 ether) return (false, 2);
+            if (newVehicleInvestment > 10 ether) return (false, 2);
         }
         // Type 2: Institutional - Min 0.1 ETH, Max 10 ETH total
         else if (investorType == IInvestorTypeRegistry.InvestorType.ACCREDITED) {

@@ -1,4 +1,4 @@
-import type { Vehicle, User, Booking, Investment, FundraisingCampaign, Review, Notification } from "@/types";
+import { type Vehicle, type User, type Booking, type Investment, type FundraisingCampaign, type Review, type Notification, FundraisingType } from "@/types";
 import {
   VEHICLE_STATUS,
   VEHICLE_CATEGORIES,
@@ -213,6 +213,9 @@ export function generateMockCampaigns(count: number): FundraisingCampaign[] {
           completed: false,
         },
       ],
+      fundraisingType: i % 2 === 0 ? FundraisingType.FULL_FUNDRAISE : FundraisingType.CO_INVEST,
+      rentorInvestment: i % 2 === 0 ? 0 : targetAmount * 0.2,
+      minFundingRequired: 60,
       investors: [],
       createdAt: new Date(Date.now() - i * 24 * 60 * 60 * 1000),
       updatedAt: new Date(),

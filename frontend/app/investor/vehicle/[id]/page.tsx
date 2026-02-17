@@ -17,8 +17,12 @@ import { Vehicle, Review, FundraisingCampaign } from "@/types";
 import { investmentApi } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { useEthPrice, useEthToUsd } from "@/hooks/usePriceFeed";
+import { useVehiclePayments, useVehicleInvestmentTotal, useRentorCoInvestment } from "@/hooks/useInvestment";
+import { formatEther } from "viem";
 import Image from "next/image";
 import { toast } from "react-hot-toast";
+import { ExplorerLink } from "@/components/web3";
+import { useWatchCampaignReports } from "@/hooks/useCRE";
 
 // Revenue waterfall percentages from RevenueDistributor.sol
 const WATERFALL = {
@@ -64,6 +68,26 @@ export default function VehicleDetailPage() {
 
   const { price: ethPrice } = useEthPrice();
 
+  // On-chain campaign totals (source of truth from smart contract)
+  const vehicleTokenId = vehicle?.vehicleNftId != null ? BigInt(vehicle.vehicleNftId) : undefined;
+  const { data: vehicleInvestmentTotalWei } = useVehicleInvestmentTotal(vehicleTokenId);
+  const { data: onChainCoInvestment } = useRentorCoInvestment(vehicleTokenId);
+  const { data: vehiclePaymentIds } = useVehiclePayments(vehicleTokenId);
+  const onChainPayments = vehiclePaymentIds as bigint[] | undefined;
+  const onChainInvestorCount = onChainPayments?.length ?? 0;
+
+  // Prefer vehicleInvestmentTotal (includes all), fallback to co-investment only
+  const investmentTotalEth = vehicleInvestmentTotalWei
+    ? parseFloat(formatEther(vehicleInvestmentTotalWei as bigint))
+    : 0;
+  const coInvestEth = onChainCoInvestment
+    ? parseFloat(formatEther(onChainCoInvestment as bigint))
+    : 0;
+  const totalRaisedEth = investmentTotalEth > 0 ? investmentTotalEth : coInvestEth;
+  const totalRaisedUsd = totalRaisedEth * ethPrice;
+
+  const campaignCREEvents = useWatchCampaignReports();
+
   const handleInvestmentSuccess = (amount: number) => {
     toast.success(`Successfully invested ${amount.toFixed(4)} ETH!`);
     loadData(); // Refresh data
@@ -104,12 +128,13 @@ export default function VehicleDetailPage() {
     ...vehicle,
     fundraising: campaign ? {
       active: true,
+      campaignId: campaign._id,
       targetAmount: campaign.targetAmount,
-      currentAmount: campaign.currentAmount,
+      currentAmount: totalRaisedUsd > 0 ? totalRaisedUsd : campaign.currentAmount,
       minInvestment: campaign.minInvestment,
       maxInvestment: campaign.maxInvestment,
       expectedROI: campaign.expectedROI,
-      investorCount,
+      investorCount: Math.max(investorCount, onChainInvestorCount),
       investors: vehicle.fundraising?.investors ?? [],
     } : vehicle.fundraising,
   };
@@ -117,11 +142,12 @@ export default function VehicleDetailPage() {
   const fundraising = vehicleWithFundraising.fundraising;
   const hasCampaign = campaign && ["active", "funded"].includes(campaign.status);
 
+  const effectiveRaised = totalRaisedUsd > 0 ? totalRaisedUsd : (campaign?.currentAmount ?? 0);
   const fundingPercentage = hasCampaign
-    ? (campaign.currentAmount / campaign.targetAmount) * 100
+    ? Math.min((effectiveRaised / campaign.targetAmount) * 100, 100)
     : 0;
   const remainingAmount = hasCampaign
-    ? campaign.targetAmount - campaign.currentAmount
+    ? Math.max(campaign.targetAmount - effectiveRaised, 0)
     : 0;
   const daysLeft = hasCampaign && campaign.endDate
     ? Math.max(0, Math.ceil((new Date(campaign.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
@@ -343,7 +369,12 @@ export default function VehicleDetailPage() {
                     </div>
                     <Progress value={fundingPercentage} variant="default" className="mb-2" />
                     <div className="flex justify-between text-sm text-gray-600">
-                      <span>{formatCurrency(campaign.currentAmount)} raised</span>
+                      <span>
+                        {formatCurrency(effectiveRaised)} raised
+                        {totalRaisedEth > 0 && (
+                          <span className="text-xs ml-1">({totalRaisedEth.toFixed(4)} ETH)</span>
+                        )}
+                      </span>
                       <span>Goal: {formatCurrency(campaign.targetAmount)}</span>
                     </div>
                   </div>
@@ -356,7 +387,7 @@ export default function VehicleDetailPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Investors</span>
-                      <span className="font-semibold">{investorCount}</span>
+                      <span className="font-semibold">{Math.max(investorCount, onChainInvestorCount)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Min. Investment</span>
@@ -390,6 +421,49 @@ export default function VehicleDetailPage() {
                       blockchain technology with transparent revenue distribution.
                     </p>
                   </div>
+
+                  {/* CRE Campaign Health Alert */}
+                  {vehicle.vehicleNftId && (() => {
+                    const vehicleEvents = campaignCREEvents.filter(
+                      (e) => e.vehicleId.toString() === vehicle.vehicleNftId?.toString(),
+                    );
+                    if (vehicleEvents.length === 0) return null;
+                    const latestEvent = vehicleEvents[0];
+                    const isFailed = latestEvent.action === "CAMPAIGN_FAILED";
+                    return (
+                      <div className={`mt-4 border rounded-lg p-4 ${isFailed ? "bg-red-50 border-red-200" : "bg-orange-50 border-orange-200"}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <svg
+                            className={`w-4 h-4 ${isFailed ? "text-red-600" : "text-orange-600"}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                            />
+                          </svg>
+                          <span className={`text-xs font-semibold ${isFailed ? "text-red-800" : "text-orange-800"}`}>
+                            {isFailed ? "Campaign Failed" : "Campaign Cancelled"}
+                          </span>
+                        </div>
+                        <p className={`text-xs ${isFailed ? "text-red-700" : "text-orange-700"}`}>
+                          {isFailed
+                            ? "This campaign did not reach its funding target. Batch refunds have been processed."
+                            : "This campaign has been cancelled. Batch refunds have been processed."}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2 text-xs">
+                          <span className={isFailed ? "text-red-500" : "text-orange-500"}>
+                            {Number(latestEvent.refundedCount)} refunded
+                          </span>
+                          <ExplorerLink value={latestEvent.transactionHash} type="tx" className="text-xs" />
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               ) : (
                 <div className="text-center py-4">

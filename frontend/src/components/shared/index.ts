@@ -16,3 +16,4 @@ export * from "./UserMenu";
 export * from "./ReviewModal";
 export * from "./ReviewList";
 export * from "./NotificationBell";
+export * from "./ClaimsList";

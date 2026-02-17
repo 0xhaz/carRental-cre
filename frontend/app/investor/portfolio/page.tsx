@@ -108,7 +108,7 @@ export default function InvestorPortfolio() {
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <Heading as="h2">My Investments</Heading>
-          <Badge variant="primary">{investments.length} Active</Badge>
+          <Badge variant="primary">{investments.filter(i => i.status === "active").length} Active</Badge>
         </div>
 
         {isLoading ? (
@@ -149,7 +149,7 @@ export default function InvestorPortfolio() {
             <Heading as="h2" className="mb-4">
               Token Holdings
             </Heading>
-            <TokenPortfolio />
+            <TokenPortfolio investments={investments} />
           </div>
 
           {/* Revenue Claiming */}
@@ -199,7 +199,7 @@ export default function InvestorPortfolio() {
             <Heading as="h2" className="mb-4">
               Transaction History
             </Heading>
-            <TransactionHistory limit={5} />
+            <TransactionHistory investments={investments} limit={5} />
           </div>
         </>
       )}

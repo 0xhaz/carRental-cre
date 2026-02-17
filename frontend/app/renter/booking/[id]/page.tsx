@@ -11,7 +11,8 @@ import {
   Badge,
 } from "@/components/ui";
 import { ReviewModal, ReviewList, ReviewStats } from "@/components/shared";
-import { generateMockBookings, generateMockVehicles, generateMockReviews } from "@/lib/mockData";
+import { bookingApi } from "@/lib/api";
+import { useVehicleMetadata, useVehicleInfo } from "@/hooks/useVehicleData";
 import { Booking, Vehicle, Review, ReviewFormData } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Image from "next/image";
@@ -24,6 +25,7 @@ export default function RenterBookingDetailPage() {
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [ownerInfo, setOwnerInfo] = useState<{ name: string; email: string; walletAddress?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -32,50 +34,46 @@ export default function RenterBookingDetailPage() {
   useEffect(() => {
     const loadBooking = async () => {
       setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      try {
+        const res = await bookingApi.getById(bookingId);
+        if (res.success && res.data) {
+          setBooking(res.data);
 
-      // Find booking from mock data
-      const mockBookings = generateMockBookings(20);
+          // Backend populates car as a full Vehicle object
+          if (typeof res.data.car === "object") {
+            setVehicle(res.data.car as unknown as Vehicle);
+          }
 
-      // Ensure first booking is completed for easy testing
-      if (mockBookings.length > 0) {
-        mockBookings[0].status = "completed" as any;
-        mockBookings[0].returnDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      }
-
-      const foundBooking = mockBookings.find((b) => b._id === bookingId);
-
-      if (foundBooking) {
-        setBooking(foundBooking);
-
-        // Find associated vehicle
-        const mockVehicles = generateMockVehicles(20);
-        const foundVehicle = mockVehicles.find((v) => v._id === foundBooking.car);
-        if (foundVehicle) {
-          setVehicle(foundVehicle);
-
-          // Load reviews for this vehicle
-          const mockReviews = generateMockReviews(15);
-          // Filter out any reviews for the current booking (to allow testing)
-          const vehicleReviews = mockReviews.filter(
-            (r) => r.vehicle === foundVehicle._id && r.booking !== bookingId
-          );
-          setReviews(vehicleReviews);
-
-          // User hasn't reviewed yet (since we filtered out current booking)
-          setHasUserReviewed(false);
+          // Backend populates owner with name, email, walletAddress
+          if (typeof res.data.owner === "object") {
+            setOwnerInfo(res.data.owner as unknown as { name: string; email: string; walletAddress?: string });
+          }
+        } else {
+          toast.error("Booking not found");
         }
+      } catch (error) {
+        console.error("Failed to load booking:", error);
+        toast.error("Failed to load booking details");
+      } finally {
+        setIsLoading(false);
       }
-
-      setIsLoading(false);
     };
 
     loadBooking();
   }, [bookingId]);
 
-  const handleCancelBooking = () => {
-    toast.success("Booking cancelled successfully!");
-    setBooking((prev) => (prev ? { ...prev, status: "cancelled" as any } : null));
+  const handleCancelBooking = async () => {
+    try {
+      const res = await bookingApi.changeStatus(bookingId, "cancelled");
+      if (res.success) {
+        toast.success("Booking cancelled successfully!");
+        setBooking((prev) => (prev ? { ...prev, status: "cancelled" as any } : null));
+      } else {
+        toast.error("Failed to cancel booking");
+      }
+    } catch (error) {
+      toast.error("Failed to cancel booking");
+    }
   };
 
   const handleContactRentor = () => {
@@ -90,13 +88,13 @@ export default function RenterBookingDetailPage() {
   };
 
   const handleReviewSubmit = (formData: ReviewFormData) => {
-    // Create new review
+    // Create new review (local only for now)
     const newReview: Review = {
       _id: `review-${Date.now()}`,
       booking: bookingId,
       vehicle: vehicle?._id || "",
-      renter: "current-user-1",
-      rentor: booking?.owner || "",
+      renter: "current-user",
+      rentor: booking?.owner as string || "",
       rating: formData.rating,
       comment: formData.comment,
       vehicleCondition: formData.vehicleCondition,
@@ -163,28 +161,26 @@ export default function RenterBookingDetailPage() {
     new Date(booking.returnDate) >= new Date();
   const canCancel = (booking.status === "pending" || booking.status === "confirmed") && !isPast;
 
-  // Mock rentor information
-  const rentor = {
-    name: "Jane Smith",
-    email: "jane.smith@example.com",
-    phone: "+1 (555) 987-6543",
-    walletAddress: "0x" + Math.random().toString(16).slice(2, 42),
-    totalVehicles: Math.floor(Math.random() * 10) + 1,
-    joinDate: new Date(Date.now() - Math.random() * 730 * 24 * 60 * 60 * 1000),
-  };
+  const duration = Math.ceil(
+    (new Date(booking.returnDate).getTime() - new Date(booking.pickupDate).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
 
-  // Mock booking timeline
+  const dailyRate = vehicle ? vehicle.pricePerDay : booking.price / duration;
+
+  // Build timeline from real data
+  const createdAt = new Date(booking.createdAt);
   const timeline = [
     {
       status: "Booking Requested",
-      date: new Date(booking.pickupDate.getTime() - 7 * 24 * 60 * 60 * 1000),
+      date: createdAt,
       description: "You submitted a booking request",
     },
     ...(booking.status !== "pending"
       ? [
           {
             status: booking.status === "cancelled" ? "Booking Cancelled" : "Booking Confirmed",
-            date: new Date(booking.pickupDate.getTime() - 5 * 24 * 60 * 60 * 1000),
+            date: new Date(booking.updatedAt),
             description:
               booking.status === "cancelled"
                 ? "Your booking was cancelled"
@@ -196,7 +192,7 @@ export default function RenterBookingDetailPage() {
       ? [
           {
             status: "Payment Processed",
-            date: new Date(booking.pickupDate.getTime() - 4 * 24 * 60 * 60 * 1000),
+            date: new Date(booking.updatedAt),
             description: `Payment of ${formatCurrency(booking.price)} confirmed`,
           },
         ]
@@ -205,24 +201,17 @@ export default function RenterBookingDetailPage() {
       ? [
           {
             status: "Vehicle Picked Up",
-            date: booking.pickupDate,
+            date: new Date(booking.pickupDate),
             description: "You picked up the vehicle",
           },
           {
             status: "Vehicle Returned",
-            date: booking.returnDate,
+            date: new Date(booking.returnDate),
             description: "You returned the vehicle",
           },
         ]
       : []),
   ];
-
-  const duration = Math.ceil(
-    (new Date(booking.returnDate).getTime() - new Date(booking.pickupDate).getTime()) /
-      (1000 * 60 * 60 * 24)
-  );
-
-  const dailyRate = vehicle ? vehicle.pricePerDay : booking.price / duration;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -272,8 +261,8 @@ export default function RenterBookingDetailPage() {
                       <>
                         <span>📍 {vehicle.location}</span>
                         <span>🚗 {vehicle.category}</span>
-                        <span>⛽ {vehicle.fuelType}</span>
-                        <span>👥 {vehicle.seatingCapacity} seats</span>
+                        <span>⛽ {vehicle.fuel_type}</span>
+                        <span>👥 {vehicle.seating_capacity} seats</span>
                       </>
                     )}
                   </div>
@@ -378,26 +367,20 @@ export default function RenterBookingDetailPage() {
               <div className="space-y-4">
                 <div className="flex justify-between items-center border-b pb-3">
                   <span className="text-gray-600">Name</span>
-                  <span className="font-semibold">{rentor.name}</span>
+                  <span className="font-semibold">{ownerInfo?.name || "N/A"}</span>
                 </div>
                 <div className="flex justify-between items-center border-b pb-3">
                   <span className="text-gray-600">Email</span>
-                  <span className="font-semibold">{rentor.email}</span>
+                  <span className="font-semibold">{ownerInfo?.email || "N/A"}</span>
                 </div>
-                <div className="flex justify-between items-center border-b pb-3">
-                  <span className="text-gray-600">Phone</span>
-                  <span className="font-semibold">{rentor.phone}</span>
-                </div>
-                <div className="flex justify-between items-center border-b pb-3">
-                  <span className="text-gray-600">Total Vehicles</span>
-                  <span className="font-semibold">{rentor.totalVehicles}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Member Since</span>
-                  <span className="font-semibold">
-                    {rentor.joinDate.toLocaleDateString()}
-                  </span>
-                </div>
+                {ownerInfo?.walletAddress && (
+                  <div className="flex justify-between items-center border-b pb-3">
+                    <span className="text-gray-600">Wallet Address</span>
+                    <span className="font-mono text-sm">
+                      {ownerInfo.walletAddress.slice(0, 6)}...{ownerInfo.walletAddress.slice(-4)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <Button
@@ -409,6 +392,11 @@ export default function RenterBookingDetailPage() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* Vehicle Condition (On-Chain) */}
+          {vehicle?.vehicleNftId && (
+            <VehicleConditionCard vehicleNftId={BigInt(vehicle.vehicleNftId)} />
+          )}
 
           {/* Booking Timeline */}
           <Card>
@@ -578,5 +566,84 @@ export default function RenterBookingDetailPage() {
         />
       )}
     </div>
+  );
+}
+
+function VehicleConditionCard({ vehicleNftId }: { vehicleNftId: bigint }) {
+  const metadata = useVehicleMetadata(vehicleNftId);
+  const vehicleInfo = useVehicleInfo(vehicleNftId);
+
+  const meta = metadata.data as
+    | [string, string, string, bigint, string, bigint, bigint, bigint]
+    | undefined;
+  const mileage = meta?.[5];
+  const registrationExpiry = meta?.[6];
+  const insuranceExpiry = meta?.[7];
+
+  const info = vehicleInfo.data as [any, number, bigint, bigint, bigint] | undefined;
+  const maintenanceCount = info?.[3];
+  const incidentCount = info?.[4];
+
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const regValid = registrationExpiry ? registrationExpiry >= now : false;
+  const insValid = insuranceExpiry ? insuranceExpiry >= now : false;
+
+  if (metadata.isLoading || vehicleInfo.isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="animate-pulse space-y-3">
+            <div className="h-4 bg-gray-200 rounded w-1/3" />
+            <div className="h-4 bg-gray-200 rounded w-2/3" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!meta) return null;
+
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <Heading as="h2" className="mb-4">Vehicle Condition</Heading>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="bg-blue-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500">Mileage</p>
+            <p className="text-xl font-bold text-blue-600">{mileage?.toString() ?? "—"}</p>
+            <p className="text-xs text-gray-400">km</p>
+          </div>
+          <div className="bg-green-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500">Maintenance</p>
+            <p className="text-xl font-bold text-green-600">{maintenanceCount?.toString() ?? "0"}</p>
+            <p className="text-xs text-gray-400">records</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500">Incidents</p>
+            <p className={`text-xl font-bold ${incidentCount && incidentCount > BigInt(0) ? "text-red-600" : "text-green-600"}`}>
+              {incidentCount?.toString() ?? "0"}
+            </p>
+            <p className="text-xs text-gray-400">reported</p>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-600">Registration</span>
+            <Badge variant={regValid ? "success" : "error"}>
+              {regValid ? "Valid" : registrationExpiry ? "Expired" : "Unknown"}
+            </Badge>
+          </div>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-600">Insurance</span>
+            <Badge variant={insValid ? "success" : "error"}>
+              {insValid ? "Valid" : insuranceExpiry ? "Expired" : "Unknown"}
+            </Badge>
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 mt-3">
+          Verified on-chain via VehicleNFT
+        </p>
+      </CardContent>
+    </Card>
   );
 }

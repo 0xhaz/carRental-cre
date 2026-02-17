@@ -1,2 +1,6 @@
 rental-cre/rental-workflow/node_modules
+rental-cre/onboarding-workflow/node_modules
+rental-cre/campaign-workflow/node_modules
+rental-cre/compliance-workflow/node_modules
+rental-cre/vehicle-workflow/node_modules
 backend/.env.backup

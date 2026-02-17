@@ -138,7 +138,7 @@ export function VerificationStatusBanner({
               <h3 className="text-xl font-bold text-gray-900">
                 Verification Required
               </h3>
-              <Badge variant="destructive">Action Needed</Badge>
+              <Badge variant="error">Action Needed</Badge>
             </div>
 
             <p className="text-gray-700 mb-4">
@@ -213,7 +213,7 @@ export function VerificationStatusBadge({
 
   return (
     <Badge
-      variant="destructive"
+      variant="error"
       className="gap-1 cursor-pointer hover:opacity-80"
       onClick={onClick}
     >

@@ -19,6 +19,7 @@ function campaignToVehicle(campaign: FundraisingCampaign & { vehicle: any }): Ve
     _id: v._id,
     fundraising: {
       active: true,
+      campaignId: campaign._id,
       targetAmount: campaign.targetAmount,
       currentAmount: campaign.currentAmount,
       minInvestment: campaign.minInvestment,
@@ -26,6 +27,8 @@ function campaignToVehicle(campaign: FundraisingCampaign & { vehicle: any }): Ve
       expectedROI: campaign.expectedROI,
       investorCount: v.fundraising?.investorCount ?? 0,
       investors: v.fundraising?.investors ?? [],
+      startDate: campaign.startDate,
+      endDate: campaign.endDate,
     },
   } as Vehicle;
 }

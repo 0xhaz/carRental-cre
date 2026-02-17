@@ -3,6 +3,8 @@ import { Button, Input, Separator, Badge, Card, CardContent } from "@/components
 import { Vehicle } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useBookingFlowStore } from "@/store";
+import { bookingApi } from "@/lib/api";
+import { toast } from "react-hot-toast";
 
 export interface BookingFlowProps {
   vehicle: Vehicle;
@@ -25,6 +27,7 @@ export function BookingFlow({ vehicle, onComplete, onCancel }: BookingFlowProps)
 
   const [additionalDriver, setAdditionalDriver] = useState(false);
   const [insuranceUpgrade, setInsuranceUpgrade] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Calculate booking details
   const calculateDays = () => {
@@ -45,21 +48,41 @@ export function BookingFlow({ vehicle, onComplete, onCancel }: BookingFlowProps)
   const insuranceUpgradeCost = insuranceUpgrade ? 15 * days : 0;
   const totalPrice = basePrice + insuranceCost + additionalDriverCost + insuranceUpgradeCost;
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep === "dates") {
       if (!pickupDate || !returnDate) {
-        alert("Please select pickup and return dates");
+        toast.error("Please select pickup and return dates");
         return;
       }
       setCurrentStep("details");
     } else if (currentStep === "details") {
       if (!pickupLocation) {
-        alert("Please enter pickup location");
+        toast.error("Please enter pickup location");
         return;
       }
       setCurrentStep("review");
     } else {
-      onComplete?.();
+      // Submit booking to API
+      setIsSubmitting(true);
+      try {
+        const res = await bookingApi.create({
+          carId: vehicle._id,
+          pickupDate,
+          returnDate,
+          price: totalPrice,
+          securityDeposit: 0,
+        });
+        if (res.success) {
+          onComplete?.();
+        } else {
+          toast.error((res as any).message || "Failed to create booking");
+        }
+      } catch (error) {
+        console.error("Booking error:", error);
+        toast.error("Failed to create booking. Please try again.");
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -316,8 +339,12 @@ export function BookingFlow({ vehicle, onComplete, onCancel }: BookingFlowProps)
         <Button variant="outline" onClick={currentStep === "dates" ? onCancel : handleBack}>
           {currentStep === "dates" ? "Cancel" : "Back"}
         </Button>
-        <Button onClick={handleNext}>
-          {currentStep === "review" ? "Confirm Booking" : "Next"}
+        <Button onClick={handleNext} disabled={isSubmitting}>
+          {currentStep === "review"
+            ? isSubmitting
+              ? "Submitting..."
+              : "Confirm Booking"
+            : "Next"}
         </Button>
       </div>
     </div>

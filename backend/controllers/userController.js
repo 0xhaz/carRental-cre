@@ -96,6 +96,19 @@ export const getCars = async (req, res) => {
   }
 };
 
+export const getCarById = async (req, res) => {
+  try {
+    const car = await Car.findById(req.params.id).populate("owner", "name email walletAddress");
+    if (!car) {
+      return res.json({ success: false, message: "Vehicle not found" });
+    }
+    res.json({ success: true, car });
+  } catch (error) {
+    console.log(error.message);
+    res.json({ success: false, message: error.message });
+  }
+};
+
 // Update User Role
 export const updateUserRole = async (req, res) => {
   try {

@@ -1,0 +1,8 @@
+{
+  "schedule": "*/30 * * * * *",
+  "investorRequestManagerAddress": "",
+  "rentalBookingAddress": "",
+  "renterComplianceAddress": "",
+  "identityRegistryAddress": "",
+  "onboardingReceiverAddress": ""
+}

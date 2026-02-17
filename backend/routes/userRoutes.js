@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getCars,
+  getCarById,
   getUserData,
   loginUser,
   registerUser,
@@ -18,6 +19,7 @@ userRouter.post("/register", registerUser);
 userRouter.post("/login", loginUser);
 userRouter.get("/data", protect, getUserData);
 userRouter.get("/cars", getCars);
+userRouter.get("/cars/:id", getCarById);
 userRouter.post("/update-role", protect, updateUserRole);
 
 // Wallet authentication

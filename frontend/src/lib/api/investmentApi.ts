@@ -30,11 +30,13 @@ export const investmentApi = {
     return data;
   },
 
-  // Create investment
+  // Create investment (record in DB after on-chain tx)
   create: async (investmentData: {
     vehicleId: string;
     campaignId: string;
     amount: number;
+    amountEth?: number;
+    txHash?: string;
   }): Promise<{ success: boolean; data: Investment }> => {
     const { data } = await apiClient.post("/investments/create", investmentData);
     return data;
@@ -104,6 +106,91 @@ export const investmentApi = {
     }
   ): Promise<{ success: boolean; message: string; data: Campaign }> => {
     const { data } = await apiClient.put(`/investments/campaign/${campaignId}`, updates);
+    return data;
+  },
+
+  // Record rentor co-investment deposit (after on-chain confirmation)
+  recordRentorCoInvestment: async (
+    campaignId: string,
+    depositData: { amount: number; txHash: string }
+  ): Promise<{ success: boolean; message: string; data: any }> => {
+    const { data } = await apiClient.post(
+      `/investments/campaign/${campaignId}/co-invest`,
+      depositData
+    );
+    return data;
+  },
+
+  // --- On-chain sync endpoints ---
+
+  // Record milestone completion
+  recordMilestoneCompleted: async (
+    vehicleNftId: string,
+    payload: { milestoneName: string; txHash?: string }
+  ): Promise<{ success: boolean }> => {
+    const { data } = await apiClient.post(
+      `/investments/vehicle/${vehicleNftId}/milestone-completed`,
+      payload
+    );
+    return data;
+  },
+
+  // Record funds released + tokens minted
+  recordFundsReleased: async (
+    vehicleNftId: string,
+    payload: { txHash?: string }
+  ): Promise<{ success: boolean }> => {
+    const { data } = await apiClient.post(
+      `/investments/vehicle/${vehicleNftId}/funds-released`,
+      payload
+    );
+    return data;
+  },
+
+  // Record revenue distribution by admin
+  recordRevenueDistributed: async (
+    vehicleNftId: string,
+    payload: { amountEth: number; txHash?: string }
+  ): Promise<{ success: boolean }> => {
+    const { data } = await apiClient.post(
+      `/investments/vehicle/${vehicleNftId}/revenue-distributed`,
+      payload
+    );
+    return data;
+  },
+
+  // Record revenue claimed by investor
+  recordRevenueClaimed: async (
+    vehicleNftId: string,
+    payload: { amountEth: number; txHash?: string }
+  ): Promise<{ success: boolean }> => {
+    const { data } = await apiClient.post(
+      `/investments/vehicle/${vehicleNftId}/revenue-claimed`,
+      payload
+    );
+    return data;
+  },
+
+  // Record token transfer
+  recordTokenTransfer: async (payload: {
+    tokenAddress: string;
+    recipientAddress: string;
+    amount: string;
+    txHash?: string;
+  }): Promise<{ success: boolean }> => {
+    const { data } = await apiClient.post("/investments/record-transfer", payload);
+    return data;
+  },
+
+  // Record dispute resolution
+  recordDisputeResolution: async (payload: {
+    disputeId: number;
+    paymentId: number;
+    outcome: number;
+    refundAmount: string;
+    txHash?: string;
+  }): Promise<{ success: boolean }> => {
+    const { data } = await apiClient.post("/investments/record-dispute-resolution", payload);
     return data;
   },
 };

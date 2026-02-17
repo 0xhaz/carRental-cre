@@ -51,12 +51,19 @@ export type ContractAddresses = {
   investorRequestManager: `0x${string}`;
   multiSigWallet: `0x${string}`;
 
+  // Token Factories
+  assetTokenFactory: `0x${string}`;
+  revenueTokenFactory: `0x${string}`;
+
   // CRE Receivers (for off-chain use)
   complianceReceiver: `0x${string}`;
   paymentReceiver: `0x${string}`;
   vehicleReceiver: `0x${string}`;
   onboardingReceiver: `0x${string}`;
   campaignMonitorReceiver: `0x${string}`;
+
+  // World ID
+  worldIDVerifier: `0x${string}`;
 };
 
 // Sepolia Testnet Addresses
@@ -70,10 +77,10 @@ export const SEPOLIA_CONTRACTS: ContractAddresses = {
   trustedIssuersRegistry: "0x686b28fb0a06de87d4cfa1a01f9584b48022a8a1",
   claimTopicsRegistry: "0xeeba359aa1662b5255634b94cba2d8e7b1526bd7",
   investorTypeRegistry: "0x1Ec4cF8B3bB679eA828C46F833b748A53729Bd33",
-  participantTypeRegistry: "0xafe4f08f80dfe110bd37466c9b920c6d280cb3c1",
+  participantTypeRegistry: "0x31cc7D9d9deA3e6933179a390d356477fdD571c6",
 
   // Compliance Modules
-  complianceRules: "0xeee4e4580b103c667acfbb81bd10986b01409450",
+  complianceRules: "0xe81a4ABB60Eb13ac76E98F89ECd1EEd9D54b2C0f",
   investorTypeCompliance: "0x53f96a9dfd9e3b68243c4c7736dbe84261165110",
   renterCompliance: "0x61bc66973794973b02b2059a2419a0a238145eb1",
   operationalCompliance: "0x8c9fb8b1d90a0c836b3a942d6e5acb19c5640f77",
@@ -89,18 +96,22 @@ export const SEPOLIA_CONTRACTS: ContractAddresses = {
   rentalOperations: "0xd1b9a8d1df0285b78d6d95161dadf8375fdb6969",
 
   // Payment System
-  investmentPaymentProtocol: "0x2b246b3e17f46a8aa9f38c82c7f66f6b6bd329cc",
-  investmentEscrow: "0x3ffe3640eb086368c44fc27b188af12748d9443f",
-  investmentRefundManager: "0x4385699d3d8173e15aa1040d2fa1d5fedef6a657",
-  rentalPaymentProtocol: "0x9e2bc54381871191c1d7a3367f6773e18061092d",
+  investmentPaymentProtocol: "0x8c61ce72d5cf64f2d14dfee554a493668b87a082",
+  investmentEscrow: "0x8e4df9a756ba09e5890f78fa56f1cfb623b4bc89",
+  investmentRefundManager: "0xa1b8379afdd69b0e4fb0a697446cf5ade40fafaf",
+  rentalPaymentProtocol: "0x6eD9882A2B011d81FdC71F3aaD2E4F2Cc707Df75",
   rentalEscrow: "0xaf7fb568ce7489f1cb770abb55d9df0e7ecba94d",
   rentalRefundManager: "0x4c1e49928736afd69b26c656f104ce25e05b5bf6",
-  disputeResolver: "0x138d4fb3286ccb682a6a226f16d8a0b59d4b4e4f",
+  disputeResolver: "0x0b4537c45202770e03ef81895a08ce13bd90131c",
 
   // Revenue & Investor Management
   revenueDistributor: "0xD08bc548f31557bB897eD91476d0c8d48297538D",
-  investorRequestManager: "0x99198B26B1584fd8792b71BFc2Cb2E22d25482d6",
+  investorRequestManager: "0x520efb46bc6ed01822dfc69ea7cde71b9ba6d6d2",
   multiSigWallet: "0x9D05853223fC9dc32FEc293a410A9E74Ab8c3E7A",
+
+  // Token Factories
+  assetTokenFactory: "0x1EEE958464B41716E0afaD7e44C08c5aDb1838ef",
+  revenueTokenFactory: "0x1eDE15097F245c0EE8Bf911F98DaD926526E206C",
 
   // CRE Receivers (redeployed with CampaignMonitorReceiver)
   complianceReceiver: "0x0ea9cd084287107bca0f9785b030c22db72301fd",
@@ -108,6 +119,9 @@ export const SEPOLIA_CONTRACTS: ContractAddresses = {
   vehicleReceiver: "0x73c58b5ba299faaa64103e453ba55b408c91e81b",
   onboardingReceiver: "0xf080a8b7ee2e83c9bee26a795e43d70b1d093850",
   campaignMonitorReceiver: "0x84a9b21b7d2ba6120923edaa32b283fd2e35fb94",
+
+  // World ID
+  worldIDVerifier: "0x838C9397F5c00f7010924dDc4c2E93Fcab6c0363",
 };
 
 // Get contracts for current chain
@@ -162,9 +176,12 @@ export const CONTRACT_NAMES: Record<keyof ContractAddresses, string> = {
   investorRequestManager: "Investor Request Manager",
   multiSigWallet: "MultiSig Wallet",
   disputeResolver: "Dispute Resolver",
+  assetTokenFactory: "Asset Token Factory",
+  revenueTokenFactory: "Revenue Token Factory",
   complianceReceiver: "Compliance Receiver",
   paymentReceiver: "Payment Receiver",
   vehicleReceiver: "Vehicle Receiver",
   onboardingReceiver: "Onboarding Receiver",
   campaignMonitorReceiver: "Campaign Monitor Receiver",
+  worldIDVerifier: "World ID Verifier",
 };

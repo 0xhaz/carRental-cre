@@ -2,6 +2,7 @@ import Investment from "../models/Investment.js";
 import Campaign from "../models/Campaign.js";
 import Car from "../models/Car.js";
 import Review from "../models/Review.js";
+import Notification from "../models/Notification.js";
 
 // @desc    Get active campaigns (investment marketplace)
 // @route   GET /api/investments/marketplace
@@ -9,7 +10,7 @@ import Review from "../models/Review.js";
 export const getMarketplace = async (req, res) => {
   try {
     const campaigns = await Campaign.find({ status: "active" })
-      .populate("vehicle", "brand model year image pricePerDay location description fundraising category")
+      .populate("vehicle", "brand model year image pricePerDay location description fundraising category vehicleNftId assetTokenAddress revenueTokenAddress ownerAddress")
       .populate("rentor", "name")
       .sort({ createdAt: -1 });
 
@@ -72,6 +73,8 @@ export const createCampaign = async (req, res) => {
       expectedROI,
       investorCount: 0,
       investors: [],
+      startDate: campaign.startDate,
+      endDate: campaign.endDate,
     };
     await vehicle.save();
 
@@ -87,7 +90,7 @@ export const createCampaign = async (req, res) => {
 // @access  Private
 export const createInvestment = async (req, res) => {
   try {
-    const { vehicleId, campaignId, amount } = req.body;
+    const { vehicleId, campaignId, amount, txHash, amountEth } = req.body;
 
     // Get campaign
     const campaign = await Campaign.findById(campaignId);
@@ -95,28 +98,30 @@ export const createInvestment = async (req, res) => {
       return res.status(404).json({ success: false, message: "Campaign not found" });
     }
 
-    // Validate investment amount
-    if (amount < campaign.minInvestment) {
-      return res.status(400).json({
-        success: false,
-        message: `Minimum investment is $${campaign.minInvestment}`,
-      });
-    }
+    // If on-chain tx already succeeded (txHash provided), skip strict USD validation
+    // since the smart contract already enforced limits
+    if (!txHash) {
+      if (amount < campaign.minInvestment) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum investment is $${campaign.minInvestment}`,
+        });
+      }
 
-    if (amount > campaign.maxInvestment) {
-      return res.status(400).json({
-        success: false,
-        message: `Maximum investment is $${campaign.maxInvestment}`,
-      });
-    }
+      if (amount > campaign.maxInvestment) {
+        return res.status(400).json({
+          success: false,
+          message: `Maximum investment is $${campaign.maxInvestment}`,
+        });
+      }
 
-    // Check if campaign can accept more funds
-    const remaining = campaign.targetAmount - campaign.currentAmount;
-    if (amount > remaining) {
-      return res.status(400).json({
-        success: false,
-        message: `Only $${remaining} needed to reach target`,
-      });
+      const remaining = campaign.targetAmount - campaign.currentAmount;
+      if (amount > remaining) {
+        return res.status(400).json({
+          success: false,
+          message: `Only $${remaining} needed to reach target`,
+        });
+      }
     }
 
     // Create investment
@@ -124,6 +129,8 @@ export const createInvestment = async (req, res) => {
       investor: req.user._id,
       vehicle: vehicleId,
       amount,
+      amountEth: amountEth || 0,
+      txHash: txHash || undefined,
       status: "active",
       investedAt: new Date(),
     });
@@ -160,7 +167,7 @@ export const createInvestment = async (req, res) => {
 export const getPortfolio = async (req, res) => {
   try {
     const investments = await Investment.find({ investor: req.user._id })
-      .populate("vehicle", "brand model image pricePerDay location")
+      .populate("vehicle", "brand model image pricePerDay location vehicleNftId assetTokenAddress revenueTokenAddress ownerAddress")
       .sort({ investedAt: -1 });
 
     const totalInvested = investments.reduce((sum, inv) => sum + inv.amount, 0);
@@ -187,7 +194,7 @@ export const getPortfolio = async (req, res) => {
 export const getInvestmentDetails = async (req, res) => {
   try {
     const investment = await Investment.findById(req.params.investmentId)
-      .populate("vehicle", "brand model image pricePerDay location")
+      .populate("vehicle", "brand model image pricePerDay location vehicleNftId assetTokenAddress revenueTokenAddress ownerAddress")
       .populate("investor", "name email");
 
     if (!investment) {
@@ -219,7 +226,7 @@ export const getRentorCampaigns = async (req, res) => {
     const vehicleIds = vehicles.map((v) => v._id);
 
     const campaigns = await Campaign.find({ vehicle: { $in: vehicleIds } })
-      .populate("vehicle", "brand model year image pricePerDay location description fundraising category")
+      .populate("vehicle", "brand model year image pricePerDay location description fundraising category vehicleNftId assetTokenAddress revenueTokenAddress ownerAddress")
       .sort({ createdAt: -1 });
 
     res.json({ success: true, data: campaigns });
@@ -389,6 +396,8 @@ export const updateCampaign = async (req, res) => {
       if (targetAmount !== undefined) vehicle.fundraising.targetAmount = targetAmount;
       if (expectedROI !== undefined) vehicle.fundraising.expectedROI = expectedROI;
       if (minInvestment !== undefined) vehicle.fundraising.minInvestment = minInvestment;
+      if (campaign.endDate) vehicle.fundraising.endDate = campaign.endDate;
+      if (campaign.startDate) vehicle.fundraising.startDate = campaign.startDate;
       await vehicle.save();
     }
 
@@ -443,13 +452,19 @@ export const cancelCampaign = async (req, res) => {
     campaign.currentAmount = 0;
     await campaign.save();
 
-    // Reset vehicle fundraising data
+    // Reset vehicle fundraising data and clear investment tokens
+    // (VehicleNFT registration persists — the vehicle is still on-chain,
+    //  but tokens must be redeployed for a new campaign with new investors)
     const vehicle = await Car.findById(campaign.vehicle);
-    if (vehicle && vehicle.fundraising) {
-      vehicle.fundraising.active = false;
-      vehicle.fundraising.currentAmount = 0;
-      vehicle.fundraising.investorCount = 0;
-      vehicle.fundraising.investors = [];
+    if (vehicle) {
+      if (vehicle.fundraising) {
+        vehicle.fundraising.active = false;
+        vehicle.fundraising.currentAmount = 0;
+        vehicle.fundraising.investorCount = 0;
+        vehicle.fundraising.investors = [];
+      }
+      vehicle.assetTokenAddress = null;
+      vehicle.revenueTokenAddress = null;
       await vehicle.save();
     }
 
@@ -462,6 +477,297 @@ export const cancelCampaign = async (req, res) => {
     });
   } catch (error) {
     console.error("Cancel campaign error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Record rentor co-investment deposit (after on-chain confirmation)
+// @route   POST /api/investments/campaign/:campaignId/co-invest
+// @access  Private
+export const recordRentorCoInvestment = async (req, res) => {
+  try {
+    const { amount, txHash } = req.body;
+
+    const campaign = await Campaign.findById(req.params.campaignId);
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: "Campaign not found" });
+    }
+
+    // Only the rentor who owns the campaign can record their co-investment
+    if (campaign.rentor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
+    if (campaign.fundraisingType !== "co_invest") {
+      return res.status(400).json({
+        success: false,
+        message: "Campaign is not a co-invest type",
+      });
+    }
+
+    if (campaign.rentorDepositedOnChain) {
+      return res.status(400).json({
+        success: false,
+        message: "Co-investment already recorded",
+      });
+    }
+
+    // Update campaign
+    campaign.rentorDepositedOnChain = true;
+    campaign.rentorDepositTxHash = txHash;
+
+    // Add rentor's amount to currentAmount
+    campaign.currentAmount += amount;
+    if (campaign.currentAmount >= campaign.targetAmount) {
+      campaign.status = "funded";
+    }
+    await campaign.save();
+
+    // Create an Investment record for the rentor
+    const investment = await Investment.create({
+      investor: req.user._id,
+      vehicle: campaign.vehicle,
+      amount,
+      status: "active",
+      investedAt: new Date(),
+      txHash,
+    });
+
+    // Update vehicle fundraising data
+    const vehicle = await Car.findById(campaign.vehicle);
+    if (vehicle && vehicle.fundraising) {
+      vehicle.fundraising.currentAmount += amount;
+      if (!vehicle.fundraising.investors.includes(req.user._id)) {
+        vehicle.fundraising.investors.push(req.user._id);
+      }
+      await vehicle.save();
+    }
+
+    res.json({
+      success: true,
+      message: "Rentor co-investment recorded",
+      data: { campaign, investment },
+    });
+  } catch (error) {
+    console.error("Record co-investment error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Record milestone completion (after on-chain tx)
+// @route   POST /api/investments/vehicle/:vehicleNftId/milestone-completed
+// @access  Private (admin)
+export const recordMilestoneCompleted = async (req, res) => {
+  try {
+    const { vehicleNftId } = req.params;
+    const { milestoneName, txHash } = req.body;
+
+    const car = await Car.findOne({ vehicleNftId: parseInt(vehicleNftId) });
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+
+    // Store milestone completion in campaign
+    const campaign = await Campaign.findOne({
+      vehicle: car._id,
+      status: { $in: ["active", "funded"] },
+    });
+
+    if (campaign) {
+      if (!campaign.completedMilestones) campaign.completedMilestones = [];
+      if (!campaign.completedMilestones.includes(milestoneName)) {
+        campaign.completedMilestones.push(milestoneName);
+      }
+      if (txHash) campaign.lastMilestoneTxHash = txHash;
+      await campaign.save();
+    }
+
+    res.json({ success: true, message: "Milestone recorded" });
+  } catch (error) {
+    console.error("Record milestone error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Record funds released + tokens minted (after on-chain tx)
+// @route   POST /api/investments/vehicle/:vehicleNftId/funds-released
+// @access  Private (admin)
+export const recordFundsReleased = async (req, res) => {
+  try {
+    const { vehicleNftId } = req.params;
+    const { txHash } = req.body;
+
+    const car = await Car.findOne({ vehicleNftId: parseInt(vehicleNftId) });
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+
+    // Update campaign status
+    const campaign = await Campaign.findOne({
+      vehicle: car._id,
+      status: { $in: ["active", "funded"] },
+    });
+
+    if (campaign) {
+      campaign.status = "funded";
+      campaign.fundsReleasedAt = new Date();
+      campaign.fundsReleaseTxHash = txHash;
+      await campaign.save();
+    }
+
+    // Update all active investments for this vehicle
+    await Investment.updateMany(
+      { vehicle: car._id, status: "active" },
+      { $set: { fundsReleased: true, fundsReleaseTxHash: txHash } }
+    );
+
+    // Notify all investors
+    const investments = await Investment.find({ vehicle: car._id, status: "active" }).populate("investor", "name");
+    for (const inv of investments) {
+      await Notification.create({
+        userId: inv.investor._id,
+        type: "investment_update",
+        title: "Funds Released & Tokens Minted",
+        message: `Milestones for ${car.brand} ${car.model} are complete. Your investment funds have been released and tokens minted.`,
+        link: `/investor/investment/${inv._id}`,
+        metadata: { vehicleId: car._id, investmentId: inv._id },
+      });
+    }
+
+    res.json({ success: true, message: "Funds release recorded, investors notified" });
+  } catch (error) {
+    console.error("Record funds released error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Record revenue distribution (after on-chain tx)
+// @route   POST /api/investments/vehicle/:vehicleNftId/revenue-distributed
+// @access  Private (admin)
+export const recordRevenueDistributed = async (req, res) => {
+  try {
+    const { vehicleNftId } = req.params;
+    const { amountEth, txHash } = req.body;
+
+    const car = await Car.findOne({ vehicleNftId: parseInt(vehicleNftId) });
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+
+    // Get active investments for this vehicle
+    const investments = await Investment.find({ vehicle: car._id, status: "active" });
+    const totalInvested = investments.reduce((sum, inv) => sum + inv.amount, 0);
+
+    // Distribute proportionally to each investor
+    for (const inv of investments) {
+      const share = totalInvested > 0 ? inv.amount / totalInvested : 0;
+      const revenueShare = (amountEth || 0) * share;
+      inv.totalRevenueEarned = (inv.totalRevenueEarned || 0) + revenueShare;
+      inv.lastDistribution = new Date();
+      await inv.save();
+    }
+
+    res.json({ success: true, message: "Revenue distribution recorded" });
+  } catch (error) {
+    console.error("Record revenue distribution error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Record revenue claimed by investor (after on-chain tx)
+// @route   POST /api/investments/vehicle/:vehicleNftId/revenue-claimed
+// @access  Private
+export const recordRevenueClaimed = async (req, res) => {
+  try {
+    const { vehicleNftId } = req.params;
+    const { amountEth, txHash } = req.body;
+
+    const car = await Car.findOne({ vehicleNftId: parseInt(vehicleNftId) });
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+
+    // Find this investor's investment for this vehicle
+    const investment = await Investment.findOne({
+      vehicle: car._id,
+      investor: req.user._id,
+      status: "active",
+    });
+
+    if (investment) {
+      investment.totalRevenueEarned = (investment.totalRevenueEarned || 0) + (amountEth || 0);
+      investment.lastDistribution = new Date();
+      await investment.save();
+    }
+
+    res.json({ success: true, message: "Revenue claim recorded" });
+  } catch (error) {
+    console.error("Record revenue claimed error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Record token transfer (after on-chain tx)
+// @route   POST /api/investments/record-transfer
+// @access  Private
+export const recordTokenTransfer = async (req, res) => {
+  try {
+    const { tokenAddress, recipientAddress, amount, txHash } = req.body;
+
+    // Find vehicle by token address
+    const car = await Car.findOne({
+      $or: [
+        { assetTokenAddress: tokenAddress },
+        { revenueTokenAddress: tokenAddress },
+      ],
+    });
+
+    if (!car) {
+      return res.json({ success: true, message: "Transfer noted (vehicle not found)" });
+    }
+
+    // Notify the sender's investment record
+    const investment = await Investment.findOne({
+      vehicle: car._id,
+      investor: req.user._id,
+      status: "active",
+    });
+
+    if (investment) {
+      if (!investment.transferHistory) investment.transferHistory = [];
+      investment.transferHistory.push({
+        to: recipientAddress,
+        amount,
+        txHash,
+        date: new Date(),
+      });
+      await investment.save();
+    }
+
+    res.json({ success: true, message: "Transfer recorded" });
+  } catch (error) {
+    console.error("Record transfer error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Record dispute resolution (after on-chain tx)
+// @route   POST /api/investments/record-dispute-resolution
+// @access  Private (admin)
+export const recordDisputeResolution = async (req, res) => {
+  try {
+    const { disputeId, paymentId, outcome, refundAmount, txHash } = req.body;
+
+    // If outcome favors payer (refund), update investment status
+    if (outcome === 1 && refundAmount > 0) {
+      // Find investment by payment-related data
+      // Since we don't have a direct mapping, log for now
+      console.log(`Dispute #${disputeId} resolved: outcome=${outcome}, refund=${refundAmount}`);
+    }
+
+    res.json({ success: true, message: "Dispute resolution recorded" });
+  } catch (error) {
+    console.error("Record dispute resolution error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

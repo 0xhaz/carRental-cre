@@ -2,6 +2,7 @@ import Car from "../models/Car.js";
 import User from "../models/User.js";
 import Campaign from "../models/Campaign.js";
 import Investment from "../models/Investment.js";
+import Notification from "../models/Notification.js";
 import imageKit from "../configs/imageKit.js";
 import fs from "fs";
 import Booking from "../models/Booking.js";
@@ -285,6 +286,57 @@ export const setVehicleNftId = async (req, res) => {
   }
 };
 
+// API to save deployed token addresses after on-chain deployment
+export const setVehicleTokens = async (req, res) => {
+  try {
+    const { _id } = req.user;
+    const { vehicleId } = req.params;
+    const { assetTokenAddress, revenueTokenAddress } = req.body;
+
+    if (!assetTokenAddress || !revenueTokenAddress) {
+      return res.status(400).json({
+        success: false,
+        message: "Both assetTokenAddress and revenueTokenAddress are required",
+      });
+    }
+
+    const car = await Car.findById(vehicleId);
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+
+    if (!car.owner || car.owner.toString() !== _id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
+    car.assetTokenAddress = assetTokenAddress;
+    car.revenueTokenAddress = revenueTokenAddress;
+    await car.save();
+
+    // Notify admin users about pending token registration
+    try {
+      const admins = await User.find({ role: "admin" });
+      for (const admin of admins) {
+        await Notification.create({
+          userId: admin._id,
+          type: "token_registration_pending",
+          title: "Token Registration Needed",
+          message: `Vehicle "${car.brand} ${car.model}" (NFT #${car.vehicleNftId}) has tokens deployed and needs on-chain registration.`,
+          link: "/admin/milestones",
+          metadata: { vehicleId: car._id },
+        });
+      }
+    } catch (notifError) {
+      console.error("Failed to send admin notification:", notifError.message);
+    }
+
+    res.json({ success: true, message: "Token addresses saved", data: car });
+  } catch (error) {
+    console.error("Set vehicle tokens error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // API to update user profile
 export const updateUserImage = async (req, res) => {
   try {
@@ -308,5 +360,127 @@ export const updateUserImage = async (req, res) => {
   } catch (error) {
     console.log(error.message);
     res.json({ success: false, message: error.message });
+  }
+};
+
+// Get vehicles that have tokens deployed and need admin registration
+export const getVehiclesPendingRegistration = async (req, res) => {
+  try {
+    const cars = await Car.find({
+      vehicleNftId: { $ne: null },
+      assetTokenAddress: { $ne: null },
+      revenueTokenAddress: { $ne: null },
+      tokenRegistrationComplete: { $ne: true },
+    }).populate("owner", "name walletAddress");
+    res.json({ success: true, data: cars });
+  } catch (error) {
+    console.error("Get pending registrations error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Mark token registration as complete and notify the rentor
+export const completeTokenRegistration = async (req, res) => {
+  try {
+    const { vehicleId } = req.params;
+    const car = await Car.findById(vehicleId).populate("owner");
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+
+    // Mark registration as complete on the vehicle
+    car.tokenRegistrationComplete = true;
+    await car.save();
+
+    await Notification.create({
+      userId: car.owner._id,
+      type: "token_registration_complete",
+      title: "Token Registration Complete",
+      message: `Your vehicle "${car.brand} ${car.model}" tokens have been registered on-chain. Investors can now participate.`,
+      link: `/rentor/vehicle/${car._id}`,
+      metadata: { vehicleId: car._id },
+    });
+
+    res.json({ success: true, message: "Registration complete notification sent" });
+  } catch (error) {
+    console.error("Complete token registration error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Upload milestone documents for a vehicle
+export const uploadMilestoneDocuments = async (req, res) => {
+  try {
+    const { vehicleId } = req.params;
+    const car = await Car.findById(vehicleId);
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+
+    // Verify ownership
+    if (car.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: "No files uploaded" });
+    }
+
+    // Process each uploaded file
+    for (const file of req.files) {
+      const milestoneName = file.fieldname; // fieldname is the milestone name
+
+      // Remove existing document for this milestone (replace)
+      car.milestoneDocuments = car.milestoneDocuments.filter(
+        (doc) => doc.milestoneName !== milestoneName
+      );
+
+      // Add new document
+      car.milestoneDocuments.push({
+        milestoneName,
+        filename: file.filename,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+        url: `/uploads/milestones/${file.filename}`,
+        uploadedAt: new Date(),
+      });
+    }
+
+    await car.save();
+    res.json({ success: true, data: car.milestoneDocuments });
+  } catch (error) {
+    console.error("Upload milestone documents error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get milestone documents for a vehicle
+export const getMilestoneDocuments = async (req, res) => {
+  try {
+    const { vehicleId } = req.params;
+    const car = await Car.findById(vehicleId);
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+    res.json({ success: true, data: car.milestoneDocuments || [] });
+  } catch (error) {
+    console.error("Get milestone documents error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Look up a vehicle by on-chain NFT ID
+export const getVehicleByNftId = async (req, res) => {
+  try {
+    const { nftId } = req.params;
+    const car = await Car.findOne({ vehicleNftId: parseInt(nftId) });
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+    res.json({ success: true, data: car });
+  } catch (error) {
+    console.error("Get vehicle by NFT ID error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -31,7 +31,7 @@ export function WalletAuthModal({
   const [currentMode, setCurrentMode] = useState<"login" | "register">(mode);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
-  const [role, setRole] = useState<UserRole>("renter");
+  const [role, setRole] = useState<UserRole>(UserRole.RENTER);
 
   if (!isOpen) return null;
 
@@ -224,7 +224,7 @@ export function WalletAuthModal({
                 setCurrentMode(currentMode === "login" ? "register" : "login");
                 setShowForm(false);
                 setName("");
-                setRole("renter");
+                setRole(UserRole.RENTER);
               }}
               className="ml-2 text-primary hover:text-primary-dull font-semibold"
               disabled={isLoading}

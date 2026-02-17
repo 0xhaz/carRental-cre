@@ -3,13 +3,16 @@ export enum InvestmentStatus {
   ACTIVE = 'active',
   LOCKED = 'locked',
   COMPLETED = 'completed',
+  REFUNDED = 'refunded',
+  CANCELLED = 'cancelled',
 }
 
 export interface Investment {
   _id: string;
   investor: string; // User ID
-  vehicle: string; // Vehicle ID
+  vehicle: string; // Vehicle ID (or populated Vehicle object)
   amount: number;
+  amountEth?: number;
 
   // Token holdings (will be on-chain later)
   assetTokens?: number;
@@ -26,6 +29,9 @@ export interface Investment {
 
   // Status
   status: InvestmentStatus;
+
+  // Blockchain
+  txHash?: string;
 
   createdAt: Date;
   updatedAt: Date;

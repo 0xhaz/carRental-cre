@@ -47,7 +47,7 @@ Separate **ownership rights** (AssetToken) from **revenue rights** (RevenueToken
 - **Transfer Restrictions**: Lock-ups, velocity limits, large transfer detection
 - **Renter Compliance**: Age, license, insurance, credit score validation
 
-## System Overview (32 Contracts)
+## System Overview (34 Contracts)
 
 ### Deployment Phases
 
@@ -59,17 +59,25 @@ Phase 4: Identity Registry              → Address-to-identity mapping
 Phase 5: Vehicle & Rental               → VehicleNFT, RentalBooking, RentalOperations
 Phase 6: Payment System (Native ETH)    → 2x payment protocols, 2x escrows, 2x refund managers, dispute resolver
 Phase 7: Revenue & Investor             → Revenue distributor, investor request manager, MultiSigWallet
-Phase 8: CRE Receivers                  → 4 Chainlink CRE bridge contracts
+Phase 8: CRE Receivers                  → 5 Chainlink CRE bridge contracts (incl. CampaignMonitor)
+Phase 9: Token Factories                → AssetTokenFactory, RevenueTokenFactory
 ```
 
 ### Key Flows
+
+**Vehicle Setup Flow** (prerequisite):
+```
+Rentor → Mint VehicleNFT → Deploy AssetToken + RevenueToken via factories
+  → Admin registers tokens on PaymentProtocol + RevenueDistributor
+  → Admin sets rentor as vehicle operator → Vehicle ready for investment
+```
 
 **Investment Flow**:
 ```
 Investor → OnchainID verified → Request investor status → Lock ETH
   → Admin approves → Invest in vehicle{value: ETH}
   → Milestones completed → Funds released to rentor
-  → AssetToken + RevenueToken minted → Earn rental revenue
+  → AssetToken + RevenueToken minted (1:1 with ETH invested) → Earn rental revenue
 ```
 
 **Rental Flow**:
@@ -199,18 +207,26 @@ Four receiver contracts bridge off-chain CRE computations to on-chain state chan
 ## Implementation Status
 
 ### Completed
-- [x] 32 smart contracts written and compiled
-- [x] 8-phase deployment scripts (Foundry)
+- [x] 34 smart contracts written and compiled
+- [x] 9-phase deployment scripts (Foundry)
 - [x] Native ETH payment system (migrated from ERC-20)
 - [x] Tiered investor onboarding (RETAIL direct lock, ACCREDITED/INSTITUTIONAL MultiSig)
-- [x] Chainlink CRE receiver contracts
+- [x] Chainlink CRE receiver contracts (incl. CampaignMonitor)
+- [x] Token factory contracts (AssetTokenFactory + RevenueTokenFactory)
 - [x] Address extraction tooling
-- [x] Sepolia testnet deployment
+- [x] Sepolia testnet deployment (all 34 contracts)
 - [x] Architecture documentation
+- [x] Frontend integration (Next.js + wagmi v2)
+  - Token deployment UI (rentor deploys per-vehicle tokens)
+  - Token registration wizard (admin registers tokens on PaymentProtocol + RevenueDistributor)
+  - Milestone management admin page (complete milestones, release funds)
+  - Revenue admin page (add revenue, distribute, waterfall preview)
+  - Operator fee withdrawal (rentor claims operator fees)
+  - On-chain rental booking (crypto payment via RentalPaymentProtocol)
+  - Investment portfolio + revenue claiming (investor dashboard)
+- [x] Backend API (Node.js/Express + MongoDB)
 
 ### In Progress
-- [ ] Frontend integration (Next.js)
-- [ ] Backend API (Node.js)
 - [ ] Unit test coverage
 - [ ] Integration tests
 

@@ -7,6 +7,7 @@ export enum VehicleStatus {
 
 export interface FundraisingInfo {
   active: boolean;
+  campaignId?: string;
   targetAmount: number;
   currentAmount: number;
   minInvestment: number;
@@ -14,6 +15,8 @@ export interface FundraisingInfo {
   expectedROI: number;
   investorCount: number;
   investors: string[]; // User IDs (will become wallet addresses)
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface RevenueInfo {
@@ -21,6 +24,17 @@ export interface RevenueInfo {
   distributed: number;
   pending: number;
   lastDistribution?: Date;
+}
+
+export interface MilestoneDocument {
+  _id?: string;
+  milestoneName: string;
+  filename: string;
+  originalName: string;
+  mimeType?: string;
+  size?: number;
+  url: string;
+  uploadedAt: string;
 }
 
 export interface Vehicle {
@@ -51,6 +65,8 @@ export interface Vehicle {
   ownerAddress?: string; // Rentor's wallet address
   assetTokenAddress?: string;
   revenueTokenAddress?: string;
+  tokenRegistrationComplete?: boolean;
+  milestoneDocuments?: MilestoneDocument[];
 
   // NEW: Status
   status?: VehicleStatus;

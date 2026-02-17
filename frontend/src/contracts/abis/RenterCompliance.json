@@ -1,0 +1,808 @@
+{
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "_identityRegistry",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_owner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "blacklistRenter",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "getBlacklistReason",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "reason",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getIncidentCount",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "months",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "count",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getRenterProfile",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "profile",
+          "type": "tuple",
+          "internalType": "struct IRenterCompliance.RenterProfile",
+          "components": [
+            {
+              "name": "hasValidIdentity",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "age",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "hasDriverLicense",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "driverLicenseExpiry",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "hasInsurance",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "insuranceExpiry",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "creditScoreTier",
+              "type": "uint8",
+              "internalType": "enum IRenterCompliance.CreditScoreTier"
+            },
+            {
+              "name": "incidentCount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "isBlacklisted",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getRenterRequirements",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "requirements",
+          "type": "tuple",
+          "internalType": "struct IRenterCompliance.RenterRequirements",
+          "components": [
+            {
+              "name": "minimumAge",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "minimumCreditScoreTier",
+              "type": "uint8",
+              "internalType": "enum IRenterCompliance.CreditScoreTier"
+            },
+            {
+              "name": "maxIncidentCount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "requireInsurance",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "requireDriverLicense",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "identityRegistry",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract IIdentityRegistry"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isAuthorizedOperator",
+      "inputs": [
+        {
+          "name": "operator",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "authorized",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isRenterBlacklisted",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isBlacklisted",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "owner",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "recordIncident",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "vehicleId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "incidentType",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "removeRenterFromBlacklist",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "renounceOwnership",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setAuthorizedOperator",
+      "inputs": [
+        {
+          "name": "operator",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "authorized",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setIdentityRegistry",
+      "inputs": [
+        {
+          "name": "_identityRegistry",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setRenterRequirements",
+      "inputs": [
+        {
+          "name": "requirements",
+          "type": "tuple",
+          "internalType": "struct IRenterCompliance.RenterRequirements",
+          "components": [
+            {
+              "name": "minimumAge",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "minimumCreditScoreTier",
+              "type": "uint8",
+              "internalType": "enum IRenterCompliance.CreditScoreTier"
+            },
+            {
+              "name": "maxIncidentCount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "requireInsurance",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "requireDriverLicense",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ]
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "transferOwnership",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "validateAge",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isValid",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "age",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "validateCreditScore",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isValid",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "creditTier",
+          "type": "uint8",
+          "internalType": "enum IRenterCompliance.CreditScoreTier"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "validateDriverLicense",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isValid",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "expiryTime",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "validateIncidentHistory",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isValid",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "incidentCount",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "validateInsurance",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isValid",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "expiryTime",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "validateRenter",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "tuple",
+          "internalType": "struct IRenterCompliance.RenterValidationResult",
+          "components": [
+            {
+              "name": "isValid",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "reason",
+              "type": "uint8",
+              "internalType": "enum IRenterCompliance.RenterValidationReason"
+            },
+            {
+              "name": "renterProfile",
+              "type": "tuple",
+              "internalType": "struct IRenterCompliance.RenterProfile",
+              "components": [
+                {
+                  "name": "hasValidIdentity",
+                  "type": "bool",
+                  "internalType": "bool"
+                },
+                {
+                  "name": "age",
+                  "type": "uint8",
+                  "internalType": "uint8"
+                },
+                {
+                  "name": "hasDriverLicense",
+                  "type": "bool",
+                  "internalType": "bool"
+                },
+                {
+                  "name": "driverLicenseExpiry",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "hasInsurance",
+                  "type": "bool",
+                  "internalType": "bool"
+                },
+                {
+                  "name": "insuranceExpiry",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "creditScoreTier",
+                  "type": "uint8",
+                  "internalType": "enum IRenterCompliance.CreditScoreTier"
+                },
+                {
+                  "name": "incidentCount",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "isBlacklisted",
+                  "type": "bool",
+                  "internalType": "bool"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "event",
+      "name": "IncidentRecorded",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "vehicleId",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "incidentType",
+          "type": "string",
+          "indexed": false,
+          "internalType": "string"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "OwnershipTransferred",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RenterBlacklisted",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "indexed": false,
+          "internalType": "string"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RenterRemovedFromBlacklist",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RenterRequirementsUpdated",
+      "inputs": [
+        {
+          "name": "minimumAge",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "uint8"
+        },
+        {
+          "name": "minimumCreditScoreTier",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "enum IRenterCompliance.CreditScoreTier"
+        },
+        {
+          "name": "maxIncidentCount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RenterValidated",
+      "inputs": [
+        {
+          "name": "renter",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "isValid",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        },
+        {
+          "name": "reason",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "enum IRenterCompliance.RenterValidationReason"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "OwnableInvalidOwner",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "OwnableUnauthorizedAccount",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "ReentrancyGuardReentrantCall",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RenterCompliance__AgeRequirementNotMet",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RenterCompliance__CreditScoreTooLow",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RenterCompliance__DriverLicenseInvalid",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RenterCompliance__InsuranceNotVerified",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RenterCompliance__InvalidAddress",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RenterCompliance__InvalidIdentityRegistry",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RenterCompliance__InvalidOracleManager",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RenterCompliance__RenterBlacklisted",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RenterCompliance__RenterNotVerified",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RenterCompliance__TooManyIncidents",
+      "inputs": []
+    }
+  ]
+}

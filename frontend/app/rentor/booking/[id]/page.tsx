@@ -10,7 +10,7 @@ import {
   CardContent,
   Badge,
 } from "@/components/ui";
-import { generateMockBookings, generateMockVehicles } from "@/lib/mockData";
+import { bookingApi } from "@/lib/api";
 import { Booking, Vehicle } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Image from "next/image";
@@ -23,47 +23,80 @@ export default function RentorBookingDetailPage() {
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [renterInfo, setRenterInfo] = useState<{ name: string; email: string; walletAddress?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadBooking = async () => {
       setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      try {
+        const res = await bookingApi.getById(bookingId);
+        if (res.success && res.data) {
+          setBooking(res.data);
 
-      // Find booking from mock data
-      const mockBookings = generateMockBookings(20);
-      const foundBooking = mockBookings.find((b) => b._id === bookingId);
+          // Backend populates car as a full Vehicle object
+          if (typeof res.data.car === "object") {
+            setVehicle(res.data.car as unknown as Vehicle);
+          }
 
-      if (foundBooking) {
-        setBooking(foundBooking);
-
-        // Find associated vehicle
-        const mockVehicles = generateMockVehicles(20);
-        const foundVehicle = mockVehicles.find((v) => v._id === foundBooking.car);
-        if (foundVehicle) {
-          setVehicle(foundVehicle);
+          // Backend populates user with name, email, walletAddress
+          if (typeof res.data.user === "object") {
+            setRenterInfo(res.data.user as unknown as { name: string; email: string; walletAddress?: string });
+          }
+        } else {
+          toast.error("Booking not found");
         }
+      } catch (error) {
+        console.error("Failed to load booking:", error);
+        toast.error("Failed to load booking details");
+      } finally {
+        setIsLoading(false);
       }
-
-      setIsLoading(false);
     };
 
     loadBooking();
   }, [bookingId]);
 
-  const handleApprove = () => {
-    toast.success("Booking approved successfully!");
-    setBooking((prev) => (prev ? { ...prev, status: "confirmed" as any } : null));
+  const handleApprove = async () => {
+    try {
+      const res = await bookingApi.changeStatus(bookingId, "confirmed");
+      if (res.success) {
+        toast.success("Booking approved successfully!");
+        setBooking((prev) => (prev ? { ...prev, status: "confirmed" as any } : null));
+      } else {
+        toast.error("Failed to approve booking");
+      }
+    } catch (error) {
+      toast.error("Failed to approve booking");
+    }
   };
 
-  const handleReject = () => {
-    toast.success("Booking rejected");
-    setBooking((prev) => (prev ? { ...prev, status: "cancelled" as any } : null));
+  const handleReject = async () => {
+    try {
+      const res = await bookingApi.changeStatus(bookingId, "cancelled");
+      if (res.success) {
+        toast.success("Booking rejected");
+        setBooking((prev) => (prev ? { ...prev, status: "cancelled" as any } : null));
+      } else {
+        toast.error("Failed to reject booking");
+      }
+    } catch (error) {
+      toast.error("Failed to reject booking");
+    }
   };
 
-  const handleMarkComplete = () => {
-    toast.success("Booking marked as completed!");
-    setBooking((prev) => (prev ? { ...prev, status: "completed" as any } : null));
+  const handleMarkComplete = async () => {
+    try {
+      const res = await bookingApi.changeStatus(bookingId, "completed");
+      if (res.success) {
+        toast.success("Booking marked as completed!");
+        setBooking((prev) => (prev ? { ...prev, status: "completed" as any } : null));
+      } else {
+        toast.error("Failed to complete booking");
+      }
+    } catch (error) {
+      toast.error("Failed to complete booking");
+    }
   };
 
   const handleContactRenter = () => {
@@ -117,28 +150,24 @@ export default function RentorBookingDetailPage() {
     new Date(booking.pickupDate) <= new Date() &&
     new Date(booking.returnDate) >= new Date();
 
-  // Mock renter information
-  const renter = {
-    name: "John Doe",
-    email: "john.doe@example.com",
-    phone: "+1 (555) 123-4567",
-    walletAddress: "0x" + Math.random().toString(16).slice(2, 42),
-    totalBookings: Math.floor(Math.random() * 20) + 1,
-    joinDate: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000),
-  };
+  const duration = Math.ceil(
+    (new Date(booking.returnDate).getTime() - new Date(booking.pickupDate).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
 
-  // Mock booking timeline
+  // Build timeline from real data
+  const createdAt = new Date(booking.createdAt);
   const timeline = [
     {
       status: "Booking Created",
-      date: new Date(booking.pickupDate.getTime() - 7 * 24 * 60 * 60 * 1000),
+      date: createdAt,
       description: "Renter submitted booking request",
     },
     ...(booking.status !== "pending"
       ? [
           {
             status: booking.status === "cancelled" ? "Booking Rejected" : "Booking Confirmed",
-            date: new Date(booking.pickupDate.getTime() - 5 * 24 * 60 * 60 * 1000),
+            date: new Date(booking.updatedAt),
             description:
               booking.status === "cancelled"
                 ? "Booking request was rejected"
@@ -150,22 +179,17 @@ export default function RentorBookingDetailPage() {
       ? [
           {
             status: "Vehicle Picked Up",
-            date: booking.pickupDate,
+            date: new Date(booking.pickupDate),
             description: "Renter picked up the vehicle",
           },
           {
             status: "Vehicle Returned",
-            date: booking.returnDate,
+            date: new Date(booking.returnDate),
             description: "Vehicle returned successfully",
           },
         ]
       : []),
   ];
-
-  const duration = Math.ceil(
-    (new Date(booking.returnDate).getTime() - new Date(booking.pickupDate).getTime()) /
-      (1000 * 60 * 60 * 24)
-  );
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -287,32 +311,20 @@ export default function RentorBookingDetailPage() {
               <div className="space-y-4">
                 <div className="flex justify-between items-center border-b pb-3">
                   <span className="text-gray-600">Name</span>
-                  <span className="font-semibold">{renter.name}</span>
+                  <span className="font-semibold">{renterInfo?.name || "N/A"}</span>
                 </div>
                 <div className="flex justify-between items-center border-b pb-3">
                   <span className="text-gray-600">Email</span>
-                  <span className="font-semibold">{renter.email}</span>
+                  <span className="font-semibold">{renterInfo?.email || "N/A"}</span>
                 </div>
-                <div className="flex justify-between items-center border-b pb-3">
-                  <span className="text-gray-600">Phone</span>
-                  <span className="font-semibold">{renter.phone}</span>
-                </div>
-                <div className="flex justify-between items-center border-b pb-3">
-                  <span className="text-gray-600">Wallet Address</span>
-                  <span className="font-mono text-sm">
-                    {renter.walletAddress.slice(0, 6)}...{renter.walletAddress.slice(-4)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center border-b pb-3">
-                  <span className="text-gray-600">Total Bookings</span>
-                  <span className="font-semibold">{renter.totalBookings}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Member Since</span>
-                  <span className="font-semibold">
-                    {renter.joinDate.toLocaleDateString()}
-                  </span>
-                </div>
+                {renterInfo?.walletAddress && (
+                  <div className="flex justify-between items-center border-b pb-3">
+                    <span className="text-gray-600">Wallet Address</span>
+                    <span className="font-mono text-sm">
+                      {renterInfo.walletAddress.slice(0, 6)}...{renterInfo.walletAddress.slice(-4)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <Button

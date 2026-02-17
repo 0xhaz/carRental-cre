@@ -56,15 +56,29 @@ export const getInvestorUsers = async (req, res) => {
 export const submitKYC = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { roleType, personalInfo, investorInfo, businessInfo } = req.body;
+    const { roleType } = req.body;
+
+    // FormData fields arrive as JSON strings from multer — parse them
+    const personalInfo = req.body.personalInfo ? JSON.parse(req.body.personalInfo) : undefined;
+    const investorInfo = req.body.investorInfo ? JSON.parse(req.body.investorInfo) : undefined;
+    const businessInfo = req.body.businessInfo ? JSON.parse(req.body.businessInfo) : undefined;
 
     // Check if user already has a KYC submission
     let kyc = await KYC.findOne({ user: userId });
 
-    if (kyc && kyc.status === "approved") {
-      return res.status(400).json({
-        success: false,
-        message: "You already have an approved KYC. Contact support to update.",
+    // Allow resubmission even for the same approved role (e.g., wallet rebind).
+    // The update path below resets status to "pending" for admin re-review.
+    // Also reset blockchain status and compliance flag since they no longer apply.
+    if (kyc && kyc.status === "approved" && kyc.roleType === roleType) {
+      kyc.blockchainStatus = {
+        isRegisteredOnChain: false,
+        walletAddress: null,
+        identityRegistryTxHash: null,
+      };
+      kyc.markModified("blockchainStatus");
+
+      await User.findByIdAndUpdate(userId, {
+        "compliance.kycVerified": false,
       });
     }
 

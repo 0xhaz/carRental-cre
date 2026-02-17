@@ -1,18 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { useUserStore } from "@/store";
 import { authApi, kycApi } from "@/lib/api";
 import { Card, CardContent, Button, Heading, Paragraph } from "@/components/ui";
 import { InvestorTypeSelector } from "@/components/investor/InvestorTypeSelector";
+import { WorldIDVerifyButton } from "@/components/web3/WorldIDVerifyButton";
+import { MiniKit } from "@worldcoin/minikit-js";
 import { toast } from "react-hot-toast";
 import type { UserRole } from "@/types";
 
 type VerificationStep =
   | "connect-wallet"
   | "bind-wallet"
+  | "world-id"
   | "investor-type"
   | "kyc-upload"
   | "pending-approval";
@@ -24,6 +27,14 @@ const INVESTOR_TYPE_LABELS: Record<number, string> = {
 };
 
 export default function VerificationPage() {
+  return (
+    <Suspense fallback={<div className="container mx-auto px-4 py-8 text-center">Loading...</div>}>
+      <VerificationContent />
+    </Suspense>
+  );
+}
+
+function VerificationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const roleParam = searchParams.get("role") as UserRole | null;
@@ -100,8 +111,12 @@ export default function VerificationPage() {
       if (response.success) {
         setUser(response.user);
         toast.success("Wallet connected successfully!");
-        // Investors go to type selection; rentors skip to KYC
-        setCurrentStep(isInvestor ? "investor-type" : "kyc-upload");
+        // If inside World App, go to World ID step first
+        if (MiniKit.isInstalled()) {
+          setCurrentStep("world-id");
+        } else {
+          setCurrentStep(isInvestor ? "investor-type" : "kyc-upload");
+        }
       } else {
         toast.error(response.message || "Failed to bind wallet");
       }
@@ -185,6 +200,8 @@ export default function VerificationPage() {
   };
 
   // Steps configuration — investors have 5 steps, rentors have 4
+  const isMiniApp = typeof window !== "undefined" && MiniKit.isInstalled();
+
   const investorSteps = [
     {
       id: "connect-wallet",
@@ -194,8 +211,17 @@ export default function VerificationPage() {
     {
       id: "bind-wallet",
       label: "Bind Wallet",
-      completed: ["investor-type", "kyc-upload", "pending-approval"].includes(currentStep),
+      completed: ["world-id", "investor-type", "kyc-upload", "pending-approval"].includes(currentStep),
     },
+    ...(isMiniApp
+      ? [
+          {
+            id: "world-id",
+            label: "World ID",
+            completed: ["investor-type", "kyc-upload", "pending-approval"].includes(currentStep),
+          },
+        ]
+      : []),
     {
       id: "investor-type",
       label: "Investor Type",
@@ -222,8 +248,17 @@ export default function VerificationPage() {
     {
       id: "bind-wallet",
       label: "Bind Wallet",
-      completed: currentStep === "kyc-upload" || currentStep === "pending-approval",
+      completed: ["world-id", "kyc-upload", "pending-approval"].includes(currentStep),
     },
+    ...(isMiniApp
+      ? [
+          {
+            id: "world-id",
+            label: "World ID",
+            completed: ["kyc-upload", "pending-approval"].includes(currentStep),
+          },
+        ]
+      : []),
     {
       id: "kyc-upload",
       label: "KYC Verification",
@@ -424,6 +459,35 @@ export default function VerificationPage() {
                     : "receiving rental payments"}{" "}
                   and identity verification.
                 </p>
+              </div>
+            )}
+
+            {/* World ID Step (Mini App only) */}
+            {currentStep === "world-id" && (
+              <div>
+                <Heading as="h2" className="mb-4">
+                  World ID Verification
+                </Heading>
+                <Paragraph className="mb-6">
+                  Verify your personhood with World ID for enhanced security and Sybil
+                  resistance. This proves you are a unique human without revealing personal data.
+                </Paragraph>
+
+                <WorldIDVerifyButton
+                  onVerified={() => {
+                    toast.success("World ID verified successfully!");
+                    setCurrentStep(isInvestor ? "investor-type" : "kyc-upload");
+                  }}
+                />
+
+                <button
+                  onClick={() =>
+                    setCurrentStep(isInvestor ? "investor-type" : "kyc-upload")
+                  }
+                  className="w-full mt-4 text-sm text-gray-500 hover:text-gray-700 underline"
+                >
+                  Skip for now
+                </button>
               </div>
             )}
 

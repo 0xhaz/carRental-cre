@@ -8,3 +8,4 @@ export * from "./VehicleStatsCard";
 export * from "./AddVehicleModal";
 export * from "./CreateCampaignModal";
 export * from "./ManageCampaignModal";
+export * from "./MilestoneDocumentUploadModal";

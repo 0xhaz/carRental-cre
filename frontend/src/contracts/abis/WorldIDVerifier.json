@@ -1,0 +1,146 @@
+{
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        { "name": "_worldId", "type": "address", "internalType": "contract IWorldID" },
+        { "name": "_appId", "type": "string", "internalType": "string" },
+        { "name": "_actionId", "type": "string", "internalType": "string" }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "isWorldIDVerified",
+      "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
+      "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "verifyAndRegister",
+      "inputs": [
+        { "name": "signal", "type": "address", "internalType": "address" },
+        { "name": "root", "type": "uint256", "internalType": "uint256" },
+        { "name": "nullifierHash", "type": "uint256", "internalType": "uint256" },
+        { "name": "proof", "type": "uint256[8]", "internalType": "uint256[8]" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "revokeVerification",
+      "inputs": [{ "name": "user", "type": "address", "internalType": "address" }],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "verifiedCount",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "userNullifierHash",
+      "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "worldId",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "address", "internalType": "contract IWorldID" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "groupId",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "externalNullifierHash",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "owner",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "renounceOwnership",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "transferOwnership",
+      "inputs": [{ "name": "newOwner", "type": "address", "internalType": "address" }],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "WorldIDVerified",
+      "inputs": [
+        { "name": "user", "type": "address", "indexed": true, "internalType": "address" },
+        { "name": "nullifierHash", "type": "uint256", "indexed": false, "internalType": "uint256" }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "WorldIDRevoked",
+      "inputs": [
+        { "name": "user", "type": "address", "indexed": true, "internalType": "address" }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "OwnershipTransferred",
+      "inputs": [
+        { "name": "previousOwner", "type": "address", "indexed": true, "internalType": "address" },
+        { "name": "newOwner", "type": "address", "indexed": true, "internalType": "address" }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "DuplicateNullifier",
+      "inputs": [{ "name": "nullifierHash", "type": "uint256", "internalType": "uint256" }]
+    },
+    {
+      "type": "error",
+      "name": "AlreadyVerified",
+      "inputs": [{ "name": "user", "type": "address", "internalType": "address" }]
+    },
+    {
+      "type": "error",
+      "name": "NotVerified",
+      "inputs": [{ "name": "user", "type": "address", "internalType": "address" }]
+    },
+    {
+      "type": "error",
+      "name": "OwnableInvalidOwner",
+      "inputs": [{ "name": "owner", "type": "address", "internalType": "address" }]
+    },
+    {
+      "type": "error",
+      "name": "OwnableUnauthorizedAccount",
+      "inputs": [{ "name": "account", "type": "address", "internalType": "address" }]
+    }
+  ]
+}

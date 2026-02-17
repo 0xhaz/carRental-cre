@@ -5,9 +5,9 @@
  * All payments use native ETH (no ERC-20 tokens).
  */
 
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { useRentalBooking, useRentalPaymentProtocol } from "./useContracts";
-import { parseEther, formatEther } from "viem";
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useRentalBooking, useRentalOperations, useRentalPaymentProtocol } from "./useContracts";
+import { formatEther } from "viem";
 
 // ═══════════════════════════════════════════════
 // Booking Queries (RentalBooking)
@@ -279,4 +279,288 @@ export function useCreateRentalBookingPayment() {
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
   return { createPayment, hash, isConfirming, isSuccess, ...rest };
+}
+
+// ═══════════════════════════════════════════════
+// Admin Booking Actions (RentalBooking)
+// ═══════════════════════════════════════════════
+
+/**
+ * Get all booking IDs for a vehicle
+ */
+export function useVehicleBookings(vehicleId?: bigint) {
+  const { address, abi } = useRentalBooking();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getVehicleBookings",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
+    },
+  });
+}
+
+/**
+ * Get booking status by ID
+ */
+export function useBookingStatus(bookingId?: bigint) {
+  const { address, abi } = useRentalBooking();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getBookingStatus",
+    args: bookingId !== undefined ? [bookingId] : undefined,
+    query: {
+      enabled: bookingId !== undefined,
+    },
+  });
+}
+
+/**
+ * Check if a booking is overdue
+ */
+export function useIsBookingOverdue(bookingId?: bigint) {
+  const { address, abi } = useRentalBooking();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "isBookingOverdue",
+    args: bookingId !== undefined ? [bookingId] : undefined,
+    query: {
+      enabled: bookingId !== undefined,
+    },
+  });
+}
+
+/**
+ * Approve a booking (admin/approver only)
+ */
+export function useApproveBooking() {
+  const { address, abi } = useRentalBooking();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const approveBooking = (bookingId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "approveBooking",
+      args: [bookingId],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { approveBooking, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Reject a booking (admin/approver only)
+ */
+export function useRejectBooking() {
+  const { address, abi } = useRentalBooking();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const rejectBooking = (bookingId: bigint, reason: string) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "rejectBooking",
+      args: [bookingId, reason],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { rejectBooking, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Cancel a booking
+ */
+export function useCancelBooking() {
+  const { address, abi } = useRentalBooking();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const cancelBooking = (bookingId: bigint, reason: string) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "cancelBooking",
+      args: [bookingId, reason],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { cancelBooking, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Resolve a dispute on a booking (admin/arbitrator only)
+ */
+export function useResolveBookingDispute() {
+  const { address, abi } = useRentalBooking();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const resolveDispute = (bookingId: bigint, finalCharges: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "resolveDispute",
+      args: [bookingId, finalCharges],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { resolveDispute, hash, isConfirming, isSuccess, isPending, error };
+}
+
+// ═══════════════════════════════════════════════
+// Condition Reports (RentalOperations)
+// ═══════════════════════════════════════════════
+
+/**
+ * Get damage assessments for a booking
+ */
+export function useBookingDamageAssessments(bookingId?: bigint) {
+  const { address, abi } = useRentalOperations();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getBookingAssessments",
+    args: bookingId !== undefined ? [bookingId] : undefined,
+    query: {
+      enabled: bookingId !== undefined,
+    },
+  });
+}
+
+/**
+ * Get mileage driven for a booking
+ */
+export function useMileageDriven(bookingId?: bigint) {
+  const { address, abi } = useRentalOperations();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getMileageDriven",
+    args: bookingId !== undefined ? [bookingId] : undefined,
+    query: {
+      enabled: bookingId !== undefined,
+    },
+  });
+}
+
+/**
+ * Create a pre-rental condition report
+ */
+export function useCreatePreRentalReport() {
+  const { address, abi } = useRentalOperations();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const createReport = (
+    bookingId: bigint,
+    vehicleId: bigint,
+    mileage: bigint,
+    fuelLevel: number,
+    photoHashes: `0x${string}`[],
+    damageNotes: string[],
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "createPreRentalReport",
+      args: [bookingId, vehicleId, mileage, fuelLevel, photoHashes, damageNotes],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { createReport, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Create a post-rental condition report
+ */
+export function useCreatePostRentalReport() {
+  const { address, abi } = useRentalOperations();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const createReport = (
+    bookingId: bigint,
+    vehicleId: bigint,
+    mileage: bigint,
+    fuelLevel: number,
+    photoHashes: `0x${string}`[],
+    damageNotes: string[],
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "createPostRentalReport",
+      args: [bookingId, vehicleId, mileage, fuelLevel, photoHashes, damageNotes],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { createReport, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Assess damage for a booking
+ */
+export function useAssessDamage() {
+  const { address, abi } = useRentalOperations();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const assessDamage = (
+    bookingId: bigint,
+    damages: string[],
+    costs: bigint[],
+    evidenceHashes: `0x${string}`[],
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "assessDamage",
+      args: [bookingId, damages, costs, evidenceHashes],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { assessDamage, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Approve a damage assessment
+ */
+export function useApproveDamageAssessment() {
+  const { address, abi } = useRentalOperations();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const approveDamageAssessment = (
+    bookingId: bigint,
+    assessmentId: bigint,
+    finalCost: bigint,
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "approveDamageAssessment",
+      args: [bookingId, assessmentId, finalCost],
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { approveDamageAssessment, hash, isConfirming, isSuccess, isPending, error };
 }

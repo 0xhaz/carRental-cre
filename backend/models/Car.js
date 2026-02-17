@@ -29,6 +29,18 @@ const carSchema = new mongoose.Schema(
     ownerAddress: { type: String, default: null }, // Rentor's wallet address
     assetTokenAddress: { type: String, default: null },
     revenueTokenAddress: { type: String, default: null },
+    tokenRegistrationComplete: { type: Boolean, default: false },
+
+    // NEW: Milestone document uploads from rentor
+    milestoneDocuments: [{
+      milestoneName: { type: String, required: true },
+      filename: { type: String, required: true },
+      originalName: { type: String, required: true },
+      mimeType: { type: String },
+      size: { type: Number },
+      url: { type: String, required: true },
+      uploadedAt: { type: Date, default: Date.now },
+    }],
 
     // NEW: Fundraising
     fundraising: {
@@ -40,6 +52,8 @@ const carSchema = new mongoose.Schema(
       expectedROI: { type: Number, default: 0 },
       investorCount: { type: Number, default: 0 },
       investors: [{ type: ObjectId, ref: "User" }],
+      startDate: { type: Date },
+      endDate: { type: Date },
     },
 
     // NEW: Revenue tracking

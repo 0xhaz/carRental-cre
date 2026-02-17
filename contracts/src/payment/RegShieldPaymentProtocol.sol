@@ -13,6 +13,7 @@ import {IIdentityRegistry} from "../interfaces/erc3643/IIdentityRegistry.sol";
 import {IParticipantTypeRegistry} from "../interfaces/erc3643/IParticipantTypeRegistry.sol";
 import {IInvestorRequestManager} from "../interfaces/investor/IInvestorRequestManager.sol";
 import {IERC3643} from "../interfaces/erc3643/IERC3643.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 /**
  * @title RegShieldPaymentProtocol
@@ -46,8 +47,17 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
     /// @notice Total invested amount per vehicle
     mapping(uint256 => uint256) public vehicleInvestmentTotal;
 
-    /// @notice Milestone tracking for payments
+    /// @notice VehicleNFT contract reference (for ownership verification)
+    IERC721 public vehicleNFT;
+
+    /// @notice Rentor co-investment amount per vehicle (vehicleId => amount)
+    mapping(uint256 => uint256) public rentorCoInvestment;
+
+    /// @notice Milestone tracking for payments (legacy per-payment)
     mapping(uint256 => MilestoneStatus) public paymentMilestones;
+
+    /// @notice Vehicle-level milestone tracking (vehicleId => milestones)
+    mapping(uint256 => VehicleMilestoneStatus) public vehicleMilestones;
 
     /// @notice Token addresses for each vehicle (assetToken + revenueToken)
     struct VehicleTokens {
@@ -92,6 +102,19 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
         uint256 completedAt;
     }
 
+    /**
+     * @notice Vehicle-level milestone tracking
+     * @dev Milestones are vehicle events (purchase, insurance, registration) — not per-investor
+     */
+    struct VehicleMilestoneStatus {
+        bool vehicleIdentified;
+        bool purchaseVerified;
+        bool insuranceObtained;
+        bool registrationCompleted;
+        bool allFundsReleased;
+        uint256 completedAt;
+    }
+
     /*//////////////////////////////////////////////////////////////
                              EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -127,18 +150,29 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
     /// @notice Emitted when all PENDING payments for a vehicle campaign are batch-cancelled
     event CampaignPaymentsBatchCancelled(uint256 indexed vehicleId, uint256 refundedCount);
 
+    /// @notice Emitted when a vehicle-level milestone is completed
+    event VehicleMilestoneCompleted(uint256 indexed vehicleId, string milestoneName, uint256 timestamp);
+
+    /// @notice Emitted when all vehicle milestones complete and all payments are batch-released
+    event VehicleMilestonesFullyCompleted(uint256 indexed vehicleId, uint256 releasedCount, uint256 timestamp);
+
+    /// @notice Emitted when a rentor co-investment is initiated
+    event RentorCoInvestmentInitiated(
+        uint256 indexed paymentId, uint256 indexed vehicleId, address indexed rentor, uint256 amount
+    );
+
     /*//////////////////////////////////////////////////////////////
                              MODIFIERS
     //////////////////////////////////////////////////////////////*/
 
     modifier validPaymentId(uint256 paymentId) {
-        if (paymentId == 0 && paymentId > _nextPaymentId) revert PaymentProtocol__InvalidPaymentId();
+        if (paymentId == 0 || paymentId >= _nextPaymentId) revert PaymentProtocol__InvalidPaymentId();
         _;
     }
 
     modifier onlyPaymentParty(uint256 paymentId) {
         Payment storage payment = _payments[paymentId];
-        if (msg.sender != payment.payer || msg.sender != payment.payee) {
+        if (msg.sender != payment.payer && msg.sender != payment.payee) {
             revert PaymentProtocol__InvalidAddress();
         }
         _;
@@ -485,6 +519,15 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
     }
 
     /**
+     * @notice Set VehicleNFT contract reference for ownership verification
+     * @param _vehicleNFT Address of the VehicleNFT contract
+     */
+    function setVehicleNFT(address _vehicleNFT) external onlyOwner {
+        if (_vehicleNFT == address(0)) revert PaymentProtocol__InvalidAddress();
+        vehicleNFT = IERC721(_vehicleNFT);
+    }
+
+    /**
      * @notice Register token pair for a vehicle
      * @param vehicleId ID of the vehicle
      * @param _assetToken Address of the vehicle's AssetToken
@@ -585,6 +628,133 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
 
         emit PaymentInitiated(paymentId, msg.sender, rentor, amount, reason);
         emit VehicleInvestmentInitiated(paymentId, vehicleId, msg.sender, amount);
+
+        // Auto-release if vehicle milestones are already completed
+        if (_areVehicleMilestonesCompleted(vehicleId)) {
+            payment.state = PaymentState.CONFIRMED;
+            paymentEscrow.releaseEscrow(paymentId);
+            _mintInvestorTokens(paymentId, vehicleId, msg.sender, amount);
+            emit InvestmentFundsReleased(paymentId, vehicleId, amount);
+            emit PaymentConfirmed(paymentId, rentor, block.timestamp);
+        }
+    }
+
+    /**
+     * @notice Initiate rentor co-investment for a vehicle they own
+     * @dev Bypasses CannotPaySelf and investor compliance checks.
+     *      Validates rentor identity, vehicle ownership, and amount bounds.
+     * @param vehicleId ID of the vehicle (on-chain NFT token ID)
+     * @param amount Co-investment amount in ETH
+     * @param reason Description of the co-investment
+     * @return paymentId ID of the created payment
+     */
+    function initiateRentorCoInvestment(uint256 vehicleId, uint256 amount, string calldata reason)
+        external
+        payable
+        nonReentrant
+        whenNotPaused
+        returns (uint256 paymentId)
+    {
+        // Basic validations
+        if (amount <= paymentSettings.minPaymentAmount) revert PaymentProtocol__AmountBelowMinimum();
+        if (amount >= paymentSettings.maxPaymentAmount) revert PaymentProtocol__AmountExceedsMaximum();
+        if (bytes(reason).length == 0) revert PaymentProtocol__ReasonRequired();
+
+        // Validate rentor identity
+        if (!identityRegistry.isVerified(msg.sender)) {
+            revert PaymentProtocol__IdentityNotVerified();
+        }
+
+        // Validate rentor role
+        if (address(participantTypeRegistry) != address(0)) {
+            if (!participantTypeRegistry.isRentor(msg.sender)) {
+                revert PaymentProtocol__ComplianceValidationFailed();
+            }
+        }
+
+        // Validate on-chain vehicle ownership
+        if (address(vehicleNFT) != address(0)) {
+            if (vehicleNFT.ownerOf(vehicleId) != msg.sender) {
+                revert PaymentProtocol__NotVehicleOwner();
+            }
+        }
+
+        // Prevent duplicate co-investment for same vehicle
+        if (rentorCoInvestment[vehicleId] > 0) {
+            revert PaymentProtocol__RentorCoInvestmentAlreadyExists();
+        }
+
+        // Calculate escrow fee
+        uint256 escrowFee = (amount * paymentSettings.escrowFeeRate) / FEE_RATE_DENOMINATOR;
+        uint256 totalAmount = amount + escrowFee;
+
+        // Check ETH value
+        if (msg.value < totalAmount) {
+            revert PaymentProtocol__InsufficientBalance();
+        }
+
+        // Create payment record (payer == payee for co-investment)
+        paymentId = _nextPaymentId++;
+        Payment storage payment = _payments[paymentId];
+
+        payment.paymentId = paymentId;
+        payment.payer = msg.sender;
+        payment.payee = msg.sender;
+        payment.amount = amount;
+        payment.state = PaymentState.PENDING;
+        payment.createdAt = block.timestamp;
+        payment.confirmationDeadline = block.timestamp + paymentSettings.confirmationPeriod;
+        payment.disputeDeadline = 0;
+        payment.complianceHash = _generateComplianceHash(msg.sender, msg.sender, amount);
+        payment.refundable = true;
+        payment.paymentReason = reason;
+        payment.escrowAmount = totalAmount;
+
+        // Forward ETH to escrow (payer == payee == msg.sender for co-investment)
+        paymentEscrow.createEscrow{value: totalAmount}(
+            paymentId, msg.sender, msg.sender, amount, paymentSettings.confirmationPeriod + paymentSettings.disputeWindow
+        );
+
+        // Refund excess ETH
+        if (msg.value > totalAmount) {
+            (bool refunded,) = payable(msg.sender).call{value: msg.value - totalAmount}("");
+            if (!refunded) revert PaymentProtocol__ETHTransferFailed();
+        }
+
+        // Initialize milestone tracking
+        paymentMilestones[paymentId].vehicleId = vehicleId;
+
+        // Update mappings
+        _payerPayments[msg.sender].push(paymentId);
+        _payeePayments[msg.sender].push(paymentId);
+        _vehiclePayments[vehicleId].push(paymentId);
+        _paymentToVehicle[paymentId] = vehicleId;
+
+        totalPayments += 1;
+        totalVolume += amount;
+        totalInvestmentVolume += amount;
+        vehicleInvestmentTotal[vehicleId] += amount;
+
+        // Track rentor co-investment
+        rentorCoInvestment[vehicleId] = amount;
+
+        // Record investment for token minting
+        if (address(investorRequestManager) != address(0)) {
+            investorRequestManager.recordVehicleInvestment(msg.sender, vehicleId, amount);
+        }
+
+        emit PaymentInitiated(paymentId, msg.sender, msg.sender, amount, reason);
+        emit VehicleInvestmentInitiated(paymentId, vehicleId, msg.sender, amount);
+        emit RentorCoInvestmentInitiated(paymentId, vehicleId, msg.sender, amount);
+    }
+
+    /**
+     * @notice Get rentor co-investment amount for a vehicle
+     * @param vehicleId ID of the vehicle
+     * @return amount Rentor's co-investment amount
+     */
+    function getRentorCoInvestment(uint256 vehicleId) external view returns (uint256 amount) {
+        return rentorCoInvestment[vehicleId];
     }
 
     /**
@@ -629,6 +799,65 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
         }
 
         _releaseMilestoneFunds(paymentId);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    VEHICLE-LEVEL MILESTONE FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Complete a vehicle-level milestone (applies to ALL payments for this vehicle)
+     * @dev Milestones are vehicle events (car purchased, insured, registered) — not per-investor.
+     *      When all 4 milestones complete, auto-releases ALL pending payments and mints tokens.
+     * @param vehicleId ID of the vehicle
+     * @param milestone Name of the milestone completed
+     */
+    function completeVehicleMilestone(uint256 vehicleId, string calldata milestone)
+        external
+        onlyOwnerOrOperator
+        nonReentrant
+    {
+        VehicleMilestoneStatus storage milestones = vehicleMilestones[vehicleId];
+        require(!milestones.allFundsReleased, "Vehicle milestones already finalized");
+
+        bytes32 milestoneHash = keccak256(abi.encodePacked(milestone));
+
+        if (milestoneHash == keccak256("VEHICLE_IDENTIFIED")) {
+            milestones.vehicleIdentified = true;
+        } else if (milestoneHash == keccak256("PURCHASE_VERIFIED")) {
+            milestones.purchaseVerified = true;
+        } else if (milestoneHash == keccak256("INSURANCE_OBTAINED")) {
+            milestones.insuranceObtained = true;
+        } else if (milestoneHash == keccak256("REGISTRATION_COMPLETED")) {
+            milestones.registrationCompleted = true;
+        } else {
+            revert("Invalid milestone name");
+        }
+
+        emit VehicleMilestoneCompleted(vehicleId, milestone, block.timestamp);
+
+        // Auto-release ALL pending payments when all 4 milestones complete
+        if (_areVehicleMilestonesCompleted(vehicleId)) {
+            _releaseAllVehiclePayments(vehicleId);
+        }
+    }
+
+    /**
+     * @notice Get vehicle-level milestone status
+     * @param vehicleId ID of the vehicle
+     * @return VehicleMilestoneStatus struct
+     */
+    function getVehicleMilestoneStatus(uint256 vehicleId) external view returns (VehicleMilestoneStatus memory) {
+        return vehicleMilestones[vehicleId];
+    }
+
+    /**
+     * @notice Manually release all pending payments for a vehicle after milestones are complete
+     * @param vehicleId ID of the vehicle
+     */
+    function releaseAllVehiclePayments(uint256 vehicleId) external onlyOwner nonReentrant {
+        require(_areVehicleMilestonesCompleted(vehicleId), "Not all milestones completed");
+        _releaseAllVehiclePayments(vehicleId);
     }
 
     /**
@@ -735,12 +964,65 @@ contract RegShieldPaymentProtocol is IPaymentProtocol, Ownable, ReentrancyGuard,
     }
 
     /**
-     * @dev Check if all milestones are completed for a payment
+     * @dev Check if all milestones are completed for a payment (legacy per-payment)
      */
     function _areMilestonesCompleted(uint256 paymentId) internal view returns (bool) {
         MilestoneStatus storage milestones = paymentMilestones[paymentId];
         return milestones.vehicleIdentified && milestones.purchaseVerified && milestones.insuranceObtained
             && milestones.registrationCompleted;
+    }
+
+    /**
+     * @dev Check if all vehicle-level milestones are completed
+     */
+    function _areVehicleMilestonesCompleted(uint256 vehicleId) internal view returns (bool) {
+        VehicleMilestoneStatus storage m = vehicleMilestones[vehicleId];
+        return m.vehicleIdentified && m.purchaseVerified && m.insuranceObtained && m.registrationCompleted;
+    }
+
+    /**
+     * @dev Release all PENDING payments for a vehicle and mint tokens to each investor
+     */
+    function _releaseAllVehiclePayments(uint256 vehicleId) internal {
+        VehicleMilestoneStatus storage milestones = vehicleMilestones[vehicleId];
+        uint256[] storage paymentIds = _vehiclePayments[vehicleId];
+        uint256 len = paymentIds.length;
+        uint256 releasedCount = 0;
+
+        for (uint256 i = 0; i < len; i++) {
+            uint256 paymentId = paymentIds[i];
+            Payment storage payment = _payments[paymentId];
+
+            // Only release PENDING payments (skip already CONFIRMED or CANCELLED)
+            if (payment.state != PaymentState.PENDING) continue;
+
+            // Update payment state
+            payment.state = PaymentState.CONFIRMED;
+
+            // Also update legacy per-payment milestone status for consistency
+            MilestoneStatus storage pm = paymentMilestones[paymentId];
+            pm.vehicleIdentified = true;
+            pm.purchaseVerified = true;
+            pm.insuranceObtained = true;
+            pm.registrationCompleted = true;
+            pm.fundsReleased = true;
+            pm.completedAt = block.timestamp;
+
+            // Release funds from escrow
+            paymentEscrow.releaseEscrow(paymentId);
+
+            // Mint tokens to investor
+            _mintInvestorTokens(paymentId, vehicleId, payment.payer, payment.amount);
+
+            emit InvestmentFundsReleased(paymentId, vehicleId, payment.amount);
+            emit PaymentConfirmed(paymentId, payment.payee, block.timestamp);
+            releasedCount++;
+        }
+
+        milestones.allFundsReleased = true;
+        milestones.completedAt = block.timestamp;
+
+        emit VehicleMilestonesFullyCompleted(vehicleId, releasedCount, block.timestamp);
     }
 
     /**

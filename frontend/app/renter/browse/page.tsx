@@ -9,7 +9,7 @@ import {
   type VehicleFilterState,
 } from "@/components/renter";
 import { Heading, Paragraph } from "@/components/ui";
-import { generateMockVehicles } from "@/lib/mockData";
+import { vehicleApi } from "@/lib/api";
 import { Vehicle } from "@/types";
 
 const DEFAULT_FILTERS: VehicleFilterState = {
@@ -31,11 +31,16 @@ export default function RenterBrowse() {
   useEffect(() => {
     const loadVehicles = async () => {
       setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const mockVehicles = generateMockVehicles(20);
-      setVehicles(mockVehicles);
-      setIsLoading(false);
+      try {
+        const res = await vehicleApi.getAll();
+        if (res.success) {
+          setVehicles(res.data);
+        }
+      } catch (error) {
+        console.error("Failed to load vehicles:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     loadVehicles();
@@ -49,8 +54,7 @@ export default function RenterBrowse() {
         const searchLower = filters.search.toLowerCase();
         const matchesSearch =
           vehicle.brand.toLowerCase().includes(searchLower) ||
-          vehicle.model.toLowerCase().includes(searchLower) ||
-          vehicle.name?.toLowerCase().includes(searchLower);
+          vehicle.model.toLowerCase().includes(searchLower);
         if (!matchesSearch) return false;
       }
 

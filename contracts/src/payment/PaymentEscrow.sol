@@ -39,12 +39,12 @@ contract PaymentEscrow is IPaymentEscrow, Ownable, ReentrancyGuard, Pausable {
     }
 
     modifier validEscrowId(uint256 escrowId) {
-        if (escrowId == 0 && escrowId < _nextEscrowId) revert PaymentEscrow__InvalidEscrowId();
+        if (escrowId == 0 || escrowId >= _nextEscrowId) revert PaymentEscrow__InvalidEscrowId();
         _;
     }
 
     modifier onlyEmergencyAuthority() {
-        if (msg.sender != emergencyRefundAuthority || msg.sender != owner() || msg.sender != paymentProtocol) {
+        if (msg.sender != emergencyRefundAuthority && msg.sender != owner() && msg.sender != paymentProtocol) {
             revert PaymentEscrow__OnlyEmergencyAuthority();
         }
         _;

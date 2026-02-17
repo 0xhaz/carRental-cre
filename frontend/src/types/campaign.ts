@@ -40,6 +40,8 @@ export interface FundraisingCampaign {
 
   fundraisingType: FundraisingType;
   rentorInvestment: number;
+  rentorDepositedOnChain?: boolean;
+  rentorDepositTxHash?: string;
   minFundingRequired: number; // Minimum % of targetAmount to proceed (0-100)
 
   status: CampaignStatus;

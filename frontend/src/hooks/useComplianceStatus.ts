@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { useUserStore } from "@/store/userStore";
-import { useIdentityRegistry } from "./useContracts";
+import { useIdentityRegistry, useWorldIDVerifier } from "./useContracts";
 import { kycApi, type UpgradeRequest } from "@/lib/api";
 
 export interface ComplianceStatus {
@@ -22,6 +22,7 @@ export interface ComplianceStatus {
 
   // Blockchain verification status
   isVerifiedOnChain: boolean; // Identity verified in IdentityRegistry contract
+  isWorldIDVerified: boolean; // World ID proof of personhood verified
   isLoading: boolean; // Loading verification status
 
   // Overall compliance
@@ -46,6 +47,7 @@ export function useComplianceStatus(): ComplianceStatus {
   const { user } = useUserStore();
   const { address: connectedAddress, isConnected } = useAccount();
   const { address: identityRegistryAddress, abi } = useIdentityRegistry();
+  const { address: worldIDVerifierAddress, abi: worldIDAbi } = useWorldIDVerifier();
 
   const [isKYCApproved, setIsKYCApproved] = useState(false);
   const [kycStatus, setKycStatus] = useState<string | null>(null);
@@ -126,6 +128,22 @@ export function useComplianceStatus(): ComplianceStatus {
 
   const isVerifiedOnChain = isVerified === true;
 
+  // Check World ID verification status
+  const {
+    data: isWorldIDVerifiedData,
+    isLoading: isLoadingWorldID,
+  } = useReadContract({
+    address: worldIDVerifierAddress,
+    abi: worldIDAbi,
+    functionName: "isWorldIDVerified",
+    args: boundWalletAddress ? [boundWalletAddress] : undefined,
+    query: {
+      enabled: !!boundWalletAddress,
+    },
+  });
+
+  const isWorldIDVerified = isWorldIDVerifiedData === true;
+
   // Check if connected wallet matches bound wallet
   const isCorrectWalletConnected =
     isConnected &&
@@ -166,7 +184,8 @@ export function useComplianceStatus(): ComplianceStatus {
     kycStatus,
     investorType,
     isVerifiedOnChain,
-    isLoading: isLoadingKYC || isLoadingBlockchain,
+    isWorldIDVerified,
+    isLoading: isLoadingKYC || isLoadingBlockchain || isLoadingWorldID,
     isFullyCompliant,
     missingSteps,
     upgradeRequest,

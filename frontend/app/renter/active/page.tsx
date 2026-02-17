@@ -218,8 +218,8 @@ export default function ActiveRentalPage() {
               <div className="flex flex-wrap gap-3 text-sm text-gray-600 mb-4">
                 <span>📍 {vehicle.location}</span>
                 <span>🚗 {vehicle.category}</span>
-                <span>⛽ {vehicle.fuelType}</span>
-                <span>👥 {vehicle.seatingCapacity} seats</span>
+                <span>⛽ {vehicle.fuel_type}</span>
+                <span>👥 {vehicle.seating_capacity} seats</span>
               </div>
             </CardContent>
           </Card>

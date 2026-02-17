@@ -6,6 +6,8 @@
 import RenterProfile from "../models/RenterProfile.js";
 import Booking from "../models/Booking.js";
 import Car from "../models/Car.js";
+import Notification from "../models/Notification.js";
+import User from "../models/User.js";
 
 /**
  * @desc    Create or update renter profile
@@ -273,6 +275,21 @@ export const submitBooking = async (req, res) => {
     renterProfile.totalBookings += 1;
     await renterProfile.save();
 
+    // Notify the car owner about the new booking request
+    try {
+      const renter = await User.findById(userId).select("name");
+      await Notification.create({
+        userId: vehicle.owner,
+        type: "booking_new",
+        title: "New Booking Request",
+        message: `${renter?.name || "A renter"} has requested to book your ${vehicle.brand} ${vehicle.model} for ${dates.days} day(s).`,
+        link: `/rentor/booking/${booking._id}`,
+        metadata: { bookingId: booking._id, vehicleId: vehicle._id, amount: pricing.totalPrice },
+      });
+    } catch (notifError) {
+      console.error("Failed to send booking notification:", notifError.message);
+    }
+
     // Populate booking with vehicle and owner details
     await booking.populate([
       { path: "car", select: "brand model year image pricePerDay" },
@@ -397,6 +414,23 @@ export const cancelBooking = async (req, res) => {
     if (renterProfile) {
       renterProfile.cancelledBookings += 1;
       await renterProfile.save();
+    }
+
+    // Notify the car owner about the cancellation
+    try {
+      const vehicle = await Car.findById(booking.car);
+      const renter = await User.findById(userId).select("name");
+      const vehicleName = vehicle ? `${vehicle.brand} ${vehicle.model}` : "vehicle";
+      await Notification.create({
+        userId: booking.owner,
+        type: "booking_cancelled",
+        title: "Booking Cancelled",
+        message: `${renter?.name || "The renter"} has cancelled their booking for ${vehicleName}.`,
+        link: `/rentor/booking/${booking._id}`,
+        metadata: { bookingId: booking._id, vehicleId: booking.car },
+      });
+    } catch (notifError) {
+      console.error("Failed to send cancellation notification:", notifError.message);
     }
 
     res.status(200).json({

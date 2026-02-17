@@ -6,7 +6,8 @@ const investmentSchema = new mongoose.Schema(
   {
     investor: { type: ObjectId, ref: "User", required: true },
     vehicle: { type: ObjectId, ref: "Car", required: true },
-    amount: { type: Number, required: true },
+    amount: { type: Number, required: true }, // USD equivalent
+    amountEth: { type: Number, default: 0 }, // ETH amount invested on-chain
 
     // Token holdings (will be populated when blockchain integration happens)
     assetTokens: { type: Number, default: 0 },
@@ -24,7 +25,7 @@ const investmentSchema = new mongoose.Schema(
     // Status
     status: {
       type: String,
-      enum: ["pending", "active", "locked", "completed"],
+      enum: ["pending", "active", "locked", "completed", "refunded", "cancelled"],
       default: "pending",
     },
 

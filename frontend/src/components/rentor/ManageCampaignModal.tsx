@@ -36,6 +36,7 @@ export function ManageCampaignModal({ campaign, vehicle, onClose, onCampaignUpda
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isSavingNftId, setIsSavingNftId] = useState(false);
+  const [mintedTokenId, setMintedTokenId] = useState<number | null>(null);
 
   // On-chain vehicle registration
   const { address: walletAddress } = useAccount();
@@ -52,7 +53,8 @@ export function ManageCampaignModal({ campaign, vehicle, onClose, onCampaignUpda
     data: mintReceipt,
   } = useWaitForTransactionReceipt({ hash: mintHash });
 
-  const isVehicleRegistered = !!(vehicle?.vehicleNftId !== undefined && vehicle?.vehicleNftId !== null);
+  const effectiveTokenId = mintedTokenId ?? vehicle?.vehicleNftId ?? null;
+  const isVehicleRegistered = effectiveTokenId !== null && effectiveTokenId !== undefined;
 
   // After mint confirmed, parse tokenId from Transfer event and save to backend
   useEffect(() => {
@@ -89,6 +91,7 @@ export function ManageCampaignModal({ campaign, vehicle, onClose, onCampaignUpda
 
         setIsSavingNftId(true);
         await vehicleApi.setVehicleNftId(vehicle._id, tokenId, walletAddress || "");
+        setMintedTokenId(tokenId);
         toast.success(`Vehicle registered on-chain! Token ID: ${tokenId}`);
         onCampaignUpdated?.();
       } catch (error: any) {
@@ -418,25 +421,39 @@ export function ManageCampaignModal({ campaign, vehicle, onClose, onCampaignUpda
           <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Blockchain Registration</p>
           {isVehicleRegistered ? (
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600">
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600 shrink-0">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 </span>
-                <span className="text-sm text-green-700 font-medium">
-                  Token ID: {vehicle?.vehicleNftId}
-                </span>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-green-800">Vehicle Registered On-Chain</p>
+                  <p className="text-xs text-green-600">NFT Token ID: #{effectiveTokenId}</p>
+                </div>
+                {mintedTokenId && (
+                  <span className="px-2 py-0.5 bg-green-200 text-green-800 text-xs font-medium rounded-full">
+                    Just minted
+                  </span>
+                )}
               </div>
-              <Button disabled className="w-full opacity-60">
-                Registered
-              </Button>
             </div>
           ) : (
             <div className="space-y-2">
               <p className="text-xs text-gray-600">
-                Register this vehicle as an NFT on-chain to enable investor participation. You must be an operator on the VehicleNFT contract.
+                Register this vehicle as an NFT on-chain to enable investor participation. You must be an authorized operator on the VehicleNFT contract.
               </p>
+              {(isMinting || isMintConfirming || isSavingNftId) && (
+                <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
+                  <svg className="w-4 h-4 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span className="text-xs text-blue-700 font-medium">
+                    {isMinting ? "Waiting for wallet confirmation..." : isMintConfirming ? "Transaction submitted, waiting for confirmation..." : "Saving token ID to backend..."}
+                  </span>
+                </div>
+              )}
               <Button
                 onClick={handleRegisterOnChain}
                 disabled={isMinting || isMintConfirming || isSavingNftId || !walletAddress}

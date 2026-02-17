@@ -55,7 +55,7 @@ export function RevenueChart({
                 borderRadius: "8px",
                 padding: "12px",
               }}
-              formatter={(value: number | undefined, name: string) => {
+              formatter={(value: number | undefined, name?: string) => {
                 if (value === undefined) return "";
                 // Format bookings as a number, everything else as currency
                 if (name === "Bookings") {

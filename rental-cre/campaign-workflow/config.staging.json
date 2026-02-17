@@ -1,0 +1,8 @@
+{
+  "schedule": "0 */15 * * * *",
+  "paymentProtocolAddress": "0x2b246B3E17f46A8aa9F38C82C7f66f6B6BD329CC",
+  "campaignReceiverAddress": "0x84a9b21b7d2ba6120923edaa32b283fd2e35fb94",
+  "vehicleNftAddress": "0xfcE0FD3671E99D65E0FF70b30b9238bB83D91814",
+  "chainSelectorName": "ethereum-testnet-sepolia",
+  "gasLimit": "500000"
+}

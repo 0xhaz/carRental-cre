@@ -59,8 +59,8 @@ export function Header() {
           src={assets.logo}
           alt="RegShield Logo"
           className="h-8"
-          width={58}
-          height={48}
+          width={120}
+          height={32}
         />
       </Link>
 
@@ -86,14 +86,14 @@ export function Header() {
         })}
 
         {/* Search Input (Desktop) */}
-        <div className="hidden lg:flex items-center text-sm gap-2 border border-borderColor px-3 rounded-full max-w-56">
+        {/* <div className="hidden lg:flex items-center text-sm gap-2 border border-borderColor px-3 rounded-full max-w-56">
           <input
             type="text"
             className="py-1.5 w-full bg-transparent outline-none placeholder-gray-500"
             placeholder="Search vehicles"
           />
           <Image src={assets.search_icon} alt="Search" width={68} height={68} />
-        </div>
+        </div> */}
 
         {/* Notifications */}
         <NotificationBell />

@@ -106,6 +106,12 @@ extract_address "08_DeployCREReceivers" "PaymentReceiver" "PAYMENT_RECEIVER"
 extract_address "08_DeployCREReceivers" "VehicleReceiver" "VEHICLE_RECEIVER"
 extract_address "08_DeployCREReceivers" "OnboardingReceiver" "ONBOARDING_RECEIVER"
 extract_address "08_DeployCREReceivers" "CampaignMonitorReceiver" "CAMPAIGN_MONITOR_RECEIVER"
+echo "" >> $OUTPUT_FILE
+
+echo ""
+echo "Token Factories:"
+extract_address "09_DeployTokenFactory" "AssetTokenFactory" "ASSET_TOKEN_FACTORY"
+extract_address "09_DeployTokenFactory" "RevenueTokenFactory" "REVENUE_TOKEN_FACTORY"
 
 echo ""
 echo -e "${GREEN}Addresses saved to: $OUTPUT_FILE${NC}"

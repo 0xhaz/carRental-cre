@@ -1,0 +1,7 @@
+{
+  "schedule": "0 */10 * * * *",
+  "vehicleNftAddress": "0xfcE0FD3671E99D65E0FF70b30b9238bB83D91814",
+  "vehicleReceiverAddress": "0x73c58b5ba299faaa64103e453ba55b408c91e81b",
+  "chainSelectorName": "ethereum-testnet-sepolia",
+  "gasLimit": "500000"
+}

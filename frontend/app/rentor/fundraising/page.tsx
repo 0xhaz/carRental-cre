@@ -41,9 +41,8 @@ export default function RentorFundraising() {
     loadCampaigns();
   }, []);
 
-  // Split campaigns by status
+  // Filter out cancelled campaigns — they are hidden from the UI
   const activeCampaigns = campaigns.filter((c) => c.status !== "cancelled");
-  const cancelledCampaigns = campaigns.filter((c) => c.status === "cancelled");
 
   // Calculate stats from active campaigns only
   const totalRaised = activeCampaigns.reduce((sum, c) => sum + (c.currentAmount || 0), 0);
@@ -163,34 +162,6 @@ export default function RentorFundraising() {
           </div>
         )}
       </div>
-
-      {/* Cancelled Campaigns */}
-      {!isLoading && cancelledCampaigns.filter((c) => typeof c.vehicle === "object" && c.vehicle).length > 0 && (
-        <div className="mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <Heading as="h2">Cancelled Campaigns</Heading>
-            <Badge variant="error">{cancelledCampaigns.length} Cancelled</Badge>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {cancelledCampaigns
-              .filter((c) => typeof c.vehicle === "object" && c.vehicle)
-              .map((campaign) => (
-                <div key={campaign._id} className="relative opacity-60">
-                  <InvestmentCard
-                    vehicle={campaign.vehicle as unknown as Vehicle}
-                    onInvest={() => handleManageCampaign(campaign)}
-                    basePath="rentor"
-                  />
-                  <div className="absolute top-3 right-3">
-                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                      Cancelled
-                    </span>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
 
       {/* Info Card */}
       <Card className="bg-blue-50 border-blue-200">

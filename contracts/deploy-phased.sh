@@ -125,9 +125,25 @@ case $PHASE in
             --verify \
             --etherscan-api-key $ETHERSCAN_API_KEY
         ;;
+    9)
+        echo -e "${BLUE}Phase 9: Deploying Token Factories${NC}"
+        if [ -z "$IDENTITY_REGISTRY" ] || [ -z "$COMPLIANCE_RULES" ] || [ -z "$INVESTMENT_PAYMENT_PROTOCOL" ]; then
+            echo -e "${RED}Error: IDENTITY_REGISTRY, COMPLIANCE_RULES, and INVESTMENT_PAYMENT_PROTOCOL must be set in .env${NC}"
+            echo -e "${YELLOW}Run extract-addresses.sh after phases 1-6 and add them to .env${NC}"
+            exit 1
+        fi
+        forge script script/09_DeployTokenFactory.s.sol \
+            --rpc-url $SEPOLIA_RPC_URL \
+            --broadcast \
+            --slow \
+            --legacy \
+            -vv \
+            --verify \
+            --etherscan-api-key $ETHERSCAN_API_KEY
+        ;;
     all)
         echo -e "${YELLOW}Deploying all phases sequentially...${NC}"
-        for i in {1..8}; do
+        for i in {1..9}; do
             echo ""
             echo -e "${YELLOW}=== Starting Phase $i ===${NC}"
             sleep 5
@@ -144,7 +160,7 @@ case $PHASE in
         ;;
     *)
         echo -e "${RED}Invalid phase number${NC}"
-        echo "Usage: ./deploy-phased.sh [1-8|all]"
+        echo "Usage: ./deploy-phased.sh [1-9|all]"
         echo ""
         echo "Phases:"
         echo "  1 - OnchainID Infrastructure"
@@ -155,6 +171,7 @@ case $PHASE in
         echo "  6 - Payment System (Native ETH)"
         echo "  7 - Revenue & Investor Management"
         echo "  8 - CRE Receiver Proxies (requires CRE_FORWARDER in .env)"
+        echo "  9 - Token Factories (requires IDENTITY_REGISTRY, COMPLIANCE_RULES, INVESTMENT_PAYMENT_PROTOCOL)"
         echo "  all - Deploy all phases sequentially"
         exit 1
         ;;

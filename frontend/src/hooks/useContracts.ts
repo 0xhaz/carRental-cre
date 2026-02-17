@@ -36,8 +36,19 @@ export function useContract<T extends keyof typeof ABIS>(contractName: T) {
     revenueDistributor: "revenueDistributor",
     multiSigWallet: "multiSigWallet",
     complianceRules: "complianceRules",
+    renterCompliance: "renterCompliance",
+    operationalCompliance: "operationalCompliance",
     investorTypeRegistry: "investorTypeRegistry",
     participantTypeRegistry: "participantTypeRegistry",
+    assetTokenFactory: "assetTokenFactory",
+    revenueTokenFactory: "revenueTokenFactory",
+    claimIssuer: "claimIssuer",
+    campaignMonitorReceiver: "campaignMonitorReceiver",
+    paymentReceiver: "paymentReceiver",
+    complianceReceiver: "complianceReceiver",
+    vehicleReceiver: "vehicleReceiver",
+    onboardingReceiver: "onboardingReceiver",
+    worldIDVerifier: "worldIDVerifier",
   };
 
   return {
@@ -69,5 +80,24 @@ export const useMultiSigWallet = () => useContract("multiSigWallet");
 
 // Compliance & Registries
 export const useComplianceRules = () => useContract("complianceRules");
+export const useRenterComplianceContract = () => useContract("renterCompliance");
+export const useOperationalComplianceContract = () => useContract("operationalCompliance");
 export const useInvestorTypeRegistry = () => useContract("investorTypeRegistry");
 export const useParticipantTypeRegistry = () => useContract("participantTypeRegistry");
+
+// Identity
+export const useClaimIssuer = () => useContract("claimIssuer");
+
+// Token Factories
+export const useAssetTokenFactory = () => useContract("assetTokenFactory");
+export const useRevenueTokenFactory = () => useContract("revenueTokenFactory");
+
+// CRE Receivers
+export const useCampaignMonitorReceiver = () => useContract("campaignMonitorReceiver");
+export const usePaymentReceiver = () => useContract("paymentReceiver");
+export const useComplianceReceiver = () => useContract("complianceReceiver");
+export const useVehicleReceiver = () => useContract("vehicleReceiver");
+export const useOnboardingReceiver = () => useContract("onboardingReceiver");
+
+// World ID
+export const useWorldIDVerifier = () => useContract("worldIDVerifier");

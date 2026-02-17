@@ -12,6 +12,17 @@ import { useComplianceStatus } from "@/hooks/useComplianceStatus";
 import { useInvestorRequestManager } from "@/hooks/useContracts";
 import Link from "next/link";
 
+/** Extract first available AST token address from populated investments */
+function resolveTokenAddress(investments: Investment[]): `0x${string}` | undefined {
+  for (const inv of investments) {
+    const vehicle = inv.vehicle as any;
+    if (vehicle && typeof vehicle === "object" && vehicle.assetTokenAddress) {
+      return vehicle.assetTokenAddress as `0x${string}`;
+    }
+  }
+  return undefined;
+}
+
 export default function InvestorDashboard() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [totalInvested, setTotalInvested] = useState(0);
@@ -19,6 +30,7 @@ export default function InvestorDashboard() {
   const [roi, setRoi] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [astTokenAddress, setAstTokenAddress] = useState<`0x${string}` | undefined>();
   const { isConnected, address: connectedAddress } = useAccount();
   const { investorType, isKYCApproved, upgradeRequest } = useComplianceStatus();
   const { address: irmAddr, abi: irmAbi } = useInvestorRequestManager();
@@ -54,6 +66,49 @@ export default function InvestorDashboard() {
 
     loadDashboard();
   }, []);
+
+  // Resolve AST token address from investment data (separate effect for reliability)
+  useEffect(() => {
+    const resolve = async () => {
+      // 1. Try populated vehicle data from portfolio
+      if (investments.length > 0) {
+        const addr = resolveTokenAddress(investments);
+        if (addr) { setAstTokenAddress(addr); return; }
+
+        // 2. Fallback: fetch vehicle details directly
+        const vehicleRef = investments[0].vehicle;
+        const vehicleId = typeof vehicleRef === "object" && vehicleRef !== null
+          ? (vehicleRef as any)._id
+          : vehicleRef;
+
+        if (vehicleId) {
+          try {
+            const res = await investmentApi.getVehiclePitch(String(vehicleId));
+            if (res.success && res.data.vehicle?.assetTokenAddress) {
+              setAstTokenAddress(res.data.vehicle.assetTokenAddress as `0x${string}`);
+              return;
+            }
+          } catch {}
+        }
+      }
+
+      // 3. Last resort: scan marketplace for any vehicle with deployed tokens
+      try {
+        const mkRes = await investmentApi.getMarketplace();
+        if (mkRes.success && mkRes.data?.length) {
+          for (const campaign of mkRes.data) {
+            const cv = (campaign as any).vehicle;
+            if (cv && typeof cv === "object" && cv.assetTokenAddress) {
+              setAstTokenAddress(cv.assetTokenAddress as `0x${string}`);
+              return;
+            }
+          }
+        }
+      } catch {}
+    };
+
+    resolve();
+  }, [investments]);
 
   const activeInvestments = investments.filter((inv) => inv.status === "active");
 
@@ -295,7 +350,11 @@ export default function InvestorDashboard() {
 
       {/* Transfer Tokens Modal */}
       {showTransferModal && (
-        <TransferTokensModal onClose={() => setShowTransferModal(false)} />
+        <TransferTokensModal
+          onClose={() => setShowTransferModal(false)}
+          tokenAddress={astTokenAddress}
+          tokenLabel="AST"
+        />
       )}
     </div>
   );

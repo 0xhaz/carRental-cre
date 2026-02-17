@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IComplianceRules} from "../interfaces/compliance/IComplianceRules.sol";
+import {ICompliance} from "../interfaces/compliance/ICompliance.sol";
 import {IIdentityRegistry} from "../interfaces/erc3643/IIdentityRegistry.sol";
 import {IRenterCompliance} from "../interfaces/compliance/IRenterCompliance.sol";
 import {IOperationalCompliance} from "../interfaces/compliance/IOperationalCompliance.sol";
@@ -15,7 +16,7 @@ import {ClaimTopics} from "./ClaimTopics.sol";
  * @notice Supports investor compliance, renter compliance, and operational compliance
  * @author RegShield Compliance Team
  */
-contract ComplianceRules is IComplianceRules, Ownable, ReentrancyGuard {
+contract ComplianceRules is IComplianceRules, ICompliance, Ownable, ReentrancyGuard {
     // ICompliance interface implementation
     /**
      * @dev Check if a transfer is allowed based on all compliance rules
@@ -424,7 +425,7 @@ contract ComplianceRules is IComplianceRules, Ownable, ReentrancyGuard {
     }
 
     /// @inheritdoc IComplianceRules
-    function isTrustedContract(address contractAddress) external view returns (bool isTrusted) {
+    function isTrustedContract(address contractAddress) external view override(IComplianceRules, ICompliance) returns (bool isTrusted) {
         isTrusted = trustedContracts[contractAddress];
     }
 
@@ -591,7 +592,7 @@ contract ComplianceRules is IComplianceRules, Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         EXTERNAL VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function canTransfer(address from, address to, uint256) external view returns (bool) {
+    function canTransfer(address from, address to, uint256) external view override(IComplianceRules, ICompliance) returns (bool) {
         // Allow minting (from == 0) and burning (to == 0)
         if (from == address(0) || to == address(0)) {
             return true;
@@ -754,5 +755,36 @@ contract ComplianceRules is IComplianceRules, Ownable, ReentrancyGuard {
             return complianceLevelRules[token];
         }
         return defaultComplianceLevelRule;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    ICompliance INTERFACE METHODS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @inheritdoc ICompliance
+    function transferred(address, address, uint256) external override {}
+
+    /// @inheritdoc ICompliance
+    function created(address, uint256) external override {}
+
+    /// @inheritdoc ICompliance
+    function destroyed(address, uint256) external override {}
+
+    /// @inheritdoc ICompliance
+    function addModule(address module) external override onlyOwner {
+        if (module == address(0)) revert Compliance__InvalidModuleAddress();
+    }
+
+    /// @inheritdoc ICompliance
+    function removeModule(address) external override onlyOwner {}
+
+    /// @inheritdoc ICompliance
+    function getModules() external pure override returns (address[] memory) {
+        return new address[](0);
+    }
+
+    /// @inheritdoc ICompliance
+    function isModuleBound(address) external pure override returns (bool) {
+        return false;
     }
 }

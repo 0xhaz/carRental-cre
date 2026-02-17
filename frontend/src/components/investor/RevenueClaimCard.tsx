@@ -5,6 +5,8 @@ import { Card, CardContent, Button } from "@/components/ui";
 import { EthUsdDisplay } from "@/components/web3";
 import { useMyClaimableRevenue, useClaimRevenue } from "@/hooks/useInvestment";
 import { toast } from "react-hot-toast";
+import { formatEther } from "viem";
+import { investmentApi } from "@/lib/api";
 
 interface RevenueClaimCardProps {
   vehicleId: bigint;
@@ -24,6 +26,14 @@ export function RevenueClaimCard({ vehicleId, vehicleName }: RevenueClaimCardPro
   useEffect(() => {
     if (isSuccess && hash) {
       toast.success("Revenue claimed successfully!");
+      // Sync claimed amount to DB
+      if (claimableWei && claimableWei > BigInt(0)) {
+        const ethAmount = parseFloat(formatEther(claimableWei));
+        investmentApi.recordRevenueClaimed(vehicleId.toString(), {
+          amountEth: ethAmount,
+          txHash: hash,
+        }).catch((err) => console.error("Failed to sync revenue claim to DB:", err));
+      }
       refetch();
     }
   }, [isSuccess, hash, refetch]);

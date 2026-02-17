@@ -4,7 +4,9 @@ import { Vehicle } from "@/types";
 import { Card, CardContent, CardFooter, Button, Badge, Progress } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
-import { useVehicleInvestmentTotal } from "@/hooks/useInvestment";
+import { useVehicleInvestmentTotal, useRentorCoInvestment } from "@/hooks/useInvestment";
+import { useEthPrice } from "@/hooks/usePriceFeed";
+import { formatEther } from "viem";
 
 export interface InvestmentCardProps {
   vehicle: Vehicle;
@@ -17,21 +19,33 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
   const { fundraising } = vehicle;
 
   // Fetch blockchain investment data
-  const { data: investmentTotal, formatted: investmentFormatted, isLoading: isLoadingInvestment } = useVehicleInvestmentTotal(
-    vehicle.vehicleNftId ? BigInt(vehicle.vehicleNftId) : undefined
-  );
+  const vehicleTokenId = vehicle.vehicleNftId != null ? BigInt(vehicle.vehicleNftId) : undefined;
+  const { data: investmentTotal, isLoading: isLoadingInvestment } = useVehicleInvestmentTotal(vehicleTokenId);
+  const { data: onChainCoInvestment } = useRentorCoInvestment(vehicleTokenId);
+  const { price: ethPrice } = useEthPrice();
 
   if (!fundraising || !fundraising.active) {
     return null;
   }
 
-  const fundingPercentage = (fundraising.currentAmount / fundraising.targetAmount) * 100;
-  const remainingAmount = fundraising.targetAmount - fundraising.currentAmount;
-  // Mock days left (endDate not in FundraisingInfo type yet)
-  const daysLeft = Math.floor(Math.random() * 60) + 10;
+  // On-chain raised amount (prefer total, fallback to co-investment)
+  const investmentTotalEth = investmentTotal
+    ? parseFloat(formatEther(investmentTotal as bigint))
+    : 0;
+  const coInvestEth = onChainCoInvestment
+    ? parseFloat(formatEther(onChainCoInvestment as bigint))
+    : 0;
+  const totalRaisedEth = investmentTotalEth > 0 ? investmentTotalEth : coInvestEth;
+  const totalRaisedUsd = totalRaisedEth * ethPrice;
+  const effectiveRaised = totalRaisedUsd > 0 ? totalRaisedUsd : fundraising.currentAmount;
+
+  const fundingPercentage = fundraising.targetAmount > 0
+    ? Math.min((effectiveRaised / fundraising.targetAmount) * 100, 100)
+    : 0;
+  const remainingAmount = Math.max(fundraising.targetAmount - effectiveRaised, 0);
 
   // Extract blockchain data if available
-  const hasBlockchainData = investmentTotal !== undefined && !isLoadingInvestment;
+  const hasBlockchainData = (investmentTotal !== undefined || onChainCoInvestment !== undefined) && !isLoadingInvestment;
   const assetTokenAddress = vehicle.assetTokenAddress;
   const revenueTokenAddress = vehicle.revenueTokenAddress;
 
@@ -40,6 +54,12 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
     e.stopPropagation(); // Prevent Link navigation
     onInvest?.(vehicle._id);
   };
+
+  // Days left from campaign endDate
+  const endDate = (fundraising as any).endDate;
+  const daysLeft = endDate
+    ? Math.max(0, Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0;
 
   return (
     <Link href={`/${basePath}/vehicle/${vehicle._id}`}>
@@ -111,7 +131,7 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Funding Progress</span>
               <span className="font-semibold">
-                {formatCurrency(fundraising.currentAmount)} / {formatCurrency(fundraising.targetAmount)}
+                {formatCurrency(effectiveRaised)} / {formatCurrency(fundraising.targetAmount)}
               </span>
             </div>
             <Progress value={fundingPercentage} variant="default" />

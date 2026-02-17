@@ -1,0 +1,184 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Card, CardContent, Heading, Button, Input, Separator } from "@/components/ui";
+import {
+  useAddRevenue,
+  useDistributeRevenue,
+  useVehicleRevenue,
+  useRevenueWaterfall,
+} from "@/hooks/useInvestment";
+import { parseEther, formatEther } from "viem";
+import { toast } from "react-hot-toast";
+import { SEPOLIA_CHAIN_ID, getEtherscanUrl } from "@/constants/contracts";
+import { investmentApi } from "@/lib/api";
+
+interface RevenueAdminProps {
+  vehicleId: bigint;
+}
+
+export default function RevenueAdmin({ vehicleId }: RevenueAdminProps) {
+  const [addAmount, setAddAmount] = useState("");
+  const { data: vehicleRevenue, refetch: refetchRevenue } = useVehicleRevenue(vehicleId);
+
+  const amountWei = addAmount && parseFloat(addAmount) > 0 ? parseEther(addAmount) : undefined;
+  const { data: waterfallData } = useRevenueWaterfall(amountWei);
+
+  const {
+    addRevenue,
+    hash: addHash,
+    isConfirming: isAddConfirming,
+    isSuccess: addSuccess,
+    isPending: isAddPending,
+    error: addError,
+  } = useAddRevenue();
+
+  const {
+    distributeRevenue,
+    hash: distHash,
+    isConfirming: isDistConfirming,
+    isSuccess: distSuccess,
+    isPending: isDistPending,
+    error: distError,
+  } = useDistributeRevenue();
+
+  const [lastAddedAmount, setLastAddedAmount] = useState("");
+
+  useEffect(() => {
+    if (addSuccess && addHash) {
+      toast.success("Revenue added!");
+      // Sync to DB
+      const ethAmount = parseFloat(lastAddedAmount);
+      if (ethAmount > 0) {
+        investmentApi.recordRevenueDistributed(vehicleId.toString(), {
+          amountEth: ethAmount,
+          txHash: addHash,
+        }).catch((err) => console.error("Failed to sync revenue to DB:", err));
+      }
+      setAddAmount("");
+      refetchRevenue();
+    }
+  }, [addSuccess, addHash]);
+
+  useEffect(() => {
+    if (distSuccess) {
+      toast.success("Revenue distributed!");
+      refetchRevenue();
+    }
+  }, [distSuccess]);
+
+  useEffect(() => {
+    if (addError) toast.error(addError.message?.slice(0, 100) || "Failed to add revenue");
+  }, [addError]);
+
+  useEffect(() => {
+    if (distError) toast.error(distError.message?.slice(0, 100) || "Failed to distribute revenue");
+  }, [distError]);
+
+  // Parse vehicle revenue data
+  const revenue = vehicleRevenue as any;
+  const accumulated = revenue?.[0] ? formatEther(revenue[0] as bigint) : "0";
+  const totalDistributed = revenue?.[1] ? formatEther(revenue[1] as bigint) : "0";
+  const distributionCount = revenue?.[2] ? Number(revenue[2]) : 0;
+
+  // Parse waterfall preview
+  const waterfall = waterfallData as any;
+
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <Heading as="h3" className="mb-4">
+          Revenue Management — Vehicle #{vehicleId.toString()}
+        </Heading>
+
+        {/* Revenue Stats */}
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="bg-blue-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-600">Accumulated</p>
+            <p className="text-lg font-bold text-blue-700">{accumulated} ETH</p>
+          </div>
+          <div className="bg-green-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-600">Total Distributed</p>
+            <p className="text-lg font-bold text-green-700">{totalDistributed} ETH</p>
+          </div>
+          <div className="bg-purple-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-600">Distributions</p>
+            <p className="text-lg font-bold text-purple-700">{distributionCount}</p>
+          </div>
+        </div>
+
+        <Separator className="my-4" />
+
+        {/* Add Revenue */}
+        <div className="space-y-3 mb-6">
+          <p className="text-sm font-medium">Add Revenue</p>
+          <Input
+            type="number"
+            label="Amount (ETH)"
+            placeholder="0.1"
+            value={addAmount}
+            onChange={(e) => setAddAmount(e.target.value)}
+            min={0}
+            step="0.001"
+          />
+
+          {waterfall && addAmount && parseFloat(addAmount) > 0 && (
+            <div className="bg-gray-50 rounded-lg p-3 space-y-1 text-xs">
+              <p className="font-medium text-gray-700 mb-2">Waterfall Preview:</p>
+              <div className="flex justify-between"><span>Platform Fee (15%)</span><span>{waterfall[0] ? formatEther(waterfall[0] as bigint) : "—"} ETH</span></div>
+              <div className="flex justify-between"><span>Maintenance (10%)</span><span>{waterfall[1] ? formatEther(waterfall[1] as bigint) : "—"} ETH</span></div>
+              <div className="flex justify-between"><span>Insurance (5%)</span><span>{waterfall[2] ? formatEther(waterfall[2] as bigint) : "—"} ETH</span></div>
+              <div className="flex justify-between"><span>Operating (10%)</span><span>{waterfall[3] ? formatEther(waterfall[3] as bigint) : "—"} ETH</span></div>
+              <div className="flex justify-between"><span>Operator Fee (10%)</span><span>{waterfall[4] ? formatEther(waterfall[4] as bigint) : "—"} ETH</span></div>
+              <div className="flex justify-between font-medium"><span>Net to Investors (50%)</span><span>{waterfall[5] ? formatEther(waterfall[5] as bigint) : "—"} ETH</span></div>
+            </div>
+          )}
+
+          <Button
+            onClick={() => {
+              if (!addAmount || parseFloat(addAmount) <= 0) {
+                toast.error("Enter a valid amount");
+                return;
+              }
+              setLastAddedAmount(addAmount);
+              addRevenue(vehicleId, parseEther(addAmount));
+            }}
+            disabled={isAddPending || isAddConfirming || !addAmount}
+            className="w-full"
+          >
+            {isAddPending ? "Confirm in Wallet..." : isAddConfirming ? "Adding Revenue..." : "Add Revenue"}
+          </Button>
+
+          {addHash && (
+            <a href={getEtherscanUrl(SEPOLIA_CHAIN_ID, addHash, "tx")} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">
+              Tx: {addHash.slice(0, 14)}...
+            </a>
+          )}
+        </div>
+
+        <Separator className="my-4" />
+
+        {/* Distribute Revenue */}
+        <div className="space-y-3">
+          <p className="text-sm font-medium">Distribute Revenue</p>
+          <p className="text-xs text-gray-600">
+            Distributes accumulated revenue through the waterfall to all token holders.
+          </p>
+          <Button
+            onClick={() => distributeRevenue(vehicleId)}
+            disabled={isDistPending || isDistConfirming || accumulated === "0"}
+            className="w-full"
+            variant="outline"
+          >
+            {isDistPending ? "Confirm in Wallet..." : isDistConfirming ? "Distributing..." : "Distribute Revenue"}
+          </Button>
+          {distHash && (
+            <a href={getEtherscanUrl(SEPOLIA_CHAIN_ID, distHash, "tx")} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">
+              Tx: {distHash.slice(0, 14)}...
+            </a>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

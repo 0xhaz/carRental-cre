@@ -325,7 +325,7 @@ export function useMyTotalInvestment() {
  */
 export function useInitiateVehicleInvestment() {
   const { address, abi } = useRegShieldPaymentProtocol();
-  const { data: hash, writeContract, isSuccess: _ws, ...rest } = useWriteContract();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
 
   const invest = (
     vehicleId: bigint,
@@ -346,7 +346,86 @@ export function useInitiateVehicleInvestment() {
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-  return { invest, hash, isConfirming, isSuccess, ...rest };
+  return { invest, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Initiate a rentor co-investment for a vehicle they own (sends ETH)
+ * Bypasses CannotPaySelf and investor compliance checks on-chain.
+ * msg.value = co-investment amount + escrow fee
+ */
+export function useInitiateRentorCoInvestment() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const coInvest = (
+    vehicleId: bigint,
+    amount: bigint,
+    reason: string,
+    totalValueWithFee: bigint,
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "initiateRentorCoInvestment",
+      args: [vehicleId, amount, reason],
+      value: totalValueWithFee,
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { coInvest, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Read payment settings from RegShieldPaymentProtocol (min/max amounts, escrow fee rate)
+ */
+export function usePaymentSettings() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+
+  const result = useReadContract({
+    address,
+    abi,
+    functionName: "paymentSettings",
+  });
+
+  const settings = result.data as
+    | [bigint, bigint, bigint, bigint, bigint, bigint]
+    | undefined;
+
+  return {
+    ...result,
+    confirmationPeriod: settings?.[0],
+    disputeWindow: settings?.[1],
+    refundWindow: settings?.[2],
+    maxPaymentAmount: settings?.[3],
+    minPaymentAmount: settings?.[4],
+    escrowFeeRate: settings?.[5],
+  };
+}
+
+/**
+ * Get rentor co-investment amount for a vehicle (on-chain)
+ */
+export function useRentorCoInvestment(vehicleId?: bigint) {
+  const { address, abi } = useRegShieldPaymentProtocol();
+
+  const result = useReadContract({
+    address,
+    abi,
+    functionName: "getRentorCoInvestment",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
+    },
+  });
+
+  return {
+    ...result,
+    formatted: result.data ? formatEther(result.data as bigint) : "0",
+  };
 }
 
 /**
@@ -552,6 +631,250 @@ export function useRevenueWaterfall(grossRevenue?: bigint) {
     args: grossRevenue !== undefined ? [grossRevenue] : undefined,
     query: {
       enabled: grossRevenue !== undefined,
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════
+// Milestone Management (Admin)
+// ═══════════════════════════════════════════════
+
+/**
+ * Complete a milestone for a payment (onlyOwner)
+ * Contract expects string names: "VEHICLE_IDENTIFIED", "PURCHASE_VERIFIED", "INSURANCE_OBTAINED", "REGISTRATION_COMPLETED"
+ */
+const MILESTONE_STRINGS = [
+  "VEHICLE_IDENTIFIED",
+  "PURCHASE_VERIFIED",
+  "INSURANCE_OBTAINED",
+  "REGISTRATION_COMPLETED",
+] as const;
+
+export function useCompleteMilestone() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const completeMilestone = (paymentId: bigint, milestoneIndex: number) => {
+    const milestoneName = MILESTONE_STRINGS[milestoneIndex];
+    if (!milestoneName) return;
+    // Last milestone (REGISTRATION_COMPLETED) auto-triggers fund release + token minting
+    // which needs significantly more gas than simple milestone updates
+    const isLastMilestone = milestoneIndex === 3;
+    writeContract({
+      address,
+      abi,
+      functionName: "completeMilestone",
+      args: [paymentId, milestoneName],
+      ...SEPOLIA_GAS_OVERRIDES,
+      ...(isLastMilestone ? { gas: BigInt(1_000_000) } : {}),
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { completeMilestone, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Release milestone funds after all milestones complete (onlyOwner)
+ */
+export function useReleaseMilestoneFunds() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const releaseFunds = (paymentId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "releaseMilestoneFunds",
+      args: [paymentId],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { releaseFunds, hash, isConfirming, isSuccess, isPending, error };
+}
+
+// ═══════════════════════════════════════════════
+// Vehicle-Level Milestone Management (Admin)
+// ═══════════════════════════════════════════════
+
+/**
+ * Complete a vehicle-level milestone (applies to ALL payments for the vehicle)
+ * When all 4 milestones complete, auto-releases all pending payments and mints tokens.
+ */
+export function useCompleteVehicleMilestone() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const completeVehicleMilestone = (vehicleId: bigint, milestoneIndex: number) => {
+    const milestoneName = MILESTONE_STRINGS[milestoneIndex];
+    if (!milestoneName) return;
+    // Last milestone auto-triggers batch fund release + token minting for ALL payments
+    const isLastMilestone = milestoneIndex === 3;
+    writeContract({
+      address,
+      abi,
+      functionName: "completeVehicleMilestone",
+      args: [vehicleId, milestoneName],
+      ...SEPOLIA_GAS_OVERRIDES,
+      ...(isLastMilestone ? { gas: BigInt(3_000_000) } : {}),
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { completeVehicleMilestone, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Read vehicle-level milestone status
+ */
+export function useVehicleMilestoneStatus(vehicleId?: bigint) {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getVehicleMilestoneStatus",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
+    },
+  });
+}
+
+/**
+ * Manually release all pending payments for a vehicle (onlyOwner)
+ */
+export function useReleaseAllVehiclePayments() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const releaseAll = (vehicleId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "releaseAllVehiclePayments",
+      args: [vehicleId],
+      ...SEPOLIA_GAS_OVERRIDES,
+      gas: BigInt(3_000_000),
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { releaseAll, hash, isConfirming, isSuccess, isPending, error };
+}
+
+// ═══════════════════════════════════════════════
+// Revenue Admin (Add & Distribute)
+// ═══════════════════════════════════════════════
+
+/**
+ * Add revenue to a vehicle (sends ETH)
+ * RevenueDistributor.addRevenue(vehicleId, 0) { value: amount }
+ */
+export function useAddRevenue() {
+  const { address, abi } = useRevenueDistributor();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const addRevenue = (vehicleId: bigint, amountWei: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "addRevenue",
+      args: [vehicleId, BigInt(0)],
+      value: amountWei,
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { addRevenue, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Distribute accumulated revenue for a vehicle
+ */
+export function useDistributeRevenue() {
+  const { address, abi } = useRevenueDistributor();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const distributeRevenue = (vehicleId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "distributeRevenue",
+      args: [vehicleId],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { distributeRevenue, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Withdraw accumulated operator fees for a vehicle
+ */
+export function useWithdrawOperatorFees() {
+  const { address, abi } = useRevenueDistributor();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const withdrawFees = (vehicleId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "withdrawOperatorFees",
+      args: [vehicleId],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { withdrawFees, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Get operator fees for a vehicle (read)
+ */
+export function useOperatorFees(vehicleId?: bigint) {
+  const { address, abi } = useRevenueDistributor();
+
+  const result = useReadContract({
+    address,
+    abi,
+    functionName: "getOperatorFees",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
+    },
+  });
+
+  return {
+    ...result,
+    formatted: result.data ? formatEther(result.data as bigint) : "0",
+  };
+}
+
+/**
+ * Get vehicle operator address (read)
+ */
+export function useVehicleOperator(vehicleId?: bigint) {
+  const { address, abi } = useRevenueDistributor();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getVehicleOperator",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
     },
   });
 }

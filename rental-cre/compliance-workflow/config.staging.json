@@ -1,0 +1,10 @@
+{
+  "schedule": "0 */5 * * * *",
+  "renterComplianceAddress": "0x61bc66973794973b02b2059a2419a0a238145eb1",
+  "operationalComplianceAddress": "0x8c9fb8b1d90a0c836b3a942d6e5acb19c5640f77",
+  "complianceReceiverAddress": "0x0ea9cd084287107bca0f9785b030c22db72301fd",
+  "vehicleNftAddress": "0xfcE0FD3671E99D65E0FF70b30b9238bB83D91814",
+  "rentalBookingAddress": "0x144e3686533811ce108ded2249f3e18899154f86",
+  "chainSelectorName": "ethereum-testnet-sepolia",
+  "gasLimit": "500000"
+}

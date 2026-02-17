@@ -9,6 +9,7 @@ import { RenterDetailsForm, type RenterDetails } from "./RenterDetailsForm";
 import { PaymentMethodSelector, type PaymentDetails } from "./PaymentMethodSelector";
 import { toast } from "react-hot-toast";
 import { renterApi } from "@/lib/api";
+import CryptoBookingFlow from "./CryptoBookingFlow";
 
 export interface BookingFlowEnhancedProps {
   vehicle: Vehicle;
@@ -34,6 +35,8 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
   const [additionalDriver, setAdditionalDriver] = useState(false);
   const [insuranceUpgrade, setInsuranceUpgrade] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cryptoBookingId, setCryptoBookingId] = useState<string | null>(null);
+  const [showCryptoPayment, setShowCryptoPayment] = useState(false);
 
   // Calculate booking details
   const calculateDays = () => {
@@ -135,7 +138,7 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
             additionalDriver,
             insuranceUpgrade,
           },
-          payment: paymentDetails,
+          payment: paymentDetails!,
           pricing: {
             basePrice,
             insuranceCost,
@@ -148,8 +151,15 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
         const response = await renterApi.submitBooking(bookingSubmission);
 
         if (response.success) {
-          toast.success("Booking submitted successfully! Waiting for owner approval.");
-          onComplete?.(response.booking);
+          // If crypto payment, show on-chain payment flow
+          if (paymentDetails?.method === "crypto" && response.booking?._id) {
+            setCryptoBookingId(response.booking._id);
+            setShowCryptoPayment(true);
+            toast.success("Booking created! Complete on-chain payment below.");
+          } else {
+            toast.success("Booking submitted successfully! Waiting for owner approval.");
+            onComplete?.(response.booking);
+          }
         }
       } catch (error: any) {
         console.error("Booking submission error:", error);
@@ -452,14 +462,28 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
               </CardContent>
             </Card>
 
-            <Card className="bg-yellow-50 border-yellow-200">
-              <CardContent className="p-4">
-                <p className="text-sm text-yellow-800">
-                  <strong>📋 Note:</strong> Your booking request will be sent to the vehicle owner for
-                  approval. You will be notified once it's confirmed.
-                </p>
-              </CardContent>
-            </Card>
+            {showCryptoPayment && cryptoBookingId ? (
+              <CryptoBookingFlow
+                vehicle={vehicle}
+                bookingId={cryptoBookingId}
+                pickupDate={pickupDate}
+                returnDate={returnDate}
+                totalPriceUsd={totalPrice}
+                onComplete={(txHash) => {
+                  onComplete?.({ _id: cryptoBookingId, txHash });
+                }}
+              />
+            ) : (
+              <Card className="bg-yellow-50 border-yellow-200">
+                <CardContent className="p-4">
+                  <p className="text-sm text-yellow-800">
+                    <strong>📋 Note:</strong> Your booking request will be sent to the vehicle owner for
+                    approval. {paymentDetails?.method === "crypto" && "You will then complete the on-chain payment."}
+                    {paymentDetails?.method !== "crypto" && "You will be notified once it's confirmed."}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
       </div>

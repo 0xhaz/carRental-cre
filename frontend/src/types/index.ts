@@ -6,6 +6,7 @@ export * from './investment';
 export * from './campaign';
 export * from './review';
 export * from './notification';
+export * from './cre';
 
 // Common types
 export interface ApiResponse<T = any> {

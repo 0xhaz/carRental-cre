@@ -59,8 +59,10 @@ export function NotificationBell() {
 
   const getNotificationIcon = (type: Notification["type"]) => {
     const iconMap = {
+      booking_new: "📋",
       booking_confirmed: "✅",
       booking_cancelled: "❌",
+      booking_completed: "🏁",
       booking_reminder: "⏰",
       payment_received: "💰",
       payment_due: "💳",
@@ -75,6 +77,13 @@ export function NotificationBell() {
       kyc_approved: "✅",
       kyc_rejected: "❌",
       kyc_expired: "⚠️",
+      upgrade_approved: "⬆️",
+      upgrade_rejected: "❌",
+      upgrade_wallet_created: "👛",
+      upgrade_complete: "✅",
+      investor_downgraded: "⬇️",
+      token_registration_pending: "🔧",
+      token_registration_complete: "✅",
       system_update: "🔔",
     };
     return iconMap[type] || "🔔";

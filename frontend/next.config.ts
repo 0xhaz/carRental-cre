@@ -18,6 +18,11 @@ const nextConfig: NextConfig = {
         hostname: "di-uploads-pod15.dealerinspire.com",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "www.completecar.ie",
+        pathname: "/**",
+      },
     ],
   },
 };

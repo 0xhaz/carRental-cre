@@ -38,6 +38,8 @@ interface IPaymentProtocol {
     error PaymentProtocol__InvalidAmountLimits();
     error PaymentProtocol__EscrowFeeRateTooHigh();
     error PaymentProtocol__UnauthorizedOperator();
+    error PaymentProtocol__NotVehicleOwner();
+    error PaymentProtocol__RentorCoInvestmentAlreadyExists();
 
     /*//////////////////////////////////////////////////////////////
                              ENUMS

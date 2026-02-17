@@ -186,7 +186,7 @@ export function useWalletRegister() {
 
   const registerWithWallet = async (
     name: string,
-    role: UserRole = "renter",
+    role: UserRole = UserRole.RENTER,
     onSuccess?: (token: string, user: any) => void
   ) => {
     if (!name || name.trim().length === 0) {

@@ -15,11 +15,29 @@ import {
   useInitiateVehicleInvestment,
   useEscrowFee,
   useCanInvestInVehicle,
+  usePaymentSettings,
+  useVehicleInvestmentTotal,
+  useVehiclePayments,
+  useRentorCoInvestment,
 } from "@/hooks/useInvestment";
+import { investmentApi } from "@/lib/api";
 import { useEthPrice, useEthToUsd, useUsdToEth } from "@/hooks/usePriceFeed";
-import { useAccount } from "wagmi";
-import { parseEther } from "viem";
+import { formatCurrency } from "@/lib/utils";
+import { useIsUserVerified } from "@/hooks/useIdentity";
+import { useAccount, useReadContract } from "wagmi";
+import { parseEther, formatEther } from "viem";
+
+const ERC20_SYMBOL_ABI = [
+  {
+    name: "symbol",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+  },
+] as const;
 import { useCanInvestorAct } from "@/hooks/useComplianceStatus";
+import { useParticipantTypeRegistry } from "@/hooks/useContracts";
 
 export interface InvestmentModalProps {
   vehicle: Vehicle;
@@ -45,10 +63,31 @@ export function InvestmentModal({
   const [amountUsd, setAmountUsd] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  const { isConnected } = useAccount();
-  const { invest, isConfirming, isSuccess, hash } = useInitiateVehicleInvestment();
+  const { isConnected, address: walletAddress } = useAccount();
+  const { invest, isConfirming, isSuccess, hash, error: txError, isPending } = useInitiateVehicleInvestment();
   const { canAct: canInvest, reason: complianceReason } = useCanInvestorAct();
   const { price: ethPrice } = useEthPrice();
+
+  // On-chain pre-flight checks — must complete before invest is allowed
+  const { data: isIdentityVerified, isLoading: identityLoading } = useIsUserVerified(walletAddress);
+  const participantRegistry = useParticipantTypeRegistry();
+  const { data: isInvestorOnChain, isLoading: investorRoleLoading } = useReadContract({
+    address: participantRegistry.address,
+    abi: participantRegistry.abi,
+    functionName: "isInvestor",
+    args: walletAddress ? [walletAddress as `0x${string}`] : undefined,
+    query: { enabled: !!walletAddress },
+  });
+  const { minPaymentAmount, maxPaymentAmount } = usePaymentSettings();
+  const preflightLoading = walletAddress ? (identityLoading || investorRoleLoading) : false;
+
+  // Read on-chain asset token symbol for display
+  const { data: assetTokenSymbol } = useReadContract({
+    address: vehicle.assetTokenAddress as `0x${string}`,
+    abi: ERC20_SYMBOL_ABI,
+    functionName: "symbol",
+    query: { enabled: !!vehicle.assetTokenAddress },
+  });
 
   const fundraising = vehicle.fundraising;
 
@@ -70,7 +109,7 @@ export function InvestmentModal({
   const totalValueWei = amountWei + escrowFee;
 
   // On-chain investment limit check
-  const vehicleTokenId = vehicle.vehicleNftId ? BigInt(vehicle.vehicleNftId) : undefined;
+  const vehicleTokenId = vehicle.vehicleNftId != null ? BigInt(vehicle.vehicleNftId) : undefined;
   const { data: canInvestData } = useCanInvestInVehicle(
     vehicleTokenId,
     amountWei > BigInt(0) ? amountWei : undefined
@@ -78,11 +117,52 @@ export function InvestmentModal({
   const canInvestOnChain = canInvestData ? (canInvestData as any)[0] as boolean : true;
   const limitReasonCode = canInvestData ? Number((canInvestData as any)[1]) : 0;
 
+  // On-chain totals (use multiple sources for reliability)
+  const { data: vehicleInvestmentTotalWei } = useVehicleInvestmentTotal(vehicleTokenId);
+  const { data: onChainCoInvestment } = useRentorCoInvestment(vehicleTokenId);
+  const { data: vehiclePaymentIds } = useVehiclePayments(vehicleTokenId);
+  const onChainPayments = vehiclePaymentIds as bigint[] | undefined;
+  const onChainInvestorCount = onChainPayments?.length ?? 0;
+
+  // Prefer vehicleInvestmentTotal (includes all), fallback to co-investment only
+  const investmentTotalEth = vehicleInvestmentTotalWei
+    ? parseFloat(formatEther(vehicleInvestmentTotalWei as bigint))
+    : 0;
+  const coInvestEth = onChainCoInvestment
+    ? parseFloat(formatEther(onChainCoInvestment as bigint))
+    : 0;
+  const totalRaisedEth = investmentTotalEth > 0 ? investmentTotalEth : coInvestEth;
+  const totalRaisedUsd = totalRaisedEth * ethPrice;
+  const effectiveRaised = totalRaisedUsd > 0 ? totalRaisedUsd : fundraising.currentAmount;
+  const effectiveInvestorCount = Math.max(fundraising.investorCount || 0, onChainInvestorCount);
+  const fundingPct = fundraising.targetAmount > 0
+    ? Math.min((effectiveRaised / fundraising.targetAmount) * 100, 100)
+    : 0;
+
   // Campaign stats
   const estimatedTokens = ethValue > 0 ? ethValue * 100 : 0; // 100 tokens per ETH
 
   // Validation
   const isValidAmount = ethValue > 0;
+
+  // On-chain pre-flight warnings — prevent transactions that would revert
+  const preflightWarnings: string[] = [];
+  if (walletAddress && vehicle.ownerAddress && walletAddress.toLowerCase() === vehicle.ownerAddress.toLowerCase()) {
+    preflightWarnings.push("You cannot invest in your own vehicle. The contract blocks self-investment (CannotPaySelf). Use a different investor wallet, or use the rentor co-investment on your vehicle management page instead.");
+  }
+  if (walletAddress && isIdentityVerified === false) {
+    preflightWarnings.push("Your identity is not verified on-chain (IdentityRegistry). Contact admin to verify your identity.");
+  }
+  if (walletAddress && isInvestorOnChain === false) {
+    preflightWarnings.push("You are not registered as an investor on-chain (ParticipantTypeRegistry). Complete investor onboarding first.");
+  }
+  if (amountWei > BigInt(0) && minPaymentAmount && amountWei <= minPaymentAmount) {
+    preflightWarnings.push(`Amount must be greater than ${formatEther(minPaymentAmount)} ETH (protocol minimum).`);
+  }
+  if (amountWei > BigInt(0) && maxPaymentAmount && amountWei >= maxPaymentAmount) {
+    preflightWarnings.push(`Amount must be less than ${formatEther(maxPaymentAmount)} ETH (protocol maximum).`);
+  }
+  const hasPreflightErrors = preflightWarnings.length > 0;
 
   // Handle input changes with auto-conversion
   const handleEthChange = (value: string) => {
@@ -101,14 +181,84 @@ export function InvestmentModal({
     }
   };
 
-  // Handle successful investment
+  // Handle successful investment — record in backend after on-chain confirmation
   useEffect(() => {
     if (isSuccess && hash) {
       toast.success(`Investment successful! Tx: ${hash.slice(0, 10)}...`);
+
+      // Record investment in MongoDB
+      const campaignId = fundraising.campaignId;
+      if (campaignId) {
+        const usdAmount = ethValue * ethPrice;
+        investmentApi
+          .create({
+            vehicleId: vehicle._id,
+            campaignId,
+            amount: usdAmount,
+            amountEth: ethValue,
+            txHash: hash,
+          })
+          .then(() => {
+            console.log("Investment recorded in database");
+          })
+          .catch((err) => {
+            console.error("Failed to record investment in DB:", err);
+            toast.error("Investment succeeded on-chain but failed to record. Contact support.");
+          });
+      }
+
       onSuccess?.(ethValue);
       onClose();
     }
   }, [isSuccess, hash]);
+
+  // Decode and display transaction errors (including gas estimation failures)
+  useEffect(() => {
+    if (!txError) return;
+    // Walk the cause chain to get the deepest error message
+    let fullMsg = "";
+    let err: unknown = txError;
+    while (err) {
+      const errMsg = (err as Error).message || "";
+      if (errMsg) fullMsg += " " + errMsg;
+      err = (err as { cause?: unknown }).cause;
+    }
+    fullMsg = fullMsg || String(txError);
+    console.error("Investment tx error (full):", fullMsg);
+    console.error("Investment tx error (raw):", txError);
+
+    const knownReverts: Record<string, string> = {
+      IdentityNotVerified: "Your identity is not verified on-chain. Ask admin to verify via IdentityRegistry.",
+      ComplianceValidationFailed: "Compliance check failed — not registered as investor or investment limits exceeded.",
+      AmountBelowMinimum: "Investment amount is below the protocol minimum.",
+      AmountExceedsMaximum: "Investment amount exceeds the protocol maximum.",
+      CannotPaySelf: "You cannot invest in your own vehicle.",
+      InsufficientBalance: "Insufficient ETH sent (amount + escrow fee).",
+      ReasonRequired: "A reason string is required for the investment.",
+      OracleAccessDenied: "Oracle access denied for this transaction.",
+      InvalidAddress: "Invalid rentor address (zero address).",
+    };
+    for (const [key, description] of Object.entries(knownReverts)) {
+      if (fullMsg.includes(key)) {
+        toast.error(description);
+        return;
+      }
+    }
+    // Gas estimation blowup = contract revert during eth_estimateGas
+    if (fullMsg.includes("gas") && (fullMsg.includes("exceeds") || fullMsg.includes("too high") || fullMsg.includes("reverted"))) {
+      toast.error("Transaction would revert on-chain. Check the compliance status section below for details.");
+      return;
+    }
+    if (fullMsg.includes("User rejected") || fullMsg.includes("user rejected")) {
+      toast.error("Transaction cancelled by user.");
+      return;
+    }
+    if (fullMsg.includes("execution reverted")) {
+      toast.error("Contract execution reverted. Check the compliance status section for details.");
+      return;
+    }
+    toast.error("Investment transaction failed. Check console for details.");
+  }, [txError]);
 
   const handleInvest = async () => {
     if (!isValidAmount || !agreedToTerms) {
@@ -186,13 +336,20 @@ export function InvestmentModal({
             <div className="flex justify-between text-sm mb-2">
               <span className="text-gray-600">Funding Progress</span>
               <span className="font-semibold">
-                {((fundraising.currentAmount / fundraising.targetAmount) * 100).toFixed(1)}%
+                {fundingPct.toFixed(1)}%
               </span>
             </div>
             <Progress
-              value={(fundraising.currentAmount / fundraising.targetAmount) * 100}
+              value={fundingPct}
               variant="default"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              {formatCurrency(effectiveRaised)} raised
+              {totalRaisedEth > 0 && (
+                <span className="ml-1">({totalRaisedEth.toFixed(4)} ETH)</span>
+              )}
+              {" "}&middot; Goal: {formatCurrency(fundraising.targetAmount)}
+            </p>
           </div>
 
           {/* Investment Stats */}
@@ -212,7 +369,7 @@ export function InvestmentModal({
             <div className="bg-purple-50 rounded-lg p-4">
               <p className="text-xs text-gray-600 mb-1">Investors</p>
               <p className="text-xl font-bold text-purple-600">
-                {fundraising.investorCount || 0}
+                {effectiveInvestorCount}
               </p>
             </div>
           </div>
@@ -316,7 +473,7 @@ export function InvestmentModal({
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Estimated Tokens</span>
                 <span className="font-semibold text-blue-600">
-                  {estimatedTokens.toLocaleString()} AST
+                  {estimatedTokens.toLocaleString()} {(assetTokenSymbol as string) || "tokens"}
                 </span>
               </div>
             </div>
@@ -340,8 +497,43 @@ export function InvestmentModal({
             </label>
           </div>
 
+          {/* On-chain Compliance Status (always visible when wallet connected) */}
+          {walletAddress && (
+            <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <p className="text-xs font-semibold text-gray-600 mb-2">On-chain Compliance Status:</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-1">
+                  <span>{isIdentityVerified === true ? "\u2705" : isIdentityVerified === false ? "\u274C" : "\u23F3"}</span>
+                  <span className="text-gray-700">Identity Verified</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span>{isInvestorOnChain === true ? "\u2705" : isInvestorOnChain === false ? "\u274C" : "\u23F3"}</span>
+                  <span className="text-gray-700">Investor Role</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span>{canInvestOnChain ? "\u2705" : amountWei > BigInt(0) && !canInvestOnChain ? "\u274C" : "\u2796"}</span>
+                  <span className="text-gray-700">Investment Limits</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span>{canInvest ? "\u2705" : "\u274C"}</span>
+                  <span className="text-gray-700">KYC Approved</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* On-chain Pre-flight Warnings */}
+          {hasPreflightErrors && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg space-y-1">
+              <p className="text-sm font-semibold text-red-800">On-chain Compliance Issues:</p>
+              {preflightWarnings.map((w, i) => (
+                <p key={i} className="text-sm text-red-700">• {w}</p>
+              ))}
+            </div>
+          )}
+
           {/* Compliance Warning */}
-          {!canInvest && complianceReason && (
+          {!canInvest && complianceReason && !hasPreflightErrors && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-800">
                 <strong>Verification Required:</strong> {complianceReason}
@@ -387,13 +579,20 @@ export function InvestmentModal({
                 !agreedToTerms ||
                 !isConnected ||
                 isConfirming ||
+                isPending ||
+                preflightLoading ||
                 !canInvest ||
+                hasPreflightErrors ||
                 (!canInvestOnChain && limitReasonCode > 0)
               }
               className="flex-1"
             >
-              {isConfirming
+              {isConfirming || isPending
                 ? "Processing..."
+                : preflightLoading
+                ? "Checking compliance..."
+                : hasPreflightErrors
+                ? "Compliance Check Failed"
                 : !canInvest
                 ? "Verification Required"
                 : !canInvestOnChain && limitReasonCode > 0

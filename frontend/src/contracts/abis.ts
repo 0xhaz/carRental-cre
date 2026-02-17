@@ -23,11 +23,27 @@ import MultiSigWalletAbi from "./abis/MultiSigWallet.json";
 
 // Compliance & Registries
 import ComplianceRulesAbi from "./abis/ComplianceRules.json";
+import RenterComplianceAbi from "./abis/RenterCompliance.json";
+import OperationalComplianceAbi from "./abis/OperationalCompliance.json";
 import InvestorTypeRegistryAbi from "./abis/InvestorTypeRegistry.json";
 import ParticipantTypeRegistryAbi from "./abis/ParticipantTypeRegistry.json";
 
+// Token Factories
+import AssetTokenFactoryAbi from "./abis/AssetTokenFactory.json";
+import RevenueTokenFactoryAbi from "./abis/RevenueTokenFactory.json";
+
+// Identity
+import ClaimIssuerAbi from "./abis/ClaimIssuer.json";
+
 // CRE Receivers
 import CampaignMonitorReceiverAbi from "./abis/CampaignMonitorReceiver.json";
+import PaymentReceiverAbi from "./abis/PaymentReceiver.json";
+import ComplianceReceiverAbi from "./abis/ComplianceReceiver.json";
+import VehicleReceiverAbi from "./abis/VehicleReceiver.json";
+import OnboardingReceiverAbi from "./abis/OnboardingReceiver.json";
+
+// World ID
+import WorldIDVerifierAbi from "./abis/WorldIDVerifier.json";
 
 // Export ABIs (extract abi field from JSON)
 export const VEHICLE_NFT_ABI = VehicleNFTAbi.abi;
@@ -43,9 +59,19 @@ export const INVESTOR_REQUEST_MANAGER_ABI = InvestorRequestManagerAbi.abi;
 export const REVENUE_DISTRIBUTOR_ABI = RevenueDistributorAbi.abi;
 export const MULTI_SIG_WALLET_ABI = MultiSigWalletAbi.abi;
 export const COMPLIANCE_RULES_ABI = ComplianceRulesAbi.abi;
+export const RENTER_COMPLIANCE_ABI = RenterComplianceAbi.abi;
+export const OPERATIONAL_COMPLIANCE_ABI = OperationalComplianceAbi.abi;
 export const INVESTOR_TYPE_REGISTRY_ABI = InvestorTypeRegistryAbi.abi;
 export const PARTICIPANT_TYPE_REGISTRY_ABI = ParticipantTypeRegistryAbi.abi;
+export const ASSET_TOKEN_FACTORY_ABI = AssetTokenFactoryAbi.abi;
+export const REVENUE_TOKEN_FACTORY_ABI = RevenueTokenFactoryAbi.abi;
+export const CLAIM_ISSUER_ABI = ClaimIssuerAbi.abi;
 export const CAMPAIGN_MONITOR_RECEIVER_ABI = CampaignMonitorReceiverAbi.abi;
+export const PAYMENT_RECEIVER_ABI = PaymentReceiverAbi.abi;
+export const COMPLIANCE_RECEIVER_ABI = ComplianceReceiverAbi.abi;
+export const VEHICLE_RECEIVER_ABI = VehicleReceiverAbi.abi;
+export const ONBOARDING_RECEIVER_ABI = OnboardingReceiverAbi.abi;
+export const WORLD_ID_VERIFIER_ABI = WorldIDVerifierAbi.abi;
 
 // Consolidated export for easy access
 export const ABIS = {
@@ -62,9 +88,19 @@ export const ABIS = {
   revenueDistributor: REVENUE_DISTRIBUTOR_ABI,
   multiSigWallet: MULTI_SIG_WALLET_ABI,
   complianceRules: COMPLIANCE_RULES_ABI,
+  renterCompliance: RENTER_COMPLIANCE_ABI,
+  operationalCompliance: OPERATIONAL_COMPLIANCE_ABI,
   investorTypeRegistry: INVESTOR_TYPE_REGISTRY_ABI,
   participantTypeRegistry: PARTICIPANT_TYPE_REGISTRY_ABI,
+  assetTokenFactory: ASSET_TOKEN_FACTORY_ABI,
+  revenueTokenFactory: REVENUE_TOKEN_FACTORY_ABI,
+  claimIssuer: CLAIM_ISSUER_ABI,
   campaignMonitorReceiver: CAMPAIGN_MONITOR_RECEIVER_ABI,
+  paymentReceiver: PAYMENT_RECEIVER_ABI,
+  complianceReceiver: COMPLIANCE_RECEIVER_ABI,
+  vehicleReceiver: VEHICLE_RECEIVER_ABI,
+  onboardingReceiver: ONBOARDING_RECEIVER_ABI,
+  worldIDVerifier: WORLD_ID_VERIFIER_ABI,
 } as const;
 
 export default ABIS;

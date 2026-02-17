@@ -31,6 +31,8 @@ const campaignSchema = new mongoose.Schema(
       default: "full_fundraise",
     },
     rentorInvestment: { type: Number, default: 0 }, // Rentor's own planned co-investment amount
+    rentorDepositedOnChain: { type: Boolean, default: false },
+    rentorDepositTxHash: { type: String, default: null },
 
     minFundingRequired: { type: Number, default: 60 }, // Minimum % of targetAmount to proceed (0-100)
 

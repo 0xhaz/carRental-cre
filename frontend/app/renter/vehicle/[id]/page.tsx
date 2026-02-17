@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Heading, Paragraph, Button, Badge, Card, CardContent, Separator } from "@/components/ui";
-import { BookingFlow } from "@/components/renter";
+import { BookingFlowEnhanced } from "@/components/renter";
 import { ReviewList, ReviewStats, RoleSwitchModal } from "@/components/shared";
-import { generateMockVehicles, generateMockReviews } from "@/lib/mockData";
+import { vehicleApi } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { Vehicle, Review, UserRole } from "@/types";
 import { toast } from "react-hot-toast";
@@ -20,25 +20,25 @@ export default function VehicleDetails() {
   const [showBookingFlow, setShowBookingFlow] = useState(false);
   const [showRoleSwitchModal, setShowRoleSwitchModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviews] = useState<Review[]>([]);
 
   useEffect(() => {
     const loadVehicle = async () => {
       setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      // Find vehicle from mock data
-      const vehicles = generateMockVehicles(12);
-      const foundVehicle = vehicles.find((v) => v._id === vehicleId) || vehicles[0];
-
-      setVehicle(foundVehicle);
-
-      // Load reviews for this vehicle
-      const mockReviews = generateMockReviews(20);
-      const vehicleReviews = mockReviews.filter((r) => r.vehicle === foundVehicle._id);
-      setReviews(vehicleReviews);
-
-      setIsLoading(false);
+      try {
+        const res = await vehicleApi.getById(vehicleId);
+        if (res.success && res.data) {
+          setVehicle(res.data);
+        } else {
+          toast.error("Vehicle not found");
+          router.push("/renter/browse");
+        }
+      } catch (error) {
+        console.error("Failed to load vehicle:", error);
+        toast.error("Failed to load vehicle details");
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     loadVehicle();
@@ -210,8 +210,10 @@ export default function VehicleDetails() {
 
                 <Separator className="my-4" />
 
-                {/* Fundraising Info (if applicable) */}
-                {vehicle.fundraising?.active && (
+                {/* Fundraising Info (if applicable) — hide if fully funded or ended */}
+                {vehicle.fundraising?.active &&
+                 vehicle.fundraising.currentAmount < vehicle.fundraising.targetAmount &&
+                 (!vehicle.fundraising.endDate || new Date(vehicle.fundraising.endDate) > new Date()) && (
                   <>
                     <div className="mb-4 p-3 bg-blue-50 rounded-lg">
                       <p className="text-sm font-semibold text-blue-900 mb-1">
@@ -280,13 +282,16 @@ export default function VehicleDetails() {
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
                       <span className="text-lg font-semibold">
-                        {vehicle.owner.toString().slice(2, 4).toUpperCase()}
+                        {typeof vehicle.owner === "object" && (vehicle.owner as any).name
+                          ? (vehicle.owner as any).name.slice(0, 2).toUpperCase()
+                          : vehicle.owner.toString().slice(2, 4).toUpperCase()}
                       </span>
                     </div>
                     <div>
                       <p className="text-sm font-medium">
-                        {vehicle.owner.toString().slice(0, 6)}...
-                        {vehicle.owner.toString().slice(-4)}
+                        {typeof vehicle.owner === "object" && (vehicle.owner as any).name
+                          ? (vehicle.owner as any).name
+                          : `${vehicle.owner.toString().slice(0, 6)}...${vehicle.owner.toString().slice(-4)}`}
                       </p>
                       <p className="text-xs text-gray-600">Verified Owner</p>
                     </div>
@@ -310,7 +315,7 @@ export default function VehicleDetails() {
       {/* Booking Flow Modal */}
       {showBookingFlow && vehicle && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <Heading as="h2">Book {vehicle.brand} {vehicle.model}</Heading>
@@ -322,7 +327,7 @@ export default function VehicleDetails() {
                   ✕
                 </Button>
               </div>
-              <BookingFlow
+              <BookingFlowEnhanced
                 vehicle={vehicle}
                 onComplete={() => {
                   setShowBookingFlow(false);

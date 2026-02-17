@@ -145,7 +145,7 @@ const renterProfileSchema = new mongoose.Schema(
 );
 
 // Calculate age from date of birth
-renterProfileSchema.pre("save", function (next) {
+renterProfileSchema.pre("save", function () {
   if (this.personalInfo.dateOfBirth) {
     const today = new Date();
     const birthDate = new Date(this.personalInfo.dateOfBirth);
@@ -159,7 +159,6 @@ renterProfileSchema.pre("save", function (next) {
     this.age = age;
     this.meetsAgeRequirement = age >= 21;
   }
-  next();
 });
 
 // Check if license is expired

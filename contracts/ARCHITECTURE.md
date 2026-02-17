@@ -9,7 +9,7 @@ Decentralized rental car platform combining vehicle tokenization, compliant inve
 
 ---
 
-## Contract Inventory (32 contracts)
+## Contract Inventory (34 contracts)
 
 | Phase | Contract | Purpose |
 |-------|----------|---------|
@@ -42,12 +42,15 @@ Decentralized rental car platform combining vehicle tokenization, compliant inve
 | 8 | PaymentReceiver | CRE: milestone completions |
 | 8 | VehicleReceiver | CRE: vehicle data updates |
 | 8 | OnboardingReceiver | CRE: investor/booking approvals |
+| 8 | CampaignMonitorReceiver | CRE: campaign status monitoring |
+| 9 | AssetTokenFactory | Deploy per-vehicle AssetToken instances |
+| 9 | RevenueTokenFactory | Deploy per-vehicle RevenueToken instances |
 
 ---
 
 ## Deployment Phases
 
-Deploy in order using `./deploy-phased.sh [1-8|all]`:
+Deploy in order using `./deploy-phased.sh [1-9|all]`:
 
 ```
 Phase 1: OnchainID Infrastructure     (OnchainIDFactory, ClaimIssuer, KeyManager)
@@ -57,7 +60,8 @@ Phase 4: Identity Registry             (IdentityRegistry)
 Phase 5: Vehicle & Rental              (VehicleNFT, RentalBooking, RentalOperations)
 Phase 6: Payment System (Native ETH)   (2x PaymentProtocol, 2x Escrow, 2x RefundManager, DisputeResolver)
 Phase 7: Revenue & Investor            (RevenueDistributor, InvestorRequestManager, MultiSigWallet)
-Phase 8: CRE Receivers                 (Compliance, Payment, Vehicle, Onboarding)
+Phase 8: CRE Receivers                 (Compliance, Payment, Vehicle, Onboarding, CampaignMonitor)
+Phase 9: Token Factories               (AssetTokenFactory, RevenueTokenFactory)
 ```
 
 After deployment, run `./extract-addresses.sh` to extract addresses from broadcast artifacts into `deployed-addresses.env`.
@@ -92,6 +96,30 @@ All participants (renters, investors, rentors) must have an OnchainID with verif
 **AssetToken** - Fractional vehicle ownership. One token per vehicle, tradeable among qualified investors, linked to physical vehicle via VIN.
 
 **RevenueToken** - Rights to rental income streams. Issued to investors who fund vehicle purchases. Automatically receives proportional rental revenue.
+
+#### Token Factories (Phase 9)
+
+Per-vehicle token deployment is handled by two factory contracts (split from a single factory to stay under the EVM's 24,576-byte contract size limit):
+
+**AssetTokenFactory** (`0x9099Fb047Bd7136C1A968c06d10cd11D0FEDA251`)
+**RevenueTokenFactory** (`0xabb0d3f1B0db1a18486175e0f6091f4D5433C4be`)
+
+```solidity
+// AssetTokenFactory
+deployAssetToken(string name, string symbol, uint256 supplyCap, string vehicleVIN) → address assetToken
+setPaymentProtocol(address _paymentProtocol)  // Owner only
+
+// RevenueTokenFactory
+deployRevenueToken(string name, string symbol, uint256 supplyCap, string vehicleVIN, uint256 minimumHoldingPeriod) → address revenueToken
+setPaymentProtocol(address _paymentProtocol)  // Owner only
+```
+
+Each factory deployment:
+1. Deploys the token with the shared `identityRegistry` and `compliance` modules
+2. Calls `token.addAgent(paymentProtocol)` — grants `RegShieldPaymentProtocol` minting rights
+3. Calls `token.transferOwnership(msg.sender)` — transfers ownership to the caller
+
+**Token Supply & Investment Mapping**: Tokens use a **1:1 ratio** with investment amounts. If an investor sends 1 ETH, they receive 1 AssetToken + 1 RevenueToken (in wei). The `supplyCap` should match the campaign's `targetAmount` to ensure the token supply can cover all investments.
 
 #### Compliance Modules
 
@@ -517,6 +545,16 @@ All receivers require `CRE_FORWARDER` address set during deployment (Phase 8).
 
 ### Investment Flow
 ```
+Rentor (Vehicle Setup)
+  │
+  ├─0a→ mintVehicle(metadata)                    [VehicleNFT]
+  ├─0b→ deployAssetToken(name, symbol, cap, VIN) [AssetTokenFactory]
+  ├─0c→ deployRevenueToken(name, symbol, ...)    [RevenueTokenFactory]
+  │     (Admin registers tokens)
+  ├─0d→ registerVehicleTokens(vehicleId, ...)    [RegShieldPaymentProtocol]
+  ├─0e→ registerVehicle(vehicleId, revenueToken) [RevenueDistributor]
+  └─0f→ setVehicleOperator(vehicleId, rentor)    [RevenueDistributor]
+
 Investor
   │
   ├─1─→ requestInvestorStatus(RETAIL)           [InvestorRequestManager]
@@ -529,11 +567,11 @@ Investor
   │     └── ETH → PaymentEscrow
   │
   │     (CRE completes milestones off-chain)
-  │     (Admin/CRE calls completeMilestone)
+  │     (Admin/CRE calls completeMilestone x4)
   │
   └─5─→ releaseMilestoneFunds()                  [RegShieldPaymentProtocol]
         ├── ETH released to rentor
-        └── AssetToken + RevenueToken → investor
+        └── _mintInvestorTokens(): 1:1 AssetToken + RevenueToken → investor
 ```
 
 ### Rental Flow
@@ -630,3 +668,8 @@ After each phase, deployed addresses are saved and referenced in subsequent phas
 8. **Calculate fees** — `paymentEscrow.calculateEscrowFee(amount)` before sending
 9. **Check availability** — `rentalBooking.isVehicleAvailable(vehicleId, start, end)`
 10. **Check claimable** — `revenueDistributor.getClaimableRevenue(vehicleId, holder)`
+11. **Deploy tokens** — `assetTokenFactory.deployAssetToken(...)` + `revenueTokenFactory.deployRevenueToken(...)`, parse event logs for deployed addresses
+12. **Register tokens** — Admin calls `paymentProtocol.registerVehicleTokens(vehicleId, asset, revenue)` + `revenueDistributor.registerVehicle(vehicleId, revenueToken)` + `revenueDistributor.setVehicleOperator(vehicleId, rentor)`
+13. **Manage milestones** — Admin calls `paymentProtocol.completeMilestone(paymentId, milestone)` + `paymentProtocol.releaseMilestoneFunds(paymentId)`
+14. **Add revenue** — Admin calls `revenueDistributor.addRevenue{value}(vehicleId, 0)` + `revenueDistributor.distributeRevenue(vehicleId)`
+15. **Withdraw operator fees** — Rentor calls `revenueDistributor.withdrawOperatorFees(vehicleId)`

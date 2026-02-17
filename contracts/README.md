@@ -8,17 +8,21 @@ A decentralized rental car platform combining vehicle tokenization, compliant in
 contracts/
 ├── src/
 │   ├── onchainId/           # ERC-734/735 identity (OnchainIDFactory, ClaimIssuer, KeyManager)
-│   ├── erc3643/             # Security tokens & registries (AssetToken, RevenueToken, IdentityRegistry, etc.)
+│   ├── erc3643/             # Security tokens, registries & token factories
+│   │   ├── AssetToken.sol   # Fractional vehicle ownership (ERC-3643)
+│   │   ├── RevenueToken.sol # Revenue rights token (ERC-3643)
+│   │   ├── TokenFactory.sol # AssetTokenFactory + RevenueTokenFactory (per-vehicle deployment)
+│   │   └── ...              # IdentityRegistry, InvestorTypeRegistry, etc.
 │   ├── compliance/          # Compliance modules (ComplianceRules, InvestorType, Renter, Operational, Transfer)
 │   ├── vehicle/             # VehicleNFT (ERC-721)
 │   ├── rental/              # RentalBooking, RentalOperations
 │   ├── payment/             # RegShieldPaymentProtocol, RentalPaymentProtocol, PaymentEscrow, RefundManager, DisputeResolver
 │   ├── investor/            # InvestorRequestManager, MultiSigWallet
 │   ├── revenue/             # RevenueDistributor
-│   ├── cre/                 # Chainlink CRE receivers (Compliance, Payment, Vehicle, Onboarding)
+│   ├── cre/                 # Chainlink CRE receivers (Compliance, Payment, Vehicle, Onboarding, CampaignMonitor)
 │   ├── interfaces/          # All interface definitions
 │   └── mocks/               # Test mocks
-├── script/                  # Foundry deployment scripts (01-08 phased + DeployAll)
+├── script/                  # Foundry deployment scripts (01-09 phased + DeployAll)
 ├── test/                    # Foundry tests
 ├── ARCHITECTURE.md          # Detailed architecture & frontend integration reference
 ├── DEPLOYMENT.md            # Deployment guide
@@ -90,13 +94,14 @@ Deploy contracts in 8 phases to avoid RPC rate limits. Each phase depends on the
 ./deploy-phased.sh 2
 # → Save TRUSTED_ISSUERS_REGISTRY, CLAIM_TOPICS_REGISTRY, etc. to .env
 
-# Continue through phases 3-8...
+# Continue through phases 3-9...
 ./deploy-phased.sh 3   # Compliance Modules
 ./deploy-phased.sh 4   # Identity Registry
 ./deploy-phased.sh 5   # Vehicle & Rental
 ./deploy-phased.sh 6   # Payment System (Native ETH)
 ./deploy-phased.sh 7   # Revenue & Investor Management
 ./deploy-phased.sh 8   # CRE Receiver Proxies
+./deploy-phased.sh 9   # Token Factories (AssetTokenFactory + RevenueTokenFactory)
 
 # Or deploy all phases sequentially (with auto-delays)
 ./deploy-phased.sh all
@@ -120,7 +125,7 @@ forge script script/DeployAll.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast --slo
 
 ## Architecture Overview
 
-**32 contracts** across 8 deployment phases:
+**34 contracts** across 9 deployment phases:
 
 | Layer | Contracts | Purpose |
 |-------|-----------|---------|
@@ -133,7 +138,8 @@ forge script script/DeployAll.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast --slo
 | Payment | RegShieldPaymentProtocol, RentalPaymentProtocol, 2x PaymentEscrow, 2x RefundManager, DisputeResolver | Native ETH escrow, refunds, disputes |
 | Investor | InvestorRequestManager, MultiSigWallet | Tiered investor onboarding |
 | Revenue | RevenueDistributor | Waterfall revenue distribution |
-| CRE | ComplianceReceiver, PaymentReceiver, VehicleReceiver, OnboardingReceiver | Chainlink off-chain bridge |
+| CRE | ComplianceReceiver, PaymentReceiver, VehicleReceiver, OnboardingReceiver, CampaignMonitorReceiver | Chainlink off-chain bridge |
+| Token Factories | AssetTokenFactory, RevenueTokenFactory | Per-vehicle ERC-3643 token deployment |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed function signatures, data flows, and frontend integration guide.
 
@@ -158,6 +164,19 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed function signatures, data fl
    (Admin approves)                        → Status: APPROVED
 ```
 
+### Vehicle Setup (Prerequisite for Investment)
+
+```
+1. Rentor mints VehicleNFT
+2. Rentor deploys tokens via factories:
+   AssetTokenFactory.deployAssetToken(name, symbol, supplyCap, VIN)
+   RevenueTokenFactory.deployRevenueToken(name, symbol, supplyCap, VIN, holdingPeriod)
+3. Admin registers tokens:
+   PaymentProtocol.registerVehicleTokens(vehicleId, assetToken, revenueToken)
+   RevenueDistributor.registerVehicle(vehicleId, revenueToken)
+   RevenueDistributor.setVehicleOperator(vehicleId, rentorAddress)
+```
+
 ### Vehicle Investment
 
 ```
@@ -168,7 +187,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed function signatures, data fl
    completeMilestone(paymentId, "INSURANCE_OBTAINED")
    completeMilestone(paymentId, "REGISTRATION_COMPLETED")
 3. releaseMilestoneFunds(paymentId)
-   → ETH released to rentor, AssetToken + RevenueToken minted to investor
+   → ETH released to rentor
+   → AssetToken + RevenueToken minted to investor (1:1 with investment amount)
 ```
 
 ### Rental Booking
