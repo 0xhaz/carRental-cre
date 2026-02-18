@@ -1,5 +1,5 @@
 {
-  "schedule": "0 */5 * * * *",
+  "schedule": "0 */10 * * * *",
   "renterComplianceAddress": "0x61bc66973794973b02b2059a2419a0a238145eb1",
   "operationalComplianceAddress": "0x8c9fb8b1d90a0c836b3a942d6e5acb19c5640f77",
   "complianceReceiverAddress": "0x0ea9cd084287107bca0f9785b030c22db72301fd",

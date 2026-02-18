@@ -1,5 +1,5 @@
 {
-  "schedule": "*/30 * * * * *",
+  "schedule": "0 */10 * * * *",
   "investorRequestManagerAddress": "0x520efb46bc6ed01822dfc69ea7cde71b9ba6d6d2",
   "rentalBookingAddress": "0x144e3686533811ce108ded2249f3e18899154f86",
   "renterComplianceAddress": "0x61bc66973794973b02b2059a2419a0a238145eb1",
