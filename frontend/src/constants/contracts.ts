@@ -69,9 +69,9 @@ export type ContractAddresses = {
 // Sepolia Testnet Addresses
 export const SEPOLIA_CONTRACTS: ContractAddresses = {
   // OnchainID Infrastructure
-  onchainIDFactory: "0x67e83ecfa2981c8b16ab5dca8535c1254c2bf820",
-  claimIssuer: "0xc122be20cffcfe3c0b8559d628f2b0095bfd4ccf",
-  keyManager: "0xb02d8e147dc5ee1749076d9b62ba69216c29f00e",
+  onchainIDFactory: "0x18560A48Cca10D5E3AF755865E66F26E056978D5",
+  claimIssuer: "0x0292a5f06d3541f9d8F0BFF91cf917ce920a41a9",
+  keyManager: "0xd17C0C5Fb1E15911c614BC998396a812971e509E",
 
   // Registries
   trustedIssuersRegistry: "0x686b28fb0a06de87d4cfa1a01f9584b48022a8a1",
@@ -99,7 +99,7 @@ export const SEPOLIA_CONTRACTS: ContractAddresses = {
   investmentPaymentProtocol: "0x8c61ce72d5cf64f2d14dfee554a493668b87a082",
   investmentEscrow: "0x8e4df9a756ba09e5890f78fa56f1cfb623b4bc89",
   investmentRefundManager: "0xa1b8379afdd69b0e4fb0a697446cf5ade40fafaf",
-  rentalPaymentProtocol: "0x6eD9882A2B011d81FdC71F3aaD2E4F2Cc707Df75",
+  rentalPaymentProtocol: "0xE7a76882da96A7bF4EE54d93De478d51A573fc2c",
   rentalEscrow: "0xaf7fb568ce7489f1cb770abb55d9df0e7ecba94d",
   rentalRefundManager: "0x4c1e49928736afd69b26c656f104ce25e05b5bf6",
   disputeResolver: "0x0b4537c45202770e03ef81895a08ce13bd90131c",

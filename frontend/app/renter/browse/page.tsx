@@ -8,9 +8,11 @@ import {
   ActiveFilters,
   type VehicleFilterState,
 } from "@/components/renter";
-import { Heading, Paragraph } from "@/components/ui";
+import { Heading, Paragraph, Button } from "@/components/ui";
 import { vehicleApi } from "@/lib/api";
 import { Vehicle } from "@/types";
+import { useCanRenterAct } from "@/hooks/useComplianceStatus";
+import Link from "next/link";
 
 const DEFAULT_FILTERS: VehicleFilterState = {
   search: "",
@@ -27,6 +29,7 @@ export default function RenterBrowse() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState<VehicleFilterState>(DEFAULT_FILTERS);
+  const { canAct: isRenterVerified, isLoading: isVerificationLoading } = useCanRenterAct();
 
   useEffect(() => {
     const loadVehicles = async () => {
@@ -141,6 +144,23 @@ export default function RenterBrowse() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Verification Banner */}
+      {!isVerificationLoading && !isRenterVerified && (
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-yellow-800">
+              Identity verification required
+            </p>
+            <p className="text-xs text-yellow-700 mt-1">
+              Complete your KYC verification to book vehicles. You can browse while waiting for approval.
+            </p>
+          </div>
+          <Link href="/verification?role=renter">
+            <Button size="sm">Complete Verification</Button>
+          </Link>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <Heading as="h1" className="mb-2">

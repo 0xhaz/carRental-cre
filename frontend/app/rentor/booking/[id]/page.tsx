@@ -24,6 +24,7 @@ export default function RentorBookingDetailPage() {
   const [booking, setBooking] = useState<Booking | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [renterInfo, setRenterInfo] = useState<{ name: string; email: string; walletAddress?: string } | null>(null);
+  const [renterProfile, setRenterProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -42,6 +43,11 @@ export default function RentorBookingDetailPage() {
           // Backend populates user with name, email, walletAddress
           if (typeof res.data.user === "object") {
             setRenterInfo(res.data.user as unknown as { name: string; email: string; walletAddress?: string });
+          }
+
+          // Backend populates renterProfile if available
+          if ((res.data as any).renterProfile) {
+            setRenterProfile((res.data as any).renterProfile);
           }
         } else {
           toast.error("Booking not found");
@@ -304,19 +310,57 @@ export default function RentorBookingDetailPage() {
           {/* Renter Information */}
           <Card>
             <CardContent className="p-6">
-              <Heading as="h2" className="mb-4">
-                Renter Information
-              </Heading>
+              <div className="flex items-center justify-between mb-4">
+                <Heading as="h2">Renter Information</Heading>
+                {renterProfile?.isVerified && (
+                  <Badge variant="success">KYC Verified</Badge>
+                )}
+              </div>
 
               <div className="space-y-4">
                 <div className="flex justify-between items-center border-b pb-3">
                   <span className="text-gray-600">Name</span>
-                  <span className="font-semibold">{renterInfo?.name || "N/A"}</span>
+                  <span className="font-semibold">
+                    {renterProfile?.personalInfo?.fullName || renterInfo?.name || "N/A"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center border-b pb-3">
                   <span className="text-gray-600">Email</span>
-                  <span className="font-semibold">{renterInfo?.email || "N/A"}</span>
+                  <span className="font-semibold">
+                    {renterProfile?.personalInfo?.email || renterInfo?.email || "N/A"}
+                  </span>
                 </div>
+                {(renterProfile?.personalInfo?.phone) && (
+                  <div className="flex justify-between items-center border-b pb-3">
+                    <span className="text-gray-600">Phone</span>
+                    <span className="font-semibold">{renterProfile.personalInfo.phone}</span>
+                  </div>
+                )}
+                {renterProfile?.driverLicense?.number && (
+                  <div className="flex justify-between items-center border-b pb-3">
+                    <span className="text-gray-600">Driver&apos;s License</span>
+                    <div className="text-right">
+                      <span className="font-semibold">{renterProfile.driverLicense.number}</span>
+                      {renterProfile.driverLicense.isVerified && (
+                        <span className="ml-2 text-xs text-green-600 font-medium">Verified</span>
+                      )}
+                      {renterProfile.driverLicense.expiryDate && (
+                        <p className="text-xs text-gray-500">
+                          Exp: {formatDate(renterProfile.driverLicense.expiryDate)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {renterProfile?.address?.street && (
+                  <div className="flex justify-between items-center border-b pb-3">
+                    <span className="text-gray-600">Address</span>
+                    <span className="font-semibold text-right text-sm">
+                      {renterProfile.address.street}, {renterProfile.address.city},{" "}
+                      {renterProfile.address.state} {renterProfile.address.zipCode}
+                    </span>
+                  </div>
+                )}
                 {renterInfo?.walletAddress && (
                   <div className="flex justify-between items-center border-b pb-3">
                     <span className="text-gray-600">Wallet Address</span>

@@ -9,6 +9,7 @@ import { vehicleApi } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { Vehicle, Review, UserRole } from "@/types";
 import { toast } from "react-hot-toast";
+import { useCanRenterAct } from "@/hooks/useComplianceStatus";
 
 export default function VehicleDetails() {
   const params = useParams();
@@ -21,6 +22,7 @@ export default function VehicleDetails() {
   const [showRoleSwitchModal, setShowRoleSwitchModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
   const [reviews] = useState<Review[]>([]);
+  const { canAct: isRenterVerified, reason: verificationReason, isLoading: isVerificationLoading } = useCanRenterAct();
 
   useEffect(() => {
     const loadVehicle = async () => {
@@ -255,12 +257,37 @@ export default function VehicleDetails() {
 
                 <Separator className="my-4" />
 
+                {/* Verification Warning */}
+                {!isVerificationLoading && !isRenterVerified && (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm font-semibold text-yellow-800 mb-1">
+                      Verification Required
+                    </p>
+                    <p className="text-xs text-yellow-700 mb-2">
+                      {verificationReason || "Complete your identity verification to book vehicles."}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => router.push("/verification?role=renter")}
+                    >
+                      Complete Verification
+                    </Button>
+                  </div>
+                )}
+
                 {/* Book Button */}
                 <Button
                   className="w-full"
                   size="lg"
-                  disabled={!vehicle.isAvailable}
+                  disabled={!vehicle.isAvailable || (!isRenterVerified && !isVerificationLoading)}
                   onClick={() => {
+                    if (!isRenterVerified) {
+                      toast.error("Please complete your identity verification first");
+                      router.push("/verification?role=renter");
+                      return;
+                    }
                     if (vehicle.isAvailable) {
                       setShowBookingFlow(true);
                     } else {
@@ -268,11 +295,17 @@ export default function VehicleDetails() {
                     }
                   }}
                 >
-                  {vehicle.isAvailable ? "Book Now" : "Not Available"}
+                  {!isRenterVerified && !isVerificationLoading
+                    ? "Verification Required"
+                    : vehicle.isAvailable
+                    ? "Book Now"
+                    : "Not Available"}
                 </Button>
 
                 <p className="text-xs text-gray-600 text-center mt-3">
-                  You won't be charged yet
+                  {isRenterVerified
+                    ? "You won't be charged yet"
+                    : "Complete verification to unlock booking"}
                 </p>
 
                 {/* Owner Info */}

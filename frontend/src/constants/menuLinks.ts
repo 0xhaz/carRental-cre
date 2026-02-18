@@ -199,6 +199,12 @@ export const renterMenuLinks = [
     coloredIcon: dashboardIconColored,
   },
   {
+    name: "Verification",
+    path: "/verification?role=renter",
+    icon: listIcon,
+    coloredIcon: listIconColored,
+  },
+  {
     name: "Browse Cars",
     path: "/renter/browse",
     icon: carIcon,

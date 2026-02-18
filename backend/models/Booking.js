@@ -55,7 +55,7 @@ const bookingSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid", "refunded", "failed"],
+      enum: ["pending", "paid", "paid_crypto", "refunded", "failed"],
       default: "pending",
     },
 

@@ -138,6 +138,7 @@ contract OnchainID is IOnchainID, Ownable, ReentrancyGuard {
     }
 
     mapping(bytes32 key => Key) private keys;
+    mapping(bytes32 key => mapping(uint256 purpose => bool)) private keyPurposes;
     mapping(uint256 purpose => bytes32[]) private keysByPurpose;
     mapping(bytes32 claimId => Claim) private claims;
     mapping(uint256 topic => bytes32[]) private claimByTopics;
@@ -191,8 +192,9 @@ contract OnchainID is IOnchainID, Ownable, ReentrancyGuard {
      */
     modifier onlyManagementKey() {
         if (
-            !keyHasPurpose(keccak256(abi.encodePacked(msg.sender)), MANAGEMENT_KEY) || msg.sender != owner()
-                || !authorizedManagers[msg.sender]
+            !keyHasPurpose(keccak256(abi.encodePacked(msg.sender)), MANAGEMENT_KEY)
+                && msg.sender != owner()
+                && !authorizedManagers[msg.sender]
         ) revert OnChainID__SenderDoesNotHaveManagementKey();
         _;
     }
@@ -203,7 +205,8 @@ contract OnchainID is IOnchainID, Ownable, ReentrancyGuard {
     modifier onlyActionKey() {
         if (
             !keyHasPurpose(keccak256(abi.encodePacked(msg.sender)), ACTION_KEY)
-                || !keyHasPurpose(keccak256(abi.encodePacked(msg.sender)), MANAGEMENT_KEY) || msg.sender != owner()
+                && !keyHasPurpose(keccak256(abi.encodePacked(msg.sender)), MANAGEMENT_KEY)
+                && msg.sender != owner()
         ) revert OnChainID__SenderDoesNotHaveActionKey();
         _;
     }
@@ -212,15 +215,25 @@ contract OnchainID is IOnchainID, Ownable, ReentrancyGuard {
                         CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
-    constructor(address _owner) Ownable(_owner == address(0) ? address(this) : _owner) {
+    constructor(address _owner, address _admin) Ownable(_owner == address(0) ? address(this) : _owner) {
         creationTime = block.timestamp;
 
-        // Add owner's address as management key
+        // Add owner's address as management + claim signer key
         if (_owner != address(0)) {
             bytes32 ownerKey = keccak256(abi.encodePacked(_owner));
             _addKey(ownerKey, MANAGEMENT_KEY, ECDSA_TYPE);
-            emit IdentityCreated(address(this), _owner, bytes32(0));
+            _addKey(ownerKey, CLAIM_SIGNER_KEY, ECDSA_TYPE);
         }
+
+        // Add admin's key for delegated claim management
+        if (_admin != address(0) && _admin != _owner) {
+            bytes32 adminKey = keccak256(abi.encodePacked(_admin));
+            _addKey(adminKey, MANAGEMENT_KEY, ECDSA_TYPE);
+            _addKey(adminKey, CLAIM_SIGNER_KEY, ECDSA_TYPE);
+            authorizedManagers[_admin] = true;
+        }
+
+        emit IdentityCreated(address(this), _owner, bytes32(0));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -273,7 +286,7 @@ contract OnchainID is IOnchainID, Ownable, ReentrancyGuard {
     /// @inheritdoc IOnchainID
     function keyHasPurpose(bytes32 _key, uint256 _purpose) public view override returns (bool exists) {
         Key memory key = keys[_key];
-        return key.key != bytes32(0) && key.purpose == _purpose && key.revokedAt == 0;
+        return key.key != bytes32(0) && keyPurposes[_key][_purpose] && key.revokedAt == 0;
     }
 
     /// @inheritdoc IOnchainID
@@ -292,9 +305,9 @@ contract OnchainID is IOnchainID, Ownable, ReentrancyGuard {
      */
     function removeKey(bytes32 _key, uint256 _purpose) external override returns (bool success) {
         if (keys[_key].key == bytes32(0)) revert OnChainID__KeyDoesNotExist();
-        if (keys[_key].purpose != _purpose) revert OnChainID__KeyPurposeMismatch();
+        if (!keyPurposes[_key][_purpose]) revert OnChainID__KeyPurposeMismatch();
 
-        keys[_key].revokedAt = block.timestamp;
+        keyPurposes[_key][_purpose] = false;
 
         // Remove from keysByPurpose mapping
         bytes32[] storage purposeKeys = keysByPurpose[_purpose];
@@ -329,7 +342,7 @@ contract OnchainID is IOnchainID, Ownable, ReentrancyGuard {
         returns (bool success)
     {
         if (keys[_key].key == bytes32(0)) revert OnChainID__KeyDoesNotExist();
-        if (keys[_key].purpose != _purpose) revert OnChainID__KeyPurposeMismatch();
+        if (!keyPurposes[_key][_purpose]) revert OnChainID__KeyPurposeMismatch();
         if (keys[_key].keyType != ECDSA_TYPE) revert OnChainID__OnlyECDSAKeysSupported();
 
         // Construct the message that should have been signed
@@ -345,8 +358,8 @@ contract OnchainID is IOnchainID, Ownable, ReentrancyGuard {
         bytes32 signerKeyHash = keccak256(abi.encode(signer));
         if (signerKeyHash != _key) revert OnChainID__SignatureDoesNotProveOwnership();
 
-        // Revoke the key
-        keys[_key].revokedAt = block.timestamp;
+        // Remove this purpose
+        keyPurposes[_key][_purpose] = false;
 
         // Remove from keysByPurpose mapping
         bytes32[] storage purposeKeys = keysByPurpose[_purpose];
@@ -455,11 +468,11 @@ contract OnchainID is IOnchainID, Ownable, ReentrancyGuard {
     ) external override returns (bytes32 claimId) {
         if (issuer == address(0)) revert OnChainID__InvalidUser();
 
-        // check if sender is authorized issuer to add claim
+        // check if sender is authorized to add claim (must have management OR claim signer key OR be owner)
         if (
             !keyHasPurpose(keccak256(abi.encodePacked(msg.sender)), MANAGEMENT_KEY)
-                || !keyHasPurpose(keccak256(abi.encodePacked(msg.sender)), CLAIM_SIGNER_KEY) || msg.sender != issuer
-                || msg.sender != owner()
+                && !keyHasPurpose(keccak256(abi.encodePacked(msg.sender)), CLAIM_SIGNER_KEY)
+                && msg.sender != owner()
         ) {
             revert OnChainID__NotAuthorizedToAddClaim();
         }
@@ -973,12 +986,17 @@ contract OnchainID is IOnchainID, Ownable, ReentrancyGuard {
      */
     function _addKey(bytes32 _key, uint256 _purpose, uint256 _keyType) internal returns (bool) {
         if (_key == bytes32(0)) revert OnChainID__InvalidKey();
-        if (keys[_key].key != bytes32(0)) revert OnChainID__KeyAlreadyExists();
+        if (keyPurposes[_key][_purpose]) revert OnChainID__KeyAlreadyExists();
 
-        keys[_key] = Key({purpose: _purpose, keyType: _keyType, key: _key, revokedAt: 0});
+        // Create base key entry if it doesn't exist yet
+        if (keys[_key].key == bytes32(0)) {
+            keys[_key] = Key({purpose: _purpose, keyType: _keyType, key: _key, revokedAt: 0});
+            allKeys.push(_key);
+        }
 
+        // Track this specific purpose
+        keyPurposes[_key][_purpose] = true;
         keysByPurpose[_purpose].push(_key);
-        allKeys.push(_key);
 
         emit KeyAdded(_key, _purpose, _keyType);
         return true;

@@ -273,6 +273,7 @@ export function useCreateRentalBookingPayment() {
       functionName: "createRentalBooking",
       args: [bookingId, vehicleId, rentor, rentalFee, securityDeposit, startTime, endTime],
       value: totalValue,
+      gas: BigInt(1_000_000), // Enough for compliance checks + escrow creation + storage writes
     });
   };
 

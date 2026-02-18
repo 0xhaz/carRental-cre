@@ -32,6 +32,7 @@ const notificationSchema = new mongoose.Schema(
         "upgrade_wallet_created",
         "upgrade_complete",
         "investor_downgraded",
+        "kyc_submitted",
         "token_registration_pending",
         "token_registration_complete",
         "system_update",

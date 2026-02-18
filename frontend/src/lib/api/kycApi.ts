@@ -38,6 +38,17 @@ export interface KYCBusinessInfo {
   yearsInBusiness: number;
 }
 
+export interface KYCRenterInfo {
+  driverLicenseNumber: string;
+  driverLicenseExpiry: Date;
+  driverLicenseIssuingState: string;
+  insuranceProvider?: string;
+  insurancePolicyNumber?: string;
+  insuranceExpiry?: Date;
+  phone: string;
+  email: string;
+}
+
 export interface KYCSubmission {
   _id: string;
   user: {
@@ -46,7 +57,7 @@ export interface KYCSubmission {
     email: string;
     walletAddress?: string;
   };
-  roleType: "investor" | "rentor";
+  roleType: "investor" | "rentor" | "renter";
   status: "pending" | "under_review" | "approved" | "rejected" | "expired";
   documents?: {
     primaryDocument?: KYCDocument;
@@ -56,6 +67,7 @@ export interface KYCSubmission {
   personalInfo?: KYCPersonalInfo;
   investorInfo?: KYCInvestorInfo;
   businessInfo?: KYCBusinessInfo;
+  renterInfo?: KYCRenterInfo;
   reviewedBy?: string;
   reviewedAt?: Date;
   reviewNotes?: string;
@@ -84,7 +96,7 @@ export interface UpgradeRequest {
 export interface KYCStatus {
   hasKYC: boolean;
   status: "not_submitted" | "pending" | "under_review" | "approved" | "rejected" | "expired";
-  roleType?: "investor" | "rentor";
+  roleType?: "investor" | "rentor" | "renter";
   investorType?: number | null; // 1=RETAIL, 2=ACCREDITED, 3=INSTITUTIONAL
   submittedAt?: Date;
   reviewedAt?: Date;

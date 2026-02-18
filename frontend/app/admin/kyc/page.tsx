@@ -5,9 +5,11 @@ import { Heading, Paragraph, Button, Card, CardContent, Badge } from "@/componen
 import { kycApi, type KYCSubmission } from "@/lib/api";
 import { toast } from "react-hot-toast";
 import { formatDate } from "@/lib/utils";
-import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from "wagmi";
-import { useVehicleNFT, useIdentityRegistry, useParticipantTypeRegistry } from "@/hooks/useContracts";
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount } from "wagmi";
+import { useVehicleNFT, useIdentityRegistry, useParticipantTypeRegistry, useRenterComplianceContract } from "@/hooks/useContracts";
 import { Input } from "@/components/ui";
+import { SEPOLIA_CONTRACTS } from "@/constants/contracts";
+import { keccak256, toHex } from "viem";
 
 export default function AdminKYCPage() {
   const [kycSubmissions, setKycSubmissions] = useState<KYCSubmission[]>([]);
@@ -231,6 +233,12 @@ export default function AdminKYCPage() {
 
       {/* Register Participant Type */}
       <RegisterParticipantCard />
+
+      {/* Fix RenterCompliance Registry */}
+      <FixRenterComplianceCard />
+
+      {/* Register Renter Claims on OnchainID */}
+      <RegisterRenterClaimsCard />
 
       {/* Review Modal */}
       {showReviewModal && selectedKYC && (
@@ -558,6 +566,68 @@ function KYCReviewModal({
             </div>
           )}
 
+          {kyc.renterInfo && (
+            <div className="mb-6">
+              <Heading as="h3" className="mb-3">
+                Renter Information
+              </Heading>
+              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Driver&apos;s License Number</p>
+                  <p className="text-sm text-gray-900">
+                    {kyc.renterInfo.driverLicenseNumber || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">License Expiry</p>
+                  <p className="text-sm text-gray-900">
+                    {kyc.renterInfo.driverLicenseExpiry
+                      ? new Date(kyc.renterInfo.driverLicenseExpiry).toLocaleDateString()
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Issuing State</p>
+                  <p className="text-sm text-gray-900">
+                    {kyc.renterInfo.driverLicenseIssuingState || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Phone</p>
+                  <p className="text-sm text-gray-900">
+                    {kyc.renterInfo.phone || "—"}
+                  </p>
+                </div>
+                {kyc.renterInfo.email && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Email</p>
+                    <p className="text-sm text-gray-900">{kyc.renterInfo.email}</p>
+                  </div>
+                )}
+                {kyc.renterInfo.insuranceProvider && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Insurance Provider</p>
+                    <p className="text-sm text-gray-900">{kyc.renterInfo.insuranceProvider}</p>
+                  </div>
+                )}
+                {kyc.renterInfo.insurancePolicyNumber && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Policy Number</p>
+                    <p className="text-sm text-gray-900">{kyc.renterInfo.insurancePolicyNumber}</p>
+                  </div>
+                )}
+                {kyc.renterInfo.insuranceExpiry && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Insurance Expiry</p>
+                    <p className="text-sm text-gray-900">
+                      {new Date(kyc.renterInfo.insuranceExpiry).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Documents */}
           <div className="mb-6">
             <Heading as="h3" className="mb-3">
@@ -835,7 +905,7 @@ function RegisterIdentityCard() {
 // Register Participant Type on ParticipantTypeRegistry
 function RegisterParticipantCard() {
   const [participantAddress, setParticipantAddress] = useState("");
-  const [roleType, setRoleType] = useState<"rentor" | "investor">("rentor");
+  const [roleType, setRoleType] = useState<"rentor" | "investor" | "renter">("rentor");
   const participantRegistry = useParticipantTypeRegistry();
 
   const { data: hash, writeContract, isPending, error } = useWriteContract();
@@ -865,6 +935,13 @@ function RegisterParticipantCard() {
     args: isValidAddress ? [participantAddress as `0x${string}`] : undefined,
     query: { enabled: isValidAddress },
   });
+  const { data: isRenterOnChain } = useReadContract({
+    address: participantRegistry.address,
+    abi: participantRegistry.abi,
+    functionName: "isRenter",
+    args: isValidAddress ? [participantAddress as `0x${string}`] : undefined,
+    query: { enabled: isValidAddress },
+  });
 
   const handleRegister = () => {
     if (!isValidAddress) {
@@ -875,7 +952,7 @@ function RegisterParticipantCard() {
     if (!isRegistered) {
       // First registration: registerParticipant with the right type
       // ParticipantType enum: 0=NONE, 1=INVESTOR_RETAIL, 2=INVESTOR_INSTITUTIONAL, 3=INVESTOR_STRATEGIC, 4=RENTER, 5=RENTOR, 6=MULTI_ROLE
-      const typeValue = roleType === "rentor" ? 5 : 1; // RENTOR=5, INVESTOR_RETAIL=1
+      const typeValue = roleType === "rentor" ? 5 : roleType === "renter" ? 4 : 1;
       writeContract({
         address: participantRegistry.address,
         abi: participantRegistry.abi,
@@ -884,7 +961,7 @@ function RegisterParticipantCard() {
       });
     } else {
       // Already registered — add the role
-      const fnName = roleType === "rentor" ? "addRentorRole" : "addInvestorRole";
+      const fnName = roleType === "rentor" ? "addRentorRole" : roleType === "renter" ? "addRenterRole" : "addInvestorRole";
       writeContract({
         address: participantRegistry.address,
         abi: participantRegistry.abi,
@@ -913,7 +990,7 @@ function RegisterParticipantCard() {
     }
   }, [error]);
 
-  const alreadyHasRole = roleType === "rentor" ? isRentorOnChain === true : isInvestorOnChain === true;
+  const alreadyHasRole = roleType === "rentor" ? isRentorOnChain === true : roleType === "renter" ? isRenterOnChain === true : isInvestorOnChain === true;
 
   return (
     <Card className="mt-8">
@@ -922,7 +999,7 @@ function RegisterParticipantCard() {
           Register Participant Type (ParticipantTypeRegistry)
         </Heading>
         <Paragraph className="text-sm text-gray-600 mb-4">
-          Register a user as a rentor or investor in the ParticipantTypeRegistry.
+          Register a user as a rentor, renter, or investor in the ParticipantTypeRegistry.
           This is required alongside identity verification for on-chain transactions.
         </Paragraph>
         <div className="space-y-3">
@@ -942,6 +1019,9 @@ function RegisterParticipantCard() {
                   <span className={isRentorOnChain === true ? "text-green-600" : "text-gray-400"}>
                     {isRentorOnChain === true ? "Rentor" : "No rentor role"}
                   </span>
+                  <span className={isRenterOnChain === true ? "text-green-600" : "text-gray-400"}>
+                    {isRenterOnChain === true ? "Renter" : "No renter role"}
+                  </span>
                   <span className={isInvestorOnChain === true ? "text-green-600" : "text-gray-400"}>
                     {isInvestorOnChain === true ? "Investor" : "No investor role"}
                   </span>
@@ -950,10 +1030,11 @@ function RegisterParticipantCard() {
             </div>
             <select
               value={roleType}
-              onChange={(e) => setRoleType(e.target.value as "rentor" | "investor")}
+              onChange={(e) => setRoleType(e.target.value as "rentor" | "investor" | "renter")}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
             >
               <option value="rentor">Rentor</option>
+              <option value="renter">Renter</option>
               <option value="investor">Investor</option>
             </select>
           </div>
@@ -973,6 +1054,525 @@ function RegisterParticipantCard() {
               : `Add ${roleType} role`}
           </Button>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * FixRenterComplianceCard — Detects and fixes IdentityRegistry mismatch
+ * in the RenterCompliance contract (deployed with old registry address).
+ */
+function FixRenterComplianceCard() {
+  const { address: rcAddress, abi: rcAbi } = useRenterComplianceContract();
+  const expectedIR = SEPOLIA_CONTRACTS.identityRegistry;
+
+  // Read current identityRegistry from RenterCompliance contract
+  const { data: currentIR, isLoading: isReadingIR } = useReadContract({
+    address: rcAddress,
+    abi: rcAbi,
+    functionName: "identityRegistry",
+  });
+
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const currentIRAddr = currentIR as `0x${string}` | undefined;
+  const isMismatch = currentIRAddr && currentIRAddr.toLowerCase() !== expectedIR.toLowerCase();
+  const isMatch = currentIRAddr && currentIRAddr.toLowerCase() === expectedIR.toLowerCase();
+
+  useEffect(() => {
+    if (isSuccess) {
+      toast.success("RenterCompliance IdentityRegistry updated!");
+    }
+  }, [isSuccess]);
+
+  useEffect(() => {
+    if (error) {
+      console.error("setIdentityRegistry error:", error);
+      const msg = error.message || "";
+      if (msg.includes("owner") || msg.includes("Ownable")) {
+        toast.error("Only the contract owner can update the IdentityRegistry.");
+      } else {
+        toast.error("Failed to update IdentityRegistry. Check console.");
+      }
+    }
+  }, [error]);
+
+  const handleFix = () => {
+    writeContract({
+      address: rcAddress,
+      abi: rcAbi,
+      functionName: "setIdentityRegistry",
+      args: [expectedIR],
+    });
+  };
+
+  // Don't show if addresses match
+  if (isReadingIR || isMatch) return null;
+
+  return (
+    <Card className="mt-8 border-2 border-red-300">
+      <CardContent className="p-6">
+        <Heading as="h2" className="mb-2 text-red-700">
+          RenterCompliance Registry Mismatch
+        </Heading>
+        <Paragraph className="text-sm text-red-600 mb-4">
+          The RenterCompliance contract is pointing to a different IdentityRegistry than the one used
+          by this admin panel. Renter compliance checks will fail until this is fixed.
+        </Paragraph>
+
+        {isMismatch && (
+          <div className="bg-red-50 rounded-lg p-4 space-y-2 text-xs font-mono mb-4">
+            <div>
+              <span className="text-gray-600">Current (wrong): </span>
+              <span className="text-red-700">{currentIRAddr}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Expected: </span>
+              <span className="text-green-700">{expectedIR}</span>
+            </div>
+          </div>
+        )}
+
+        <Button
+          onClick={handleFix}
+          disabled={isPending || isConfirming || isSuccess}
+          className="bg-red-600 hover:bg-red-700"
+        >
+          {isPending
+            ? "Confirm in Wallet..."
+            : isConfirming
+            ? "Confirming..."
+            : isSuccess
+            ? "Fixed!"
+            : "Fix IdentityRegistry Address"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Inline ABIs for OnchainIDFactory and OnchainID (no dedicated frontend ABI files)
+const FACTORY_ABI = [
+  {
+    type: "function" as const,
+    name: "deployOnchainIDWithKey" as const,
+    inputs: [
+      { name: "_owner", type: "address" as const, internalType: "address" as const },
+      { name: "_managementKey", type: "address" as const, internalType: "address" as const },
+      { name: "_salt", type: "bytes32" as const, internalType: "bytes32" as const },
+    ],
+    outputs: [{ name: "identity", type: "address" as const, internalType: "address" as const }],
+    stateMutability: "payable" as const,
+  },
+  {
+    type: "function" as const,
+    name: "getIdentityByOwner" as const,
+    inputs: [{ name: "_owner", type: "address" as const, internalType: "address" as const }],
+    outputs: [{ name: "", type: "address" as const, internalType: "address" as const }],
+    stateMutability: "view" as const,
+  },
+  {
+    type: "function" as const,
+    name: "deploymentFee" as const,
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" as const, internalType: "uint256" as const }],
+    stateMutability: "view" as const,
+  },
+] as const;
+
+const ONCHAIN_ID_ABI = [
+  {
+    type: "function" as const,
+    name: "addClaim" as const,
+    inputs: [
+      { name: "_topic", type: "uint256" as const, internalType: "uint256" as const },
+      { name: "_scheme", type: "uint256" as const, internalType: "uint256" as const },
+      { name: "_issuer", type: "address" as const, internalType: "address" as const },
+      { name: "_signature", type: "bytes" as const, internalType: "bytes" as const },
+      { name: "_data", type: "bytes" as const, internalType: "bytes" as const },
+      { name: "_uri", type: "string" as const, internalType: "string" as const },
+    ],
+    outputs: [{ name: "claimId", type: "bytes32" as const, internalType: "bytes32" as const }],
+    stateMutability: "nonpayable" as const,
+  },
+  {
+    type: "function" as const,
+    name: "getClaimIdsByTopic" as const,
+    inputs: [{ name: "_topic", type: "uint256" as const, internalType: "uint256" as const }],
+    outputs: [{ name: "", type: "bytes32[]" as const, internalType: "bytes32[]" as const }],
+    stateMutability: "view" as const,
+  },
+] as const;
+
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+
+// Claim topic constants matching ClaimTopics.sol
+const CLAIM_TOPICS = {
+  DRIVER_LICENSE_VALID: BigInt(4),
+  INSURANCE_VERIFIED: BigInt(5),
+  CREDIT_SCORE_RANGE: BigInt(6),
+} as const;
+
+const CLAIM_TOPIC_NAMES: Record<string, string> = {
+  "4": "Driver License",
+  "5": "Insurance",
+  "6": "Credit Score",
+};
+
+/**
+ * RegisterRenterClaimsCard — Multi-step wizard to deploy OnchainID,
+ * update IdentityRegistry, and register renter claims (driver license,
+ * insurance, credit score) required by RenterCompliance contract.
+ */
+function RegisterRenterClaimsCard() {
+  const [renterAddress, setRenterAddress] = useState("");
+  const { address: adminAddress } = useAccount();
+  const identityRegistry = useIdentityRegistry();
+
+  const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(renterAddress);
+
+  // ── Read current state ──────────────────────────────────────
+  const { data: currentIdentity, refetch: refetchIdentity } = useReadContract({
+    address: identityRegistry.address,
+    abi: identityRegistry.abi,
+    functionName: "identity",
+    args: isValidAddress ? [renterAddress as `0x${string}`] : undefined,
+    query: { enabled: isValidAddress },
+  });
+
+  const { data: factoryIdentity, refetch: refetchFactory } = useReadContract({
+    address: SEPOLIA_CONTRACTS.onchainIDFactory as `0x${string}`,
+    abi: FACTORY_ABI,
+    functionName: "getIdentityByOwner",
+    args: isValidAddress ? [renterAddress as `0x${string}`] : undefined,
+    query: { enabled: isValidAddress },
+  });
+
+  const { data: deploymentFee } = useReadContract({
+    address: SEPOLIA_CONTRACTS.onchainIDFactory as `0x${string}`,
+    abi: FACTORY_ABI,
+    functionName: "deploymentFee",
+  });
+
+  // ── Derive state ────────────────────────────────────────────
+  const currentId = currentIdentity as string | undefined;
+  const factoryId = factoryIdentity as string | undefined;
+  const hasIdentity = !!currentId && currentId !== ZERO_ADDR;
+  const isEOA = hasIdentity && currentId?.toLowerCase() === renterAddress.toLowerCase();
+  const hasFactoryId = !!factoryId && factoryId !== ZERO_ADDR;
+  const onchainIdAddr = hasFactoryId ? (factoryId as `0x${string}`) : undefined;
+  const registryCorrect = hasIdentity && !isEOA && hasFactoryId &&
+    currentId?.toLowerCase() === factoryId?.toLowerCase();
+
+  // ── Read claims on OnchainID ────────────────────────────────
+  const claimCheckAddr = registryCorrect ? onchainIdAddr : undefined;
+
+  const { data: licenseClaimIds, refetch: refetchLicense } = useReadContract({
+    address: claimCheckAddr,
+    abi: ONCHAIN_ID_ABI,
+    functionName: "getClaimIdsByTopic",
+    args: claimCheckAddr ? [CLAIM_TOPICS.DRIVER_LICENSE_VALID] : undefined,
+    query: { enabled: !!claimCheckAddr },
+  });
+  const { data: insuranceClaimIds, refetch: refetchInsurance } = useReadContract({
+    address: claimCheckAddr,
+    abi: ONCHAIN_ID_ABI,
+    functionName: "getClaimIdsByTopic",
+    args: claimCheckAddr ? [CLAIM_TOPICS.INSURANCE_VERIFIED] : undefined,
+    query: { enabled: !!claimCheckAddr },
+  });
+  const { data: creditClaimIds, refetch: refetchCredit } = useReadContract({
+    address: claimCheckAddr,
+    abi: ONCHAIN_ID_ABI,
+    functionName: "getClaimIdsByTopic",
+    args: claimCheckAddr ? [CLAIM_TOPICS.CREDIT_SCORE_RANGE] : undefined,
+    query: { enabled: !!claimCheckAddr },
+  });
+
+  const hasLicense = ((licenseClaimIds as `0x${string}`[]) || []).length > 0;
+  const hasInsurance = ((insuranceClaimIds as `0x${string}`[]) || []).length > 0;
+  const hasCredit = ((creditClaimIds as `0x${string}`[]) || []).length > 0;
+  const allClaimsPresent = hasLicense && hasInsurance && hasCredit;
+
+  // ── Determine what steps are needed ─────────────────────────
+  const needsDeploy = isValidAddress && !hasFactoryId;
+  const needsDeleteOld = isValidAddress && hasFactoryId && hasIdentity && (isEOA || !registryCorrect);
+  const needsRegister = isValidAddress && hasFactoryId && (!hasIdentity || isEOA || !registryCorrect);
+  const needsClaims = isValidAddress && registryCorrect && !allClaimsPresent;
+
+  // ── Transaction hooks (one per step) ────────────────────────
+  const {
+    data: deployHash, writeContract: writeDeploy,
+    isPending: isDeploying, error: deployError,
+  } = useWriteContract();
+  const { isLoading: isDeployConfirming, isSuccess: deploySuccess } =
+    useWaitForTransactionReceipt({ hash: deployHash });
+
+  const {
+    data: deleteHash, writeContract: writeDelete,
+    isPending: isDeletingId, error: deleteError,
+  } = useWriteContract();
+  const { isLoading: isDeleteConfirming, isSuccess: deleteSuccess } =
+    useWaitForTransactionReceipt({ hash: deleteHash });
+
+  const {
+    data: regHash, writeContract: writeRegister,
+    isPending: isRegisteringId, error: registerError,
+  } = useWriteContract();
+  const { isLoading: isRegConfirming, isSuccess: registerSuccess } =
+    useWaitForTransactionReceipt({ hash: regHash });
+
+  const {
+    data: claimHash, writeContract: writeClaim,
+    isPending: isClaiming, error: claimError,
+  } = useWriteContract();
+  const { isLoading: isClaimConfirming, isSuccess: claimSuccess } =
+    useWaitForTransactionReceipt({ hash: claimHash });
+
+  // ── Refetch after each step ─────────────────────────────────
+  useEffect(() => {
+    if (deploySuccess) { toast.success("OnchainID deployed!"); refetchFactory(); }
+  }, [deploySuccess]);
+  useEffect(() => {
+    if (deleteSuccess) { toast.success("Old identity deleted from registry"); refetchIdentity(); }
+  }, [deleteSuccess]);
+  useEffect(() => {
+    if (registerSuccess) { toast.success("OnchainID registered in IdentityRegistry!"); refetchIdentity(); }
+  }, [registerSuccess]);
+  useEffect(() => {
+    if (claimSuccess) {
+      toast.success("Claim registered on OnchainID!");
+      refetchLicense(); refetchInsurance(); refetchCredit();
+    }
+  }, [claimSuccess]);
+
+  // ── Error toasts ────────────────────────────────────────────
+  useEffect(() => { if (deployError) toast.error("Deploy failed: " + (deployError.message?.slice(0, 120) || "Unknown")); }, [deployError]);
+  useEffect(() => { if (deleteError) toast.error("Delete failed: " + (deleteError.message?.slice(0, 120) || "Unknown")); }, [deleteError]);
+  useEffect(() => { if (registerError) toast.error("Register failed: " + (registerError.message?.slice(0, 120) || "Unknown")); }, [registerError]);
+  useEffect(() => { if (claimError) toast.error("Claim failed: " + (claimError.message?.slice(0, 120) || "Unknown")); }, [claimError]);
+
+  // ── Action handlers ─────────────────────────────────────────
+  const handleDeploy = () => {
+    if (!adminAddress) { toast.error("Connect admin wallet first"); return; }
+    const salt = keccak256(toHex(renterAddress));
+    writeDeploy({
+      address: SEPOLIA_CONTRACTS.onchainIDFactory as `0x${string}`,
+      abi: FACTORY_ABI,
+      functionName: "deployOnchainIDWithKey",
+      args: [renterAddress as `0x${string}`, adminAddress, salt],
+      value: ((deploymentFee as bigint) || BigInt(0)) + BigInt(1),
+    });
+  };
+
+  const handleDeleteIdentity = () => {
+    writeDelete({
+      address: identityRegistry.address,
+      abi: identityRegistry.abi,
+      functionName: "deleteIdentity",
+      args: [renterAddress as `0x${string}`],
+    });
+  };
+
+  const handleRegisterIdentity = () => {
+    if (!onchainIdAddr) { toast.error("No OnchainID found"); return; }
+    writeRegister({
+      address: identityRegistry.address,
+      abi: identityRegistry.abi,
+      functionName: "registerIdentity",
+      args: [renterAddress as `0x${string}`, onchainIdAddr, 1], // country=1 (US)
+    });
+  };
+
+  const handleAddClaim = (topic: bigint) => {
+    if (!onchainIdAddr || !adminAddress) return;
+    const name = CLAIM_TOPIC_NAMES[topic.toString()] || "claim";
+    writeClaim({
+      address: onchainIdAddr,
+      abi: ONCHAIN_ID_ABI,
+      functionName: "addClaim",
+      args: [topic, BigInt(1), adminAddress, "0x", "0x", `regshield:${name.toLowerCase().replace(" ", "_")}`],
+    });
+  };
+
+  // ── Busy states ─────────────────────────────────────────────
+  const anyPending = isDeploying || isDeployConfirming || isDeletingId || isDeleteConfirming ||
+    isRegisteringId || isRegConfirming || isClaiming || isClaimConfirming;
+
+  const btnLabel = (pending: boolean, confirming: boolean, label: string) =>
+    pending ? "Confirm in Wallet..." : confirming ? "Confirming..." : label;
+
+  return (
+    <Card className="mt-8 border-2 border-indigo-200">
+      <CardContent className="p-6">
+        <Heading as="h2" className="mb-2">
+          Register Renter Claims (OnchainID)
+        </Heading>
+        <Paragraph className="text-sm text-gray-600 mb-4">
+          Deploy an OnchainID for the renter and register driver license, insurance, and credit score
+          claims. These claims are required by the RenterCompliance contract for on-chain rental payments.
+        </Paragraph>
+
+        {/* Address input */}
+        <div className="mb-4">
+          <Input
+            placeholder="0x... renter wallet address"
+            value={renterAddress}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRenterAddress(e.target.value)}
+            className="font-mono text-sm"
+          />
+        </div>
+
+        {/* Status dashboard */}
+        {isValidAddress && (
+          <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm mb-4">
+            <div className="flex justify-between">
+              <span className="text-gray-600">OnchainID Deployed</span>
+              <Badge variant={hasFactoryId ? "success" : "warning"}>
+                {hasFactoryId ? "Yes" : "No"}
+              </Badge>
+            </div>
+            {hasFactoryId && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">OnchainID Address</span>
+                <span className="font-mono text-xs text-gray-700">
+                  {onchainIdAddr?.slice(0, 10)}...{onchainIdAddr?.slice(-6)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-gray-600">Identity Registry</span>
+              <Badge variant={registryCorrect ? "success" : hasIdentity ? (isEOA ? "error" : "warning") : "warning"}>
+                {registryCorrect ? "Correct" : isEOA ? "EOA (needs update)" : hasIdentity ? "Wrong address" : "Not registered"}
+              </Badge>
+            </div>
+            {registryCorrect && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Driver License Claim (4)</span>
+                  <Badge variant={hasLicense ? "success" : "warning"}>
+                    {hasLicense ? "Present" : "Missing"}
+                  </Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Insurance Claim (5)</span>
+                  <Badge variant={hasInsurance ? "success" : "warning"}>
+                    {hasInsurance ? "Present" : "Missing"}
+                  </Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Credit Score Claim (6)</span>
+                  <Badge variant={hasCredit ? "success" : "warning"}>
+                    {hasCredit ? "Present" : "Missing"}
+                  </Badge>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* All done */}
+        {isValidAddress && registryCorrect && allClaimsPresent && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800 font-medium">
+            All renter claims are registered. This renter can now pass on-chain compliance checks.
+          </div>
+        )}
+
+        {/* Action buttons */}
+        {isValidAddress && (
+          <div className="space-y-3 mt-4">
+            {/* Step 1: Deploy OnchainID */}
+            {needsDeploy && (
+              <div>
+                <Paragraph className="text-xs text-gray-500 mb-1">
+                  Step 1: Deploy an OnchainID contract for this renter
+                </Paragraph>
+                <Button
+                  onClick={handleDeploy}
+                  disabled={anyPending || !adminAddress}
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                >
+                  {btnLabel(isDeploying, isDeployConfirming, "Deploy OnchainID")}
+                </Button>
+              </div>
+            )}
+
+            {/* Step 2a: Delete old EOA identity */}
+            {!needsDeploy && needsDeleteOld && !deleteSuccess && (
+              <div>
+                <Paragraph className="text-xs text-gray-500 mb-1">
+                  Step 2a: Remove old identity (EOA) from registry
+                </Paragraph>
+                <Button
+                  onClick={handleDeleteIdentity}
+                  disabled={anyPending}
+                  variant="destructive"
+                >
+                  {btnLabel(isDeletingId, isDeleteConfirming, "Delete Old Identity")}
+                </Button>
+              </div>
+            )}
+
+            {/* Step 2b: Register new OnchainID */}
+            {!needsDeploy && needsRegister && (!needsDeleteOld || deleteSuccess) && (
+              <div>
+                <Paragraph className="text-xs text-gray-500 mb-1">
+                  Step 2b: Register OnchainID in IdentityRegistry
+                </Paragraph>
+                <Button
+                  onClick={handleRegisterIdentity}
+                  disabled={anyPending}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {btnLabel(isRegisteringId, isRegConfirming, "Register OnchainID")}
+                </Button>
+              </div>
+            )}
+
+            {/* Step 3: Register claims */}
+            {needsClaims && (
+              <div>
+                <Paragraph className="text-xs text-gray-500 mb-1">
+                  Step 3: Register missing claims on OnchainID
+                </Paragraph>
+                <div className="flex gap-2 flex-wrap">
+                  {!hasLicense && (
+                    <Button
+                      onClick={() => handleAddClaim(CLAIM_TOPICS.DRIVER_LICENSE_VALID)}
+                      disabled={anyPending}
+                      size="sm"
+                      className="bg-teal-600 hover:bg-teal-700"
+                    >
+                      {isClaiming || isClaimConfirming ? "Processing..." : "Add Driver License"}
+                    </Button>
+                  )}
+                  {!hasInsurance && (
+                    <Button
+                      onClick={() => handleAddClaim(CLAIM_TOPICS.INSURANCE_VERIFIED)}
+                      disabled={anyPending}
+                      size="sm"
+                      className="bg-teal-600 hover:bg-teal-700"
+                    >
+                      {isClaiming || isClaimConfirming ? "Processing..." : "Add Insurance"}
+                    </Button>
+                  )}
+                  {!hasCredit && (
+                    <Button
+                      onClick={() => handleAddClaim(CLAIM_TOPICS.CREDIT_SCORE_RANGE)}
+                      disabled={anyPending}
+                      size="sm"
+                      className="bg-teal-600 hover:bg-teal-700"
+                    >
+                      {isClaiming || isClaimConfirming ? "Processing..." : "Add Credit Score"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -18,7 +18,7 @@ const kycSchema = new mongoose.Schema(
     // Role-specific verification
     roleType: {
       type: String,
-      enum: ["investor", "rentor"],
+      enum: ["investor", "rentor", "renter"],
       required: true,
     },
 
@@ -84,6 +84,18 @@ const kycSchema = new mongoose.Schema(
       annualIncome: Number,
       netWorth: Number,
       investmentExperience: String,
+    },
+
+    // For Renters - Driver's License, Insurance & Contact
+    renterInfo: {
+      driverLicenseNumber: String,
+      driverLicenseExpiry: Date,
+      driverLicenseIssuingState: String,
+      insuranceProvider: String,
+      insurancePolicyNumber: String,
+      insuranceExpiry: Date,
+      phone: String,
+      email: String,
     },
 
     // For Rentors - Business Information

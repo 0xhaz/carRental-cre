@@ -121,9 +121,11 @@ contract RentalPaymentProtocol is IRentalPaymentProtocol, Ownable, ReentrancyGua
         }
 
         uint256 totalAmount = rentalFee + securityDeposit;
+        uint256 escrowFee = paymentEscrow.calculateEscrowFee(totalAmount);
+        uint256 totalWithFee = totalAmount + escrowFee;
 
-        // Check renter's ETH value
-        if (msg.value < totalAmount) {
+        // Check renter's ETH value (must cover escrow fee too)
+        if (msg.value < totalWithFee) {
             revert RentalPayment__InvalidAmount();
         }
 
@@ -146,14 +148,14 @@ contract RentalPaymentProtocol is IRentalPaymentProtocol, Ownable, ReentrancyGua
         payment.actualReturnTime = 0;
         payment.penaltyAmount = 0;
 
-        // Forward ETH to escrow
-        paymentEscrow.createEscrow{value: totalAmount}(
+        // Forward ETH to escrow (including escrow fee)
+        paymentEscrow.createEscrow{value: totalWithFee}(
             paymentId, msg.sender, rentor, totalAmount, (endTime - startTime) + 7 days
         );
 
         // Refund excess ETH
-        if (msg.value > totalAmount) {
-            (bool refunded,) = payable(msg.sender).call{value: msg.value - totalAmount}("");
+        if (msg.value > totalWithFee) {
+            (bool refunded,) = payable(msg.sender).call{value: msg.value - totalWithFee}("");
             if (!refunded) revert RentalPayment__PaymentAlreadyProcessed();
         }
 

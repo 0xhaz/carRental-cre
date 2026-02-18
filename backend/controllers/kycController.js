@@ -6,6 +6,7 @@
 import KYC from "../models/kycModel.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
+import RenterProfile from "../models/RenterProfile.js";
 
 /**
  * @desc    Get all investor users with wallet + KYC status (for admin investor management)
@@ -62,6 +63,7 @@ export const submitKYC = async (req, res) => {
     const personalInfo = req.body.personalInfo ? JSON.parse(req.body.personalInfo) : undefined;
     const investorInfo = req.body.investorInfo ? JSON.parse(req.body.investorInfo) : undefined;
     const businessInfo = req.body.businessInfo ? JSON.parse(req.body.businessInfo) : undefined;
+    const renterInfo = req.body.renterInfo ? JSON.parse(req.body.renterInfo) : undefined;
 
     // Check if user already has a KYC submission
     let kyc = await KYC.findOne({ user: userId });
@@ -119,6 +121,7 @@ export const submitKYC = async (req, res) => {
       if (personalInfo) kyc.personalInfo = personalInfo;
       if (investorInfo) kyc.investorInfo = investorInfo;
       if (businessInfo) kyc.businessInfo = businessInfo;
+      if (renterInfo) kyc.renterInfo = renterInfo;
       kyc.status = "pending";
       kyc.submittedAt = new Date();
 
@@ -132,8 +135,23 @@ export const submitKYC = async (req, res) => {
         personalInfo,
         investorInfo,
         businessInfo,
+        renterInfo,
         status: "pending",
         submittedAt: new Date(),
+      });
+    }
+
+    // Notify all admin users about the new KYC submission
+    const adminUsers = await User.find({ role: "admin" }, "_id");
+    const roleLabel = roleType === "renter" ? "Renter" : roleType === "investor" ? "Investor" : "Rentor";
+    for (const admin of adminUsers) {
+      await Notification.create({
+        userId: admin._id,
+        type: "kyc_submitted",
+        title: `New KYC Submission`,
+        message: `${req.user.name || "A user"} has submitted KYC verification as a ${roleLabel}. Please review their documents.`,
+        link: "/admin/kyc",
+        metadata: {},
       });
     }
 
@@ -325,13 +343,61 @@ export const approveKYC = async (req, res) => {
       "compliance.kycVerified": true,
     });
 
+    // If renter, create or update RenterProfile from KYC data
+    if (kyc.roleType === "renter") {
+      const profileData = {
+        user: kyc.user._id,
+        personalInfo: {
+          fullName: kyc.personalInfo?.fullName || "",
+          email: kyc.renterInfo?.email || kyc.user.email || "",
+          phone: kyc.renterInfo?.phone || "",
+          dateOfBirth: kyc.personalInfo?.dateOfBirth || null,
+        },
+        address: {
+          street: kyc.personalInfo?.address?.street || "",
+          city: kyc.personalInfo?.address?.city || "",
+          state: kyc.personalInfo?.address?.state || "",
+          zipCode: kyc.personalInfo?.address?.postalCode || "",
+          country: kyc.personalInfo?.address?.country || "USA",
+        },
+        driverLicense: {
+          number: kyc.renterInfo?.driverLicenseNumber || "",
+          expiryDate: kyc.renterInfo?.driverLicenseExpiry || null,
+          issuingState: kyc.renterInfo?.driverLicenseIssuingState || "",
+          isVerified: true,
+          verifiedAt: new Date(),
+          verifiedBy: reviewerId,
+        },
+        insurance: {
+          provider: kyc.renterInfo?.insuranceProvider || "",
+          policyNumber: kyc.renterInfo?.insurancePolicyNumber || "",
+          expiryDate: kyc.renterInfo?.insuranceExpiry || null,
+          isVerified: true,
+          verifiedAt: new Date(),
+          verifiedBy: reviewerId,
+        },
+        isVerified: true,
+      };
+
+      await RenterProfile.findOneAndUpdate(
+        { user: kyc.user._id },
+        profileData,
+        { upsert: true, new: true }
+      );
+    }
+
+    // Determine redirect link based on role
+    const redirectLink = kyc.roleType === "renter"
+      ? "/renter/browse"
+      : `/${kyc.roleType}/dashboard`;
+
     // Create notification for user
     await Notification.create({
       userId: kyc.user._id,
       type: "kyc_approved",
       title: "KYC Approved ✅",
       message: `Your KYC verification has been approved! You can now access all ${kyc.roleType} features on the platform.`,
-      link: `/${kyc.roleType}/dashboard`,
+      link: redirectLink,
       metadata: {},
     });
 

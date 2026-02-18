@@ -94,6 +94,22 @@ const renterProfileSchema = new mongoose.Schema(
       },
     },
 
+    // Insurance
+    insurance: {
+      provider: String,
+      policyNumber: String,
+      expiryDate: Date,
+      isVerified: {
+        type: Boolean,
+        default: false,
+      },
+      verifiedAt: Date,
+      verifiedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    },
+
     // Verification Status
     isVerified: {
       type: Boolean,

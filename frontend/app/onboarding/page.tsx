@@ -94,7 +94,7 @@ export default function Onboarding() {
         setTimeout(() => {
           // For investor/rentor, go to verification wizard
           // For renter, go directly to browse
-          if (role === UserRole.INVESTOR || role === UserRole.RENTOR) {
+          if (role === UserRole.INVESTOR || role === UserRole.RENTOR || role === UserRole.RENTER) {
             router.push(`/verification?role=${role}`);
           } else {
             router.push(route);

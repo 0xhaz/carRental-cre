@@ -85,8 +85,8 @@ contract OnchainIDFactory is Ownable {
         if (msg.value <= deploymentFee) revert OnchainIDFactory__InsufficientDeploymentFee();
         if (saltToIdentity[_salt] != address(0)) revert OnchainIDFactory__SaltAlreadyUsed();
 
-        // Deploy OnchainID contract using Create2
-        bytes memory bytecode = abi.encodePacked(type(OnchainID).creationCode, abi.encode(_owner));
+        // Deploy OnchainID contract using Create2 (no admin key)
+        bytes memory bytecode = abi.encodePacked(type(OnchainID).creationCode, abi.encode(_owner, address(0)));
 
         identity = Create2.deploy(0, _salt, bytecode);
 
@@ -126,8 +126,8 @@ contract OnchainIDFactory is Ownable {
         if (msg.value <= deploymentFee) revert OnchainIDFactory__InsufficientDeploymentFee();
         if (saltToIdentity[_salt] != address(0)) revert OnchainIDFactory__SaltAlreadyUsed();
 
-        // Deploy OnchainID contract using Create2
-        bytes memory bytecode = abi.encodePacked(type(OnchainID).creationCode, abi.encode(_owner));
+        // Deploy OnchainID contract using Create2 (owner + admin management key)
+        bytes memory bytecode = abi.encodePacked(type(OnchainID).creationCode, abi.encode(_owner, _managementKey));
 
         identity = Create2.deploy(0, _salt, bytecode);
 
@@ -155,8 +155,8 @@ contract OnchainIDFactory is Ownable {
      * @param _salt Salt for deterministic address generation
      * @return identity The computed address
      */
-    function computeOnchainIDAddress(address _owner, bytes32 _salt) external view returns (address identity) {
-        bytes memory bytecode = abi.encodePacked(type(OnchainID).creationCode, abi.encode(_owner));
+    function computeOnchainIDAddress(address _owner, address _admin, bytes32 _salt) external view returns (address identity) {
+        bytes memory bytecode = abi.encodePacked(type(OnchainID).creationCode, abi.encode(_owner, _admin));
 
         return Create2.computeAddress(_salt, keccak256(bytecode));
     }
@@ -183,8 +183,8 @@ contract OnchainIDFactory is Ownable {
             if (_owners[i] == address(0)) revert OnchainIDFactory__InvalidOwnerAddress();
             if (saltToIdentity[_salts[i]] != address(0)) revert OnchainIDFactory__SaltAlreadyUsed();
 
-            // Deploy OnchainID contract using Create2
-            bytes memory bytecode = abi.encodePacked(type(OnchainID).creationCode, abi.encode(_owners[i]));
+            // Deploy OnchainID contract using Create2 (no admin key for batch)
+            bytes memory bytecode = abi.encodePacked(type(OnchainID).creationCode, abi.encode(_owners[i], address(0)));
 
             address identity = Create2.deploy(0, _salts[i], bytecode);
 

@@ -115,7 +115,8 @@ export const getBookingById = async (req, res) => {
     const booking = await Booking.findById(id)
       .populate("car")
       .populate("user", "name email walletAddress")
-      .populate("owner", "name email walletAddress");
+      .populate("owner", "name email walletAddress")
+      .populate("renterProfile");
 
     if (!booking) {
       return res.json({ success: false, message: "Booking not found" });

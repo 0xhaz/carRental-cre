@@ -34,6 +34,12 @@ export interface RenterProfile {
     };
     isVerified: boolean;
   };
+  insurance?: {
+    provider: string;
+    policyNumber: string;
+    expiryDate: Date;
+    isVerified: boolean;
+  };
   age: number;
   meetsAgeRequirement: boolean;
   totalBookings: number;

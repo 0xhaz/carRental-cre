@@ -262,3 +262,38 @@ export function useCanRentorAct(): {
 
   return { canAct: true, reason: null, isLoading: false };
 }
+
+/**
+ * Hook to check if user can perform renter actions
+ * Gates on KYC approval — wallet match is enforced at the blockchain operation level
+ */
+export function useCanRenterAct(): {
+  canAct: boolean;
+  reason: string | null;
+  isLoading: boolean;
+} {
+  const { user } = useUserStore();
+  const compliance = useComplianceStatus();
+
+  if (compliance.isLoading) {
+    return { canAct: false, reason: null, isLoading: true };
+  }
+
+  if (user?.role !== "renter") {
+    return {
+      canAct: false,
+      reason: "You must be registered as a renter",
+      isLoading: false,
+    };
+  }
+
+  if (!compliance.isKYCApproved && !compliance.isVerifiedOnChain) {
+    return {
+      canAct: false,
+      reason: compliance.missingSteps[0] || "Complete KYC verification",
+      isLoading: false,
+    };
+  }
+
+  return { canAct: true, reason: null, isLoading: false };
+}

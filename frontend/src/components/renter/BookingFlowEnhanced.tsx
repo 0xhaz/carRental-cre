@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button, Input, Separator, Badge, Card, CardContent } from "@/components/ui";
 import { Vehicle } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { RenterDetailsForm, type RenterDetails } from "./RenterDetailsForm";
 import { PaymentMethodSelector, type PaymentDetails } from "./PaymentMethodSelector";
 import { toast } from "react-hot-toast";
 import { renterApi } from "@/lib/api";
+import { useCanRenterAct } from "@/hooks/useComplianceStatus";
 import CryptoBookingFlow from "./CryptoBookingFlow";
 
 export interface BookingFlowEnhancedProps {
@@ -30,6 +31,9 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
     setPickupLocation,
   } = useBookingFlowStore();
 
+  const { canAct: isRenterVerified } = useCanRenterAct();
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
   const [renterDetails, setRenterDetails] = useState<RenterDetails | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
   const [additionalDriver, setAdditionalDriver] = useState(false);
@@ -37,6 +41,43 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cryptoBookingId, setCryptoBookingId] = useState<string | null>(null);
   const [showCryptoPayment, setShowCryptoPayment] = useState(false);
+
+  // Pre-populate renter details from verified profile
+  useEffect(() => {
+    if (isRenterVerified && !profileLoaded) {
+      renterApi
+        .getProfile()
+        .then((res) => {
+          if (res.success && res.profile) {
+            const p = res.profile;
+            setRenterDetails({
+              fullName: p.personalInfo?.fullName || "",
+              email: p.personalInfo?.email || "",
+              phone: p.personalInfo?.phone || "",
+              dateOfBirth: p.personalInfo?.dateOfBirth
+                ? new Date(p.personalInfo.dateOfBirth).toISOString().split("T")[0]
+                : "",
+              address: p.address?.street || "",
+              city: p.address?.city || "",
+              state: p.address?.state || "",
+              zipCode: p.address?.zipCode || "",
+              driverLicense: {
+                number: p.driverLicense?.number || "",
+                expiryDate: p.driverLicense?.expiryDate
+                  ? new Date(p.driverLicense.expiryDate).toISOString().split("T")[0]
+                  : "",
+                issuingState: p.driverLicense?.issuingState || "",
+                // Images were uploaded during KYC — not needed for verified renters
+              },
+            });
+            setProfileLoaded(true);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load renter profile:", err);
+        });
+    }
+  }, [isRenterVerified, profileLoaded]);
 
   // Calculate booking details
   const calculateDays = () => {
@@ -84,7 +125,12 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
         toast.error("Please select pickup and return dates");
         return;
       }
-      setCurrentStep("renter_details");
+      // Skip renter_details if verified profile is loaded
+      if (isRenterVerified && profileLoaded) {
+        setCurrentStep("booking_details");
+      } else {
+        setCurrentStep("renter_details");
+      }
     } else if (currentStep === "renter_details") {
       if (!validateRenterDetails()) {
         toast.error("Please complete all required fields and upload your driver's license");
@@ -174,7 +220,12 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
     if (currentStep === "renter_details") {
       setCurrentStep("dates");
     } else if (currentStep === "booking_details") {
-      setCurrentStep("renter_details");
+      // Skip back to dates if renter_details was skipped
+      if (isRenterVerified && profileLoaded) {
+        setCurrentStep("dates");
+      } else {
+        setCurrentStep("renter_details");
+      }
     } else if (currentStep === "payment") {
       setCurrentStep("booking_details");
     } else if (currentStep === "review") {
@@ -182,13 +233,16 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
     }
   };
 
-  const steps = [
-    { id: "dates", label: "Dates", number: 1 },
-    { id: "renter_details", label: "Your Details", number: 2 },
-    { id: "booking_details", label: "Booking Info", number: 3 },
-    { id: "payment", label: "Payment", number: 4 },
-    { id: "review", label: "Review", number: 5 },
+  const allSteps = [
+    { id: "dates", label: "Dates" },
+    ...((isRenterVerified && profileLoaded)
+      ? []
+      : [{ id: "renter_details", label: "Your Details" }]),
+    { id: "booking_details", label: "Booking Info" },
+    { id: "payment", label: "Payment" },
+    { id: "review", label: "Review" },
   ];
+  const steps = allSteps.map((s, i) => ({ ...s, number: i + 1 }));
 
   const currentStepIndex = steps.findIndex((s) => s.id === currentStep);
 
