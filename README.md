@@ -7,7 +7,7 @@
 
 **RegShield** is a fully on-chain vehicle rental investment platform where vehicle operators (rentors) raise capital by tokenizing vehicle ownership and rental income rights using **ERC-3643** security tokens. Investors fund vehicle acquisitions, renters book vehicles with crypto payments, and rental revenue is automatically distributed via a transparent **waterfall model** — all orchestrated by **5 Chainlink CRE workflows** that automate compliance, onboarding, payments, vehicle telematics, and campaign monitoring.
 
-> **Chainlink Convergence Hackathon 2026** - Risk & Compliance Track
+> **Chainlink Convergence Hackathon 2026** - DeFi & Tokenization
 
 ---
 
