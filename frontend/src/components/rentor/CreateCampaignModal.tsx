@@ -8,12 +8,13 @@ import { vehicleApi, investmentApi } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 // Revenue waterfall percentages from RevenueDistributor.sol
+// Insurance (5%) + Operating (10%) + Operator (10%) = 25% total → withdrawable by rentor
 const WATERFALL = {
   platformFee: 0.15,
   maintenance: 0.10,
-  insurance: 0.05,
-  operatingCosts: 0.10,
-  operatorFee: 0.10,
+  insurance: 0.05,       // Rentor responsibility
+  operatingCosts: 0.10,  // Rentor responsibility
+  operatorFee: 0.10,     // Rentor responsibility
   netToInvestors: 0.50,
 } as const;
 
@@ -648,18 +649,18 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                         <span className="text-red-500">-${fmt(pricing.maintenance)}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-gray-500">Insurance (5%)</span>
+                        <span className="text-gray-500">Insurance (5%) — Rentor</span>
                         <span className="text-red-500">-${fmt(pricing.insurance)}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-gray-500">Operating Costs (10%)</span>
+                        <span className="text-gray-500">Operating Costs (10%) — Rentor</span>
                         <span className="text-red-500">-${fmt(pricing.operatingCosts)}</span>
                       </div>
                     </div>
 
                     {/* Operator Fee */}
                     <div className="border-t border-blue-100 pt-2 flex justify-between items-center">
-                      <span className="text-sm font-medium text-blue-700">Operator Fee (10%)</span>
+                      <span className="text-sm font-medium text-blue-700">Operator Fee (10%) — Rentor</span>
                       <span className="text-sm font-bold text-blue-700">${fmt(pricing.operatorFee)}/yr</span>
                     </div>
 

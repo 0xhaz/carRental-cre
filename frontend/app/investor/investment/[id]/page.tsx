@@ -199,6 +199,8 @@ export default function InvestmentDetailPage() {
                   className="w-full h-full object-cover"
                   width={800}
                   height={400}
+                  unoptimized
+                  onError={(e) => { (e.target as HTMLImageElement).src = "/assets/car_image1.png"; }}
                 />
                 <div className="absolute top-4 left-4 flex gap-2">
                   <Badge

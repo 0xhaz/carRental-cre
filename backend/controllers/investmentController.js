@@ -647,7 +647,10 @@ export const recordFundsReleased = async (req, res) => {
 export const recordRevenueDistributed = async (req, res) => {
   try {
     const { vehicleNftId } = req.params;
-    const { amountEth, txHash } = req.body;
+    const { amountEth, amountUsd, txHash } = req.body;
+
+    // Prefer amountUsd (already converted); fall back to amountEth for legacy callers
+    const revenueAmount = amountUsd || amountEth || 0;
 
     const car = await Car.findOne({ vehicleNftId: parseInt(vehicleNftId) });
     if (!car) {
@@ -661,7 +664,7 @@ export const recordRevenueDistributed = async (req, res) => {
     // Distribute proportionally to each investor
     for (const inv of investments) {
       const share = totalInvested > 0 ? inv.amount / totalInvested : 0;
-      const revenueShare = (amountEth || 0) * share;
+      const revenueShare = revenueAmount * share;
       inv.totalRevenueEarned = (inv.totalRevenueEarned || 0) + revenueShare;
       inv.lastDistribution = new Date();
       await inv.save();
@@ -680,7 +683,10 @@ export const recordRevenueDistributed = async (req, res) => {
 export const recordRevenueClaimed = async (req, res) => {
   try {
     const { vehicleNftId } = req.params;
-    const { amountEth, txHash } = req.body;
+    const { amountEth, amountUsd, txHash } = req.body;
+
+    // Prefer amountUsd (already converted); fall back to amountEth for legacy callers
+    const revenueAmount = amountUsd || amountEth || 0;
 
     const car = await Car.findOne({ vehicleNftId: parseInt(vehicleNftId) });
     if (!car) {
@@ -694,11 +700,14 @@ export const recordRevenueClaimed = async (req, res) => {
       status: "active",
     });
 
-    if (investment) {
-      investment.totalRevenueEarned = (investment.totalRevenueEarned || 0) + (amountEth || 0);
-      investment.lastDistribution = new Date();
-      await investment.save();
+    if (!investment) {
+      console.warn(`recordRevenueClaimed: no active investment found for vehicle ${car._id} / investor ${req.user._id}`);
+      return res.status(404).json({ success: false, message: "No active investment found for this vehicle" });
     }
+
+    investment.totalRevenueEarned = (investment.totalRevenueEarned || 0) + revenueAmount;
+    investment.lastDistribution = new Date();
+    await investment.save();
 
     res.json({ success: true, message: "Revenue claim recorded" });
   } catch (error) {

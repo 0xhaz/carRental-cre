@@ -5,10 +5,12 @@ import { Card, CardContent, Heading, Button } from "@/components/ui";
 import {
   useRegisterVehicleTokens,
   useRegisterVehicleRevenue,
+  useSetRevenueTokenDistributor,
   useSetVehicleOperator,
+  useAddTokenAgent,
 } from "@/hooks/useVehicleSetup";
 import { toast } from "react-hot-toast";
-import { SEPOLIA_CHAIN_ID, getEtherscanUrl } from "@/constants/contracts";
+import { SEPOLIA_CHAIN_ID, SEPOLIA_CONTRACTS, getEtherscanUrl } from "@/constants/contracts";
 
 interface VehicleSetupWizardProps {
   vehicleNftId: bigint;
@@ -30,7 +32,9 @@ export default function VehicleSetupWizard({
   onComplete,
 }: VehicleSetupWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
-  const [stepStatuses, setStepStatuses] = useState<StepStatus[]>(["pending", "pending", "pending"]);
+  const [stepStatuses, setStepStatuses] = useState<StepStatus[]>(["pending", "pending", "pending", "pending", "pending", "pending"]);
+
+  const paymentProtocolAddress = SEPOLIA_CONTRACTS.investmentPaymentProtocol as `0x${string}`;
 
   const {
     register: registerTokens,
@@ -51,6 +55,15 @@ export default function VehicleSetupWizard({
   } = useRegisterVehicleRevenue();
 
   const {
+    setDistributor,
+    hash: setDistributorHash,
+    isConfirming: isSetDistributorConfirming,
+    isSuccess: setDistributorSuccess,
+    isPending: isSetDistributorPending,
+    error: setDistributorError,
+  } = useSetRevenueTokenDistributor();
+
+  const {
     setOperator,
     hash: setOperatorHash,
     isConfirming: isSetOperatorConfirming,
@@ -58,6 +71,24 @@ export default function VehicleSetupWizard({
     isPending: isSetOperatorPending,
     error: setOperatorError,
   } = useSetVehicleOperator();
+
+  const {
+    addAgent: addAgentAsset,
+    hash: addAgentAssetHash,
+    isConfirming: isAddAgentAssetConfirming,
+    isSuccess: addAgentAssetSuccess,
+    isPending: isAddAgentAssetPending,
+    error: addAgentAssetError,
+  } = useAddTokenAgent();
+
+  const {
+    addAgent: addAgentRevenue,
+    hash: addAgentRevenueHash,
+    isConfirming: isAddAgentRevenueConfirming,
+    isSuccess: addAgentRevenueSuccess,
+    isPending: isAddAgentRevenuePending,
+    error: addAgentRevenueError,
+  } = useAddTokenAgent();
 
   const updateStatus = (step: number, status: StepStatus) => {
     setStepStatuses((prev) => {
@@ -77,25 +108,55 @@ export default function VehicleSetupWizard({
     }
   }, [registerTokensSuccess]);
 
-  // Step 2 complete → auto-start step 3
+  // Step 2 complete → auto-start step 3 (configure RevenueToken distributor)
   useEffect(() => {
     if (registerRevenueSuccess && currentStep === 1) {
       updateStatus(1, "done");
       setCurrentStep(2);
       updateStatus(2, "in_progress");
-      setOperator(vehicleNftId, rentorAddress);
+      setDistributor(revenueTokenAddress);
     }
   }, [registerRevenueSuccess]);
 
-  // Step 3 complete → all done
+  // Step 3 complete → auto-start step 4 (set operator)
   useEffect(() => {
-    if (setOperatorSuccess && currentStep === 2) {
+    if (setDistributorSuccess && currentStep === 2) {
       updateStatus(2, "done");
       setCurrentStep(3);
+      updateStatus(3, "in_progress");
+      setOperator(vehicleNftId, rentorAddress);
+    }
+  }, [setDistributorSuccess]);
+
+  // Step 4 complete → auto-start step 5 (authorize minting on AssetToken)
+  useEffect(() => {
+    if (setOperatorSuccess && currentStep === 3) {
+      updateStatus(3, "done");
+      setCurrentStep(4);
+      updateStatus(4, "in_progress");
+      addAgentAsset(assetTokenAddress, paymentProtocolAddress);
+    }
+  }, [setOperatorSuccess]);
+
+  // Step 5 complete → auto-start step 6 (authorize minting on RevenueToken)
+  useEffect(() => {
+    if (addAgentAssetSuccess && currentStep === 4) {
+      updateStatus(4, "done");
+      setCurrentStep(5);
+      updateStatus(5, "in_progress");
+      addAgentRevenue(revenueTokenAddress, paymentProtocolAddress);
+    }
+  }, [addAgentAssetSuccess]);
+
+  // Step 6 complete → all done
+  useEffect(() => {
+    if (addAgentRevenueSuccess && currentStep === 5) {
+      updateStatus(5, "done");
+      setCurrentStep(6);
       toast.success("Vehicle token setup complete!");
       onComplete?.();
     }
-  }, [setOperatorSuccess]);
+  }, [addAgentRevenueSuccess]);
 
   // Error handling
   useEffect(() => {
@@ -113,11 +174,32 @@ export default function VehicleSetupWizard({
   }, [registerRevenueError]);
 
   useEffect(() => {
-    if (setOperatorError) {
+    if (setDistributorError) {
       updateStatus(2, "error");
+      toast.error(setDistributorError.message?.slice(0, 100) || "Failed to configure RevenueToken distributor");
+    }
+  }, [setDistributorError]);
+
+  useEffect(() => {
+    if (setOperatorError) {
+      updateStatus(3, "error");
       toast.error(setOperatorError.message?.slice(0, 100) || "Failed to set operator");
     }
   }, [setOperatorError]);
+
+  useEffect(() => {
+    if (addAgentAssetError) {
+      updateStatus(4, "error");
+      toast.error(addAgentAssetError.message?.slice(0, 100) || "Failed to authorize minting on AssetToken");
+    }
+  }, [addAgentAssetError]);
+
+  useEffect(() => {
+    if (addAgentRevenueError) {
+      updateStatus(5, "error");
+      toast.error(addAgentRevenueError.message?.slice(0, 100) || "Failed to authorize minting on RevenueToken");
+    }
+  }, [addAgentRevenueError]);
 
   const handleStart = () => {
     updateStatus(0, "in_progress");
@@ -140,10 +222,28 @@ export default function VehicleSetupWizard({
       isConfirming: isRegisterRevenueConfirming,
     },
     {
+      label: "Configure RevenueToken distributor",
+      hash: setDistributorHash,
+      isPending: isSetDistributorPending,
+      isConfirming: isSetDistributorConfirming,
+    },
+    {
       label: "Set operator on RevenueDistributor",
       hash: setOperatorHash,
       isPending: isSetOperatorPending,
       isConfirming: isSetOperatorConfirming,
+    },
+    {
+      label: "Authorize minting on AssetToken",
+      hash: addAgentAssetHash,
+      isPending: isAddAgentAssetPending,
+      isConfirming: isAddAgentAssetConfirming,
+    },
+    {
+      label: "Authorize minting on RevenueToken",
+      hash: addAgentRevenueHash,
+      isPending: isAddAgentRevenuePending,
+      isConfirming: isAddAgentRevenueConfirming,
     },
   ];
 
@@ -212,7 +312,7 @@ export default function VehicleSetupWizard({
         {allDone && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3">
             <p className="text-xs text-green-800">
-              All token registrations complete. The payment system can now mint tokens when investors fund milestones.
+              All token registrations and minting authorizations complete. The payment system can now mint tokens when all investment milestones are fulfilled.
             </p>
           </div>
         )}

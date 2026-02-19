@@ -70,6 +70,7 @@ export function InvestmentCard({ vehicle, onInvest, className, basePath = "inves
             src={vehicle.image || "/assets/car_image1.png"}
             alt={`${vehicle.brand} ${vehicle.model}`}
             className="w-full h-full object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).src = "/assets/car_image1.png"; }}
           />
           <div className="absolute top-4 left-4">
             <Badge variant="default" className="shadow-lg">

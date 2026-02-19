@@ -167,21 +167,21 @@ export default function InvestorPortfolio() {
                   {investments
                     .filter((inv) => {
                       const v = inv.vehicle as any;
-                      return v && typeof v === "object" && v.tokenId;
+                      return v && typeof v === "object" && (v.vehicleNftId != null);
                     })
                     .map((inv) => {
                       const v = inv.vehicle as any;
                       return (
                         <RevenueClaimCard
                           key={inv._id}
-                          vehicleId={BigInt(v.tokenId)}
+                          vehicleId={BigInt(v.vehicleNftId)}
                           vehicleName={`${v.brand || "Vehicle"} ${v.model || ""}`}
                         />
                       );
                     })}
                   {investments.filter((inv) => {
                     const v = inv.vehicle as any;
-                    return v && typeof v === "object" && v.tokenId;
+                    return v && typeof v === "object" && (v.vehicleNftId != null);
                   }).length === 0 && (
                     <p className="text-sm text-gray-500 text-center py-4">
                       No tokenized vehicles in your portfolio yet.

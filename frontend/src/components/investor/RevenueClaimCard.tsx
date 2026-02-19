@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Card, CardContent, Button } from "@/components/ui";
 import { EthUsdDisplay } from "@/components/web3";
 import { useMyClaimableRevenue, useClaimRevenue } from "@/hooks/useInvestment";
+import { useAccount } from "wagmi";
 import { toast } from "react-hot-toast";
 import { formatEther } from "viem";
 import { investmentApi } from "@/lib/api";
+import { useEthPrice } from "@/hooks/usePriceFeed";
 
 interface RevenueClaimCardProps {
   vehicleId: bigint;
@@ -17,29 +19,37 @@ interface RevenueClaimCardProps {
  * Shows claimable revenue for a specific vehicle and allows the investor to claim it.
  */
 export function RevenueClaimCard({ vehicleId, vehicleName }: RevenueClaimCardProps) {
+  const { isConnected } = useAccount();
   const { data, refetch, formatted } = useMyClaimableRevenue(vehicleId);
   const claimableWei = data as bigint | undefined;
   const hasClaimable = claimableWei && claimableWei > BigInt(0);
+  const { price: ethPrice } = useEthPrice();
 
   const { claimRevenue, isConfirming, isSuccess, hash } = useClaimRevenue();
 
+  // Capture the claimable amount at claim time — wagmi auto-refetches on-chain data
+  // after tx confirms, so claimableWei becomes 0 before the success useEffect fires.
+  const pendingClaimRef = useRef<{ wei: bigint; ethPrice: number } | null>(null);
+
   useEffect(() => {
-    if (isSuccess && hash) {
+    if (isSuccess && hash && pendingClaimRef.current) {
       toast.success("Revenue claimed successfully!");
-      // Sync claimed amount to DB
-      if (claimableWei && claimableWei > BigInt(0)) {
-        const ethAmount = parseFloat(formatEther(claimableWei));
-        investmentApi.recordRevenueClaimed(vehicleId.toString(), {
-          amountEth: ethAmount,
-          txHash: hash,
-        }).catch((err) => console.error("Failed to sync revenue claim to DB:", err));
-      }
+      const { wei, ethPrice: capturedPrice } = pendingClaimRef.current;
+      const ethAmount = parseFloat(formatEther(wei));
+      const usdAmount = capturedPrice > 0 ? ethAmount * capturedPrice : 0;
+      investmentApi.recordRevenueClaimed(vehicleId.toString(), {
+        amountEth: ethAmount,
+        amountUsd: usdAmount,
+        txHash: hash,
+      }).catch((err) => console.error("Failed to sync revenue claim to DB:", err));
+      pendingClaimRef.current = null;
       refetch();
     }
-  }, [isSuccess, hash, refetch]);
+  }, [isSuccess, hash, refetch, vehicleId]);
 
   const handleClaim = () => {
-    if (!hasClaimable) return;
+    if (!hasClaimable || !claimableWei) return;
+    pendingClaimRef.current = { wei: claimableWei, ethPrice };
     claimRevenue(vehicleId);
   };
 
@@ -60,11 +70,11 @@ export function RevenueClaimCard({ vehicleId, vehicleName }: RevenueClaimCardPro
           </div>
           <Button
             onClick={handleClaim}
-            disabled={!hasClaimable || isConfirming}
+            disabled={!isConnected || !hasClaimable || isConfirming}
             variant={hasClaimable ? "default" : "outline"}
             size="sm"
           >
-            {isConfirming ? "Claiming..." : hasClaimable ? "Claim" : "No Revenue"}
+            {!isConnected ? "Connect Wallet" : isConfirming ? "Claiming..." : hasClaimable ? "Claim" : "No Revenue"}
           </Button>
         </div>
       </CardContent>

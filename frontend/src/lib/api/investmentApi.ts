@@ -150,7 +150,7 @@ export const investmentApi = {
   // Record revenue distribution by admin
   recordRevenueDistributed: async (
     vehicleNftId: string,
-    payload: { amountEth: number; txHash?: string }
+    payload: { amountEth: number; amountUsd?: number; txHash?: string }
   ): Promise<{ success: boolean }> => {
     const { data } = await apiClient.post(
       `/investments/vehicle/${vehicleNftId}/revenue-distributed`,
@@ -162,7 +162,7 @@ export const investmentApi = {
   // Record revenue claimed by investor
   recordRevenueClaimed: async (
     vehicleNftId: string,
-    payload: { amountEth: number; txHash?: string }
+    payload: { amountEth: number; amountUsd?: number; txHash?: string }
   ): Promise<{ success: boolean }> => {
     const { data } = await apiClient.post(
       `/investments/vehicle/${vehicleNftId}/revenue-claimed`,

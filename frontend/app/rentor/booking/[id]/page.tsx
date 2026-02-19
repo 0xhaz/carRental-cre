@@ -9,12 +9,24 @@ import {
   Card,
   CardContent,
   Badge,
+  Separator,
 } from "@/components/ui";
 import { bookingApi } from "@/lib/api";
 import { Booking, Vehicle } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Image from "next/image";
 import { toast } from "react-hot-toast";
+import { keccak256, toHex, formatEther, parseEther } from "viem";
+import { useAccount, useConnect } from "wagmi";
+import {
+  usePaymentByBooking,
+  useRentalPaymentDetails,
+  useStartRental,
+  useCompleteRental,
+} from "@/hooks/useRentalOperations";
+import { useDistributeRevenue, useVehicleRevenue } from "@/hooks/useInvestment";
+
+import { SEPOLIA_CHAIN_ID, getEtherscanUrl } from "@/constants/contracts";
 
 export default function RentorBookingDetailPage() {
   const params = useParams();
@@ -503,8 +515,348 @@ export default function RentorBookingDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* On-Chain Rental Lifecycle — only for crypto-paid bookings */}
+          {((booking as any).paymentMethod === "crypto" || (booking as any).txHashes?.request) && (
+            <RentalLifecycleCard bookingMongoId={booking._id} />
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// On-Chain Rental Lifecycle Card
+// ═══════════════════════════════════════════════
+
+const PAYMENT_STATES = ["PENDING", "ESCROWED", "ACTIVE", "PROCESSING", "COMPLETED", "DISPUTED", "REFUNDED", "CANCELLED"];
+
+const PENALTY_REASONS = [
+  { value: 0, label: "None" },
+  { value: 1, label: "Damage" },
+  { value: 2, label: "Late Return" },
+  { value: 3, label: "Excessive Mileage" },
+  { value: 4, label: "Cleaning Fee" },
+  { value: 5, label: "Missing Fuel" },
+  { value: 6, label: "Toll Violation" },
+  { value: 7, label: "Traffic Violation" },
+  { value: 8, label: "Other" },
+];
+
+function RentalLifecycleCard({ bookingMongoId }: { bookingMongoId: string }) {
+  const { address: walletAddress, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const [penaltyEth, setPenaltyEth] = useState("0");
+  const [penaltyReason, setPenaltyReason] = useState(0);
+  const [penaltyDesc, setPenaltyDesc] = useState("");
+  const [manualPaymentId, setManualPaymentId] = useState("");
+
+  // Derive on-chain bookingId from MongoDB _id (same as CryptoBookingFlow)
+  const onChainBookingId = bookingMongoId.length > 10
+    ? BigInt(keccak256(toHex(bookingMongoId))) % BigInt(2 ** 128)
+    : BigInt(parseInt(bookingMongoId));
+
+  // Look up paymentId from on-chain bookingId
+  const { data: paymentIdRaw, error: lookupError, isLoading: lookupLoading } = usePaymentByBooking(onChainBookingId);
+  const autoPaymentId = paymentIdRaw !== undefined ? BigInt(paymentIdRaw as any) : undefined;
+  const hasAutoPayment = autoPaymentId !== undefined && autoPaymentId > BigInt(0);
+
+  // Allow manual override if auto-lookup fails
+  const manualId = manualPaymentId ? BigInt(manualPaymentId) : undefined;
+  const paymentId = hasAutoPayment ? autoPaymentId : manualId;
+  const hasPayment = paymentId !== undefined && paymentId > BigInt(0);
+
+  // Debug: log lookup details
+  useEffect(() => {
+    console.log("[RentalLifecycle] bookingMongoId:", bookingMongoId);
+    console.log("[RentalLifecycle] onChainBookingId:", onChainBookingId.toString());
+    console.log("[RentalLifecycle] paymentIdRaw:", paymentIdRaw);
+    console.log("[RentalLifecycle] lookupError:", lookupError);
+    console.log("[RentalLifecycle] lookupLoading:", lookupLoading);
+  }, [bookingMongoId, onChainBookingId, paymentIdRaw, lookupError, lookupLoading]);
+
+  // Read full payment details
+  const { data: paymentRaw, refetch: refetchPayment } = useRentalPaymentDetails(hasPayment ? paymentId : undefined);
+  const payment = paymentRaw as any;
+  const paymentState = payment ? Number(payment.state ?? payment[8]) : -1;
+  const vehicleId = payment ? BigInt(payment.vehicleId ?? payment[2] ?? 0) : undefined;
+  const totalAmount = payment ? BigInt(payment.totalAmount ?? payment[7] ?? 0) : BigInt(0);
+
+  // Read vehicle revenue
+  const { data: revenueRaw, refetch: refetchRevenue } = useVehicleRevenue(
+    vehicleId && vehicleId > BigInt(0) ? vehicleId : undefined
+  );
+  const revenue = revenueRaw as any;
+  const accumulated = revenue?.accumulatedRevenue ? BigInt(revenue.accumulatedRevenue) : BigInt(0);
+
+  // Write hooks
+  const {
+    startRental, hash: startHash,
+    isConfirming: startConfirming, isSuccess: startSuccess,
+    isPending: startPending, error: startError,
+  } = useStartRental();
+
+  const {
+    completeRental, hash: completeHash,
+    isConfirming: completeConfirming, isSuccess: completeSuccess,
+    isPending: completePending, error: completeError,
+  } = useCompleteRental();
+
+  const {
+    distributeRevenue, hash: distHash,
+    isConfirming: distConfirming, isSuccess: distSuccess,
+    isPending: distPending, error: distError,
+  } = useDistributeRevenue();
+
+  // Refetch on success + DB sync
+  useEffect(() => {
+    if (startSuccess) { toast.success("Rental started on-chain!"); refetchPayment(); }
+  }, [startSuccess]);
+  useEffect(() => {
+    if (completeSuccess) {
+      toast.success("Rental completed! Escrow released.");
+      refetchPayment();
+      refetchRevenue();
+      // Revenue is NOT recorded to DB here — the gross amount includes waterfall fees
+      // (platform 15%, maintenance 10%, rentor 25% [operator+insurance+operating]).
+      // Only ~50% reaches investors, split by token ownership.
+      // Accurate revenue is recorded when each investor claims via RevenueClaimCard.
+    }
+  }, [completeSuccess]);
+  useEffect(() => {
+    if (distSuccess) { toast.success("Revenue distributed!"); refetchRevenue(); }
+  }, [distSuccess]);
+
+  // Error toasts
+  useEffect(() => { if (startError) toast.error(startError.message?.slice(0, 120) || "Start rental failed"); }, [startError]);
+  useEffect(() => { if (completeError) toast.error(completeError.message?.slice(0, 120) || "Complete rental failed"); }, [completeError]);
+  useEffect(() => { if (distError) toast.error(distError.message?.slice(0, 120) || "Distribution failed"); }, [distError]);
+
+  const stateLabel = paymentState >= 0 ? PAYMENT_STATES[paymentState] || "UNKNOWN" : "Loading...";
+  const stateColor = paymentState === 4 ? "text-green-700" : paymentState === 2 ? "text-blue-700" : paymentState === 1 ? "text-yellow-700" : "text-gray-700";
+  const lastHash = distHash || completeHash || startHash;
+
+  // Gate: wallet must be connected for on-chain operations
+  if (!isConnected) {
+    return (
+      <Card className="mt-4">
+        <CardContent className="p-6">
+          <Heading as="h3" className="mb-2">On-Chain Rental Lifecycle</Heading>
+          <p className="text-sm text-gray-500 mb-3">
+            Connect your wallet to Sepolia to manage the on-chain rental lifecycle.
+          </p>
+          <div className="flex flex-col gap-2">
+            {connectors.map((connector) => (
+              <Button
+                key={connector.uid}
+                onClick={() => connect({ connector })}
+                variant="outline"
+                size="sm"
+                className="w-full"
+              >
+                Connect {connector.name}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!hasPayment) {
+    return (
+      <Card className="mt-4">
+        <CardContent className="p-6">
+          <Heading as="h3" className="mb-2">On-Chain Rental Lifecycle</Heading>
+          <p className="text-sm text-gray-500">
+            {lookupLoading
+              ? "Loading on-chain payment data..."
+              : lookupError
+                ? `Error reading contract: ${lookupError.message?.slice(0, 80)}`
+                : "Auto-lookup returned no payment. You can enter the Payment ID manually below."}
+          </p>
+          <div className="mt-3 text-xs text-gray-400 font-mono space-y-1">
+            <p>Booking ID: {bookingMongoId}</p>
+            <p>On-chain ID: {onChainBookingId.toString()}</p>
+            <p>Auto-lookup result: {String(paymentIdRaw)}</p>
+          </div>
+          <div className="mt-4 flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="text-xs text-gray-600 mb-1 block">Manual Payment ID</label>
+              <input
+                type="number"
+                className="w-full border rounded px-3 py-2 text-sm"
+                placeholder="e.g. 1"
+                value={manualPaymentId}
+                onChange={(e) => setManualPaymentId(e.target.value)}
+                min={1}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Check Etherscan or the renter&apos;s tx to find the Payment ID.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="mt-4 border-2 border-indigo-200">
+      <CardContent className="p-6">
+        <Heading as="h3" className="mb-4">On-Chain Rental Lifecycle</Heading>
+
+        {/* Payment Info */}
+        <div className="space-y-2 text-sm mb-4">
+          <div className="flex justify-between">
+            <span className="text-gray-600">Payment ID</span>
+            <span className="font-mono font-semibold">#{paymentId!.toString()}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">State</span>
+            <span className={`font-semibold ${stateColor}`}>{stateLabel}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Escrow Amount</span>
+            <span className="font-semibold">{formatEther(totalAmount)} ETH</span>
+          </div>
+          {vehicleId && vehicleId > BigInt(0) && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Vehicle NFT</span>
+              <span className="font-mono font-semibold">#{vehicleId.toString()}</span>
+            </div>
+          )}
+        </div>
+
+        <Separator className="my-4" />
+
+        {/* Step 1: Start Rental */}
+        <div className="mb-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Step 1: Start Rental
+          </p>
+          {paymentState < 1 ? (
+            <p className="text-xs text-gray-400">Waiting for escrow...</p>
+          ) : paymentState === 1 ? (
+            <Button
+              onClick={() => startRental(paymentId!)}
+              disabled={startPending || startConfirming}
+              className="w-full"
+              size="sm"
+            >
+              {startPending ? "Confirm in Wallet..." : startConfirming ? "Confirming..." : "Start Rental"}
+            </Button>
+          ) : (
+            <p className="text-xs text-green-600 font-medium">Rental started</p>
+          )}
+        </div>
+
+        <Separator className="my-4" />
+
+        {/* Step 2: Complete Rental */}
+        <div className="mb-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Step 2: Complete Rental
+          </p>
+          {paymentState < 2 ? (
+            <p className="text-xs text-gray-400">Start rental first...</p>
+          ) : paymentState === 2 ? (
+            <div className="space-y-2">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Penalty (ETH)</label>
+                <input
+                  type="number"
+                  value={penaltyEth}
+                  onChange={(e) => setPenaltyEth(e.target.value)}
+                  min="0"
+                  step="0.001"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Reason</label>
+                <select
+                  value={penaltyReason}
+                  onChange={(e) => setPenaltyReason(Number(e.target.value))}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                >
+                  {PENALTY_REASONS.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+              {penaltyReason > 0 && (
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Description</label>
+                  <input
+                    type="text"
+                    value={penaltyDesc}
+                    onChange={(e) => setPenaltyDesc(e.target.value)}
+                    placeholder="Brief description..."
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+              )}
+              <Button
+                onClick={() => {
+                  const penaltyWei = parseFloat(penaltyEth) > 0 ? parseEther(penaltyEth) : BigInt(0);
+                  completeRental(paymentId!, penaltyWei, penaltyReason, penaltyDesc || "No penalty");
+                }}
+                disabled={completePending || completeConfirming}
+                className="w-full"
+                size="sm"
+              >
+                {completePending ? "Confirm in Wallet..." : completeConfirming ? "Confirming..." : "Complete Rental"}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-green-600 font-medium">Rental completed &amp; escrow released</p>
+          )}
+        </div>
+
+        <Separator className="my-4" />
+
+        {/* Step 3: Distribute Revenue */}
+        <div className="mb-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Step 3: Distribute Revenue
+          </p>
+          {paymentState < 4 ? (
+            <p className="text-xs text-gray-400">Complete rental first...</p>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Accumulated</span>
+                <span className="font-semibold">{formatEther(accumulated)} ETH</span>
+              </div>
+              <Button
+                onClick={() => vehicleId && distributeRevenue(vehicleId)}
+                disabled={distPending || distConfirming || accumulated === BigInt(0) || !vehicleId}
+                className="w-full"
+                size="sm"
+                variant="outline"
+              >
+                {distPending ? "Confirm in Wallet..." : distConfirming ? "Distributing..." : "Distribute Revenue"}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Transaction link */}
+        {lastHash && (
+          <div className="mt-4 pt-3 border-t">
+            <a
+              href={getEtherscanUrl(SEPOLIA_CHAIN_ID, lastHash, "tx")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-500 hover:underline"
+            >
+              Latest Tx: {lastHash.slice(0, 14)}...
+            </a>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

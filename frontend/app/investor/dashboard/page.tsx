@@ -10,7 +10,24 @@ import { formatCurrency } from "@/lib/utils";
 import { useAccount, useReadContract } from "wagmi";
 import { useComplianceStatus } from "@/hooks/useComplianceStatus";
 import { useInvestorRequestManager } from "@/hooks/useContracts";
+import { useMyClaimableRevenue } from "@/hooks/useInvestment";
+import { useEthPrice } from "@/hooks/usePriceFeed";
+import { formatEther } from "viem";
 import Link from "next/link";
+
+/** On-chain revenue cell for dashboard table — needs to be a component to use hooks */
+function RevenueCell({ vehicleNftId, dbRevenue }: { vehicleNftId?: number | null; dbRevenue: number }) {
+  const nftId = vehicleNftId != null ? BigInt(vehicleNftId) : undefined;
+  const { data: claimableWei } = useMyClaimableRevenue(nftId);
+  const { price: ethPrice } = useEthPrice();
+
+  // DB stores already-claimed revenue; on-chain shows unclaimed. Total = both.
+  const claimable = claimableWei ? parseFloat(formatEther(claimableWei as bigint)) : 0;
+  const onChainUsd = claimable * (ethPrice || 0);
+  const totalRevenue = (dbRevenue || 0) + onChainUsd;
+
+  return <span>{formatCurrency(totalRevenue)}</span>;
+}
 
 /** Extract first available AST token address from populated investments */
 function resolveTokenAddress(investments: Investment[]): `0x${string}` | undefined {
@@ -203,7 +220,7 @@ export default function InvestorDashboard() {
                 </thead>
                 <tbody>
                   {investments.slice(0, 5).map((investment) => {
-                    const vehicle = investment.vehicle as unknown as { brand?: string; model?: string } | string;
+                    const vehicle = investment.vehicle as unknown as { brand?: string; model?: string; vehicleNftId?: number } | string;
                     const isPopulated = typeof vehicle === "object" && vehicle !== null;
                     return (
                       <tr key={investment._id} className="border-b hover:bg-gray-50">
@@ -212,7 +229,11 @@ export default function InvestorDashboard() {
                         </td>
                         <td className="py-3 px-4">{formatCurrency(investment.amount)}</td>
                         <td className="py-3 px-4 text-green-600">
-                          {formatCurrency(investment.totalRevenueEarned)}
+                          {isPopulated ? (
+                            <RevenueCell vehicleNftId={vehicle.vehicleNftId} dbRevenue={investment.totalRevenueEarned} />
+                          ) : (
+                            formatCurrency(investment.totalRevenueEarned)
+                          )}
                         </td>
                         <td className="py-3 px-4">
                           <Badge variant={investment.status === "active" ? "success" : "default"}>

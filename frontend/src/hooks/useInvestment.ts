@@ -570,6 +570,7 @@ export function useClaimRevenue() {
       abi,
       functionName: "claimRevenue",
       args: [vehicleId],
+      gas: BigInt(500_000),
       ...SEPOLIA_GAS_OVERRIDES,
     });
   };
@@ -592,6 +593,7 @@ export function useBatchClaimRevenue() {
       abi,
       functionName: "batchClaimRevenue",
       args: [vehicleIds],
+      gas: BigInt(500_000) * BigInt(vehicleIds.length || 1),
       ...SEPOLIA_GAS_OVERRIDES,
     });
   };
@@ -860,6 +862,91 @@ export function useOperatorFees(vehicleId?: bigint) {
     ...result,
     formatted: result.data ? formatEther(result.data as bigint) : "0",
   };
+}
+
+/**
+ * Get accumulated platform fees (read)
+ */
+export function usePlatformFees() {
+  const { address, abi } = useRevenueDistributor();
+
+  const result = useReadContract({
+    address,
+    abi,
+    functionName: "getPlatformFees",
+    query: { enabled: true },
+  });
+
+  return {
+    ...result,
+    formatted: result.data ? formatEther(result.data as bigint) : "0",
+  };
+}
+
+/**
+ * Withdraw accumulated platform fees (owner only)
+ */
+export function useWithdrawPlatformFees() {
+  const { address, abi } = useRevenueDistributor();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const withdraw = (recipient: `0x${string}`) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "withdrawPlatformFees",
+      args: [recipient],
+      gas: BigInt(500_000),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { withdraw, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Get maintenance reserve for a vehicle (read)
+ */
+export function useMaintenanceReserve(vehicleId?: bigint) {
+  const { address, abi } = useRevenueDistributor();
+
+  const result = useReadContract({
+    address,
+    abi,
+    functionName: "getMaintenanceReserve",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: { enabled: vehicleId !== undefined },
+  });
+
+  return {
+    ...result,
+    formatted: result.data ? formatEther(result.data as bigint) : "0",
+  };
+}
+
+/**
+ * Withdraw maintenance reserve for a vehicle (owner only)
+ */
+export function useWithdrawMaintenanceReserve() {
+  const { address, abi } = useRevenueDistributor();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const withdraw = (vehicleId: bigint, recipient: `0x${string}`, amount: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "withdrawMaintenanceReserve",
+      args: [vehicleId, recipient, amount],
+      gas: BigInt(500_000),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { withdraw, hash, isConfirming, isSuccess, isPending, error };
 }
 
 /**

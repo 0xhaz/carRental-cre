@@ -12,6 +12,7 @@ import { parseEther, formatEther } from "viem";
 import { toast } from "react-hot-toast";
 import { SEPOLIA_CHAIN_ID, getEtherscanUrl } from "@/constants/contracts";
 import { investmentApi } from "@/lib/api";
+import { useEthPrice } from "@/hooks/usePriceFeed";
 
 interface RevenueAdminProps {
   vehicleId: bigint;
@@ -19,6 +20,7 @@ interface RevenueAdminProps {
 
 export default function RevenueAdmin({ vehicleId }: RevenueAdminProps) {
   const [addAmount, setAddAmount] = useState("");
+  const { price: ethPrice } = useEthPrice();
   const { data: vehicleRevenue, refetch: refetchRevenue } = useVehicleRevenue(vehicleId);
 
   const amountWei = addAmount && parseFloat(addAmount) > 0 ? parseEther(addAmount) : undefined;
@@ -47,11 +49,13 @@ export default function RevenueAdmin({ vehicleId }: RevenueAdminProps) {
   useEffect(() => {
     if (addSuccess && addHash) {
       toast.success("Revenue added!");
-      // Sync to DB
+      // Sync to DB (convert ETH → USD for dashboard display)
       const ethAmount = parseFloat(lastAddedAmount);
       if (ethAmount > 0) {
+        const usdAmount = ethPrice > 0 ? ethAmount * ethPrice : 0;
         investmentApi.recordRevenueDistributed(vehicleId.toString(), {
           amountEth: ethAmount,
+          amountUsd: usdAmount,
           txHash: addHash,
         }).catch((err) => console.error("Failed to sync revenue to DB:", err));
       }
@@ -77,9 +81,9 @@ export default function RevenueAdmin({ vehicleId }: RevenueAdminProps) {
 
   // Parse vehicle revenue data
   const revenue = vehicleRevenue as any;
-  const accumulated = revenue?.[0] ? formatEther(revenue[0] as bigint) : "0";
-  const totalDistributed = revenue?.[1] ? formatEther(revenue[1] as bigint) : "0";
-  const distributionCount = revenue?.[2] ? Number(revenue[2]) : 0;
+  const accumulated = revenue?.accumulatedRevenue ? formatEther(revenue.accumulatedRevenue as bigint) : "0";
+  const totalDistributed = revenue?.totalDistributed ? formatEther(revenue.totalDistributed as bigint) : "0";
+  const distributionCount = revenue?.distributionCount ? Number(revenue.distributionCount) : 0;
 
   // Parse waterfall preview
   const waterfall = waterfallData as any;
@@ -122,17 +126,20 @@ export default function RevenueAdmin({ vehicleId }: RevenueAdminProps) {
             step="0.001"
           />
 
-          {waterfall && addAmount && parseFloat(addAmount) > 0 && (
-            <div className="bg-gray-50 rounded-lg p-3 space-y-1 text-xs">
-              <p className="font-medium text-gray-700 mb-2">Waterfall Preview:</p>
-              <div className="flex justify-between"><span>Platform Fee (15%)</span><span>{waterfall[0] ? formatEther(waterfall[0] as bigint) : "—"} ETH</span></div>
-              <div className="flex justify-between"><span>Maintenance (10%)</span><span>{waterfall[1] ? formatEther(waterfall[1] as bigint) : "—"} ETH</span></div>
-              <div className="flex justify-between"><span>Insurance (5%)</span><span>{waterfall[2] ? formatEther(waterfall[2] as bigint) : "—"} ETH</span></div>
-              <div className="flex justify-between"><span>Operating (10%)</span><span>{waterfall[3] ? formatEther(waterfall[3] as bigint) : "—"} ETH</span></div>
-              <div className="flex justify-between"><span>Operator Fee (10%)</span><span>{waterfall[4] ? formatEther(waterfall[4] as bigint) : "—"} ETH</span></div>
-              <div className="flex justify-between font-medium"><span>Net to Investors (50%)</span><span>{waterfall[5] ? formatEther(waterfall[5] as bigint) : "—"} ETH</span></div>
-            </div>
-          )}
+          {waterfall && addAmount && parseFloat(addAmount) > 0 && (() => {
+            const wf = waterfall as any;
+            return (
+              <div className="bg-gray-50 rounded-lg p-3 space-y-1 text-xs">
+                <p className="font-medium text-gray-700 mb-2">Waterfall Preview:</p>
+                <div className="flex justify-between"><span>Platform Fee (15%)</span><span>{wf.platformFee ? formatEther(wf.platformFee as bigint) : "—"} ETH</span></div>
+                <div className="flex justify-between"><span>Maintenance (10%)</span><span>{wf.maintenanceReserve ? formatEther(wf.maintenanceReserve as bigint) : "—"} ETH</span></div>
+                <div className="flex justify-between"><span>Insurance (5%) — Rentor</span><span>{wf.insuranceFee ? formatEther(wf.insuranceFee as bigint) : "—"} ETH</span></div>
+                <div className="flex justify-between"><span>Operating (10%) — Rentor</span><span>{wf.operatingCosts ? formatEther(wf.operatingCosts as bigint) : "—"} ETH</span></div>
+                <div className="flex justify-between"><span>Operator Fee (10%) — Rentor</span><span>{wf.operatorFee ? formatEther(wf.operatorFee as bigint) : "—"} ETH</span></div>
+                <div className="flex justify-between font-medium"><span>Net to Investors (50%)</span><span>{wf.netDistributable ? formatEther(wf.netDistributable as bigint) : "—"} ETH</span></div>
+              </div>
+            );
+          })()}
 
           <Button
             onClick={() => {

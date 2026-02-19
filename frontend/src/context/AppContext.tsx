@@ -54,7 +54,6 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(data.user);
         setIsOwner(data.user.role === "owner");
       } else {
-        router.push("/");
         setUser(null);
       }
     } catch (error: unknown) {

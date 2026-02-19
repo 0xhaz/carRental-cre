@@ -6,7 +6,7 @@ import { kycApi, type KYCSubmission } from "@/lib/api";
 import { toast } from "react-hot-toast";
 import { formatDate } from "@/lib/utils";
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount } from "wagmi";
-import { useVehicleNFT, useIdentityRegistry, useParticipantTypeRegistry, useRenterComplianceContract } from "@/hooks/useContracts";
+import { useVehicleNFT, useIdentityRegistry, useParticipantTypeRegistry, useRenterComplianceContract, useRentalPaymentProtocol } from "@/hooks/useContracts";
 import { Input } from "@/components/ui";
 import { SEPOLIA_CONTRACTS } from "@/constants/contracts";
 import { keccak256, toHex } from "viem";
@@ -260,61 +260,106 @@ export default function AdminKYCPage() {
 function AuthorizeOperatorCard() {
   const [operatorAddress, setOperatorAddress] = useState("");
   const vehicleNFT = useVehicleNFT();
+  const rentalPayment = useRentalPaymentProtocol();
 
+  // VehicleNFT operator write
   const {
-    data: hash,
-    writeContract,
-    isPending,
-    error,
+    data: nftHash,
+    writeContract: writeNft,
+    isPending: nftPending,
+    error: nftError,
   } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const { isLoading: nftConfirming, isSuccess: nftSuccess } = useWaitForTransactionReceipt({ hash: nftHash });
+
+  // RentalPaymentProtocol operator write
+  const {
+    data: rentalHash,
+    writeContract: writeRental,
+    isPending: rentalPending,
+    error: rentalError,
+  } = useWriteContract();
+  const { isLoading: rentalConfirming, isSuccess: rentalSuccess } = useWaitForTransactionReceipt({ hash: rentalHash });
 
   // Check current operator status for the entered address
   const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(operatorAddress);
-  const { data: isAlreadyOperator } = useReadContract({
+  const { data: isNftOperator } = useReadContract({
     address: vehicleNFT.address,
     abi: vehicleNFT.abi,
     functionName: "operators",
     args: isValidAddress ? [operatorAddress as `0x${string}`] : undefined,
     query: { enabled: isValidAddress },
   });
+  const { data: isRentalOperator } = useReadContract({
+    address: rentalPayment.address,
+    abi: rentalPayment.abi,
+    functionName: "authorizedOperators",
+    args: isValidAddress ? [operatorAddress as `0x${string}`] : undefined,
+    query: { enabled: isValidAddress },
+  });
+
+  const bothAuthorized = isNftOperator === true && isRentalOperator === true;
+  const anyPending = nftPending || rentalPending || nftConfirming || rentalConfirming;
 
   const handleAuthorize = () => {
     if (!isValidAddress) {
       toast.error("Please enter a valid wallet address");
       return;
     }
-    writeContract({
-      address: vehicleNFT.address,
-      abi: vehicleNFT.abi,
-      functionName: "setOperator",
-      args: [operatorAddress as `0x${string}`, true],
-    });
+    // Authorize on VehicleNFT if not already
+    if (isNftOperator !== true) {
+      writeNft({
+        address: vehicleNFT.address,
+        abi: vehicleNFT.abi,
+        functionName: "setOperator",
+        args: [operatorAddress as `0x${string}`, true],
+      });
+    }
+    // Authorize on RentalPaymentProtocol if not already
+    if (isRentalOperator !== true) {
+      writeRental({
+        address: rentalPayment.address,
+        abi: rentalPayment.abi,
+        functionName: "setAuthorizedOperator",
+        args: [operatorAddress as `0x${string}`, true],
+      });
+    }
   };
 
   useEffect(() => {
-    if (isSuccess) {
-      toast.success("Wallet authorized as vehicle operator!");
-      setOperatorAddress("");
-    }
-  }, [isSuccess]);
+    if (nftSuccess) toast.success("Authorized on VehicleNFT!");
+  }, [nftSuccess]);
 
   useEffect(() => {
-    if (error) {
-      console.error("setOperator error:", error);
-      toast.error("Failed to authorize operator. Make sure your wallet is the contract owner.");
+    if (rentalSuccess) toast.success("Authorized on RentalPaymentProtocol!");
+  }, [rentalSuccess]);
+
+  useEffect(() => {
+    if (nftSuccess && rentalSuccess) setOperatorAddress("");
+  }, [nftSuccess, rentalSuccess]);
+
+  useEffect(() => {
+    if (nftError) {
+      console.error("VehicleNFT setOperator error:", nftError);
+      toast.error("Failed to authorize on VehicleNFT. Make sure your wallet is the contract owner.");
     }
-  }, [error]);
+  }, [nftError]);
+
+  useEffect(() => {
+    if (rentalError) {
+      console.error("RentalPaymentProtocol setAuthorizedOperator error:", rentalError);
+      toast.error("Failed to authorize on RentalPaymentProtocol. Make sure your wallet is the contract owner.");
+    }
+  }, [rentalError]);
 
   return (
     <Card className="mt-8">
       <CardContent className="p-6">
         <Heading as="h2" className="mb-2">
-          Authorize Vehicle Operator
+          Authorize Rentor Operator
         </Heading>
         <Paragraph className="text-sm text-gray-600 mb-4">
-          Authorize a rentor's wallet as a vehicle operator on VehicleNFT. This allows them to register their vehicles on-chain.
-          Your connected wallet must be the VehicleNFT contract owner.
+          Authorize a rentor&apos;s wallet on both <strong>VehicleNFT</strong> (vehicle registration) and <strong>RentalPaymentProtocol</strong> (rental lifecycle management).
+          Your connected wallet must be the contract owner.
         </Paragraph>
         <div className="flex gap-3 items-start">
           <div className="flex-1">
@@ -324,22 +369,26 @@ function AuthorizeOperatorCard() {
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOperatorAddress(e.target.value)}
               className="font-mono text-sm"
             />
-            {isValidAddress && isAlreadyOperator === true && (
-              <p className="text-xs text-green-600 mt-1">This address is already an authorized operator.</p>
-            )}
-            {isValidAddress && isAlreadyOperator === false && (
-              <p className="text-xs text-amber-600 mt-1">This address is not yet an operator.</p>
+            {isValidAddress && (
+              <div className="mt-2 space-y-1">
+                <p className={`text-xs ${isNftOperator === true ? "text-green-600" : "text-amber-600"}`}>
+                  VehicleNFT: {isNftOperator === true ? "Authorized" : "Not authorized"}
+                </p>
+                <p className={`text-xs ${isRentalOperator === true ? "text-green-600" : "text-amber-600"}`}>
+                  RentalPaymentProtocol: {isRentalOperator === true ? "Authorized" : "Not authorized"}
+                </p>
+              </div>
             )}
           </div>
           <Button
             onClick={handleAuthorize}
-            disabled={!isValidAddress || isPending || isConfirming || isAlreadyOperator === true}
+            disabled={!isValidAddress || anyPending || bothAuthorized}
             className="bg-green-600 hover:bg-green-700"
           >
-            {isPending
-              ? "Confirm in Wallet..."
-              : isConfirming
+            {anyPending
               ? "Confirming..."
+              : bothAuthorized
+              ? "Already Authorized"
               : "Authorize"}
           </Button>
         </div>

@@ -14,11 +14,13 @@ import {IRevenueToken} from "../interfaces/erc3643/IRevenueToken.sol";
  *
  * Revenue Waterfall:
  * - 15% Platform Fee → Protocol treasury
- * - 10% Maintenance Reserve → Per-vehicle escrow
- * - 5% Insurance → Coverage payments
- * - 10% Operating Costs → Gas, cleaning, parking
+ * - 10% Maintenance Reserve → Per-vehicle escrow (admin-managed)
+ * - 5% Insurance → Vehicle operator (rentor responsibility)
+ * - 10% Operating Costs → Vehicle operator (rentor responsibility)
  * - 10% Operator Fee → Vehicle operator (rentor)
  * - 50% Net Distributable → RevenueToken holders (proportional)
+ *
+ * Insurance + Operating + Operator = 25% total withdrawable by the rentor via withdrawOperatorFees().
  */
 contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
@@ -227,8 +229,8 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
         // Store maintenance reserve for this vehicle
         _maintenanceReserves[vehicleId] += allocation.maintenanceReserve;
 
-        // Store operator fees for this vehicle
-        _operatorFeesAccumulated[vehicleId] += allocation.operatorFee;
+        // Store operator fees for this vehicle (includes insurance + operating costs — rentor responsibility)
+        _operatorFeesAccumulated[vehicleId] += allocation.operatorFee + allocation.insuranceFee + allocation.operatingCosts;
 
         // Emit waterfall event
         emit WaterfallApplied(
@@ -338,7 +340,8 @@ contract RevenueDistributor is IRevenueDistributor, Ownable, ReentrancyGuard {
 
     /**
      * @notice Withdraw accumulated operator fees for a vehicle
-     * @dev Only the vehicle operator or contract owner can withdraw
+     * @dev Only the vehicle operator or contract owner can withdraw.
+     *      Includes operator fee (10%) + insurance (5%) + operating costs (10%) = 25% total.
      * @param vehicleId Vehicle NFT token ID
      */
     function withdrawOperatorFees(uint256 vehicleId)

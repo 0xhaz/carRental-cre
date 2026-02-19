@@ -6,7 +6,10 @@ import { RevenueChart } from "@/components/investor";
 import { VerificationStatusBanner } from "@/components/shared/VerificationStatusBanner";
 import { Heading, Paragraph, Card, CardContent, Button } from "@/components/ui";
 import { useComplianceStatus } from "@/hooks/useComplianceStatus";
-import { rentorApi, type RentorDashboardData } from "@/lib/api";
+import { rentorApi, investmentApi, vehicleApi, type RentorDashboardData } from "@/lib/api";
+import { RevenueClaimCard } from "@/components/investor/RevenueClaimCard";
+import OperatorFeeCard from "@/components/rentor/OperatorFeeCard";
+import { Investment, Vehicle } from "@/types";
 import { toast } from "react-hot-toast";
 import Link from "next/link";
 
@@ -15,6 +18,8 @@ export default function RentorDashboard() {
   const [dashboardData, setDashboardData] = useState<RentorDashboardData | null>(null);
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [coInvestments, setCoInvestments] = useState<Investment[]>([]);
+  const [ownedVehicles, setOwnedVehicles] = useState<Vehicle[]>([]);
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -28,6 +33,34 @@ export default function RentorDashboard() {
           // Only show revenue chart when there's actual data from backend
           // Revenue data will be populated from actual bookings in the future
           setRevenueData([]);
+        }
+
+        // Load co-investments (rentor may also be a token holder)
+        try {
+          const portfolioRes = await investmentApi.getPortfolio();
+          if (portfolioRes.success) {
+            setCoInvestments(
+              (portfolioRes.data.investments || []).filter(
+                (inv: any) => inv.status === "active" && inv.vehicle?.vehicleNftId != null
+              )
+            );
+          }
+        } catch {
+          // Not critical — rentor may not have co-investments
+        }
+
+        // Load owned vehicles with NFT IDs (for operator fee withdrawal)
+        try {
+          const vehiclesRes = await vehicleApi.getRentorVehicles();
+          if (vehiclesRes.success) {
+            setOwnedVehicles(
+              (vehiclesRes.data || []).filter(
+                (v: Vehicle) => v.vehicleNftId != null
+              )
+            );
+          }
+        } catch {
+          // Not critical
         }
       } catch (error: any) {
         console.error("Failed to load dashboard:", error);
@@ -134,6 +167,51 @@ export default function RentorDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Operator Fees */}
+      {ownedVehicles.length > 0 && (
+        <div className="mt-8">
+          <Heading as="h3" className="mb-4">
+            Operator Fees
+          </Heading>
+          <Paragraph className="text-sm text-gray-600 mb-4">
+            Withdraw your operator fees (25% total: 10% operator + 5% insurance + 10% operating costs) from your vehicles.
+          </Paragraph>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {ownedVehicles.map((v) => (
+              <OperatorFeeCard
+                key={v._id}
+                vehicleId={BigInt(v.vehicleNftId!)}
+                vehicleName={`${v.brand || "Vehicle"} ${v.model || ""}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Co-Investment Revenue Claim */}
+      {coInvestments.length > 0 && (
+        <div className="mt-8">
+          <Heading as="h3" className="mb-4">
+            Co-Investment Revenue
+          </Heading>
+          <Paragraph className="text-sm text-gray-600 mb-4">
+            Claim your share of revenue from vehicles you co-invested in.
+          </Paragraph>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {coInvestments.map((inv: any) => {
+              const v = inv.vehicle as any;
+              return (
+                <RevenueClaimCard
+                  key={inv._id}
+                  vehicleId={BigInt(v.vehicleNftId)}
+                  vehicleName={`${v.brand || "Vehicle"} ${v.model || ""}`}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

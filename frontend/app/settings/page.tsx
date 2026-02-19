@@ -11,7 +11,7 @@ import { Copy, Check, AlertCircle, Wallet } from "lucide-react";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, setUser, isAuthenticated, isLoading: userLoading } = useUserStore();
+  const { user, setUser, isAuthenticated, isLoading: userLoading, isHydrated } = useUserStore();
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
@@ -24,12 +24,13 @@ export default function SettingsPage() {
 
   // Redirect if not authenticated or not investor/rentor
   useEffect(() => {
+    if (!isHydrated) return;
     if (!userLoading && (!isAuthenticated || !user)) {
       router.push("/");
     } else if (user && user.role !== UserRole.INVESTOR && user.role !== UserRole.RENTOR) {
       router.push("/");
     }
-  }, [isAuthenticated, user, userLoading, router]);
+  }, [isAuthenticated, user, userLoading, isHydrated, router]);
 
   // Load KYC status
   useEffect(() => {

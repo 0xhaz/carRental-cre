@@ -282,6 +282,72 @@ export function useCreateRentalBookingPayment() {
   return { createPayment, hash, isConfirming, isSuccess, ...rest };
 }
 
+/**
+ * Look up the on-chain paymentId from a bookingId
+ */
+export function usePaymentByBooking(bookingId?: bigint) {
+  const { address, abi } = useRentalPaymentProtocol();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getPaymentByBooking",
+    args: bookingId !== undefined ? [bookingId] : undefined,
+    query: { enabled: bookingId !== undefined },
+  });
+}
+
+/**
+ * Start a rental (transitions payment from ESCROWED → ACTIVE)
+ */
+export function useStartRental() {
+  const { address, abi } = useRentalPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const startRental = (paymentId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "startRental",
+      args: [paymentId],
+      gas: BigInt(500_000),
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { startRental, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Complete a rental (releases escrow → rentor, adds revenue to distributor)
+ * penaltyReason: 0=None, 1=Damage, 2=LateReturn, 3=ExcessiveMileage, 4=CleaningFee,
+ *                5=MissingFuel, 6=TollViolation, 7=TrafficViolation, 8=Other
+ */
+export function useCompleteRental() {
+  const { address, abi } = useRentalPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const completeRental = (
+    paymentId: bigint,
+    penaltyAmount: bigint,
+    penaltyReason: number,
+    penaltyDescription: string,
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "completeRental",
+      args: [paymentId, penaltyAmount, penaltyReason, penaltyDescription],
+      gas: BigInt(1_000_000),
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { completeRental, hash, isConfirming, isSuccess, isPending, error };
+}
+
 // ═══════════════════════════════════════════════
 // Admin Booking Actions (RentalBooking)
 // ═══════════════════════════════════════════════

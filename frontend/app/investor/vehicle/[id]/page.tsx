@@ -25,12 +25,13 @@ import { ExplorerLink } from "@/components/web3";
 import { useWatchCampaignReports } from "@/hooks/useCRE";
 
 // Revenue waterfall percentages from RevenueDistributor.sol
+// Insurance (5%) + Operating (10%) + Operator (10%) = 25% total → withdrawable by rentor
 const WATERFALL = {
   platformFee: 0.15,
   maintenance: 0.10,
-  insurance: 0.05,
-  operatingCosts: 0.10,
-  operatorFee: 0.10,
+  insurance: 0.05,       // Rentor responsibility
+  operatingCosts: 0.10,  // Rentor responsibility
+  operatorFee: 0.10,     // Rentor responsibility
   netToInvestors: 0.50,
 } as const;
 
@@ -207,6 +208,8 @@ export default function VehicleDetailPage() {
                 className="w-full h-full object-cover"
                 width={800}
                 height={400}
+                unoptimized
+                onError={(e) => { (e.target as HTMLImageElement).src = "/assets/car_image1.png"; }}
               />
               <div className="absolute top-4 left-4 flex gap-2">
                 {hasCampaign && (
@@ -281,9 +284,9 @@ export default function VehicleDetailPage() {
                 {[
                   { label: "Platform Fee", pct: WATERFALL.platformFee, amount: waterfall.platformFee, color: "bg-gray-200" },
                   { label: "Maintenance Reserve", pct: WATERFALL.maintenance, amount: waterfall.maintenance, color: "bg-orange-200" },
-                  { label: "Insurance", pct: WATERFALL.insurance, amount: waterfall.insurance, color: "bg-yellow-200" },
-                  { label: "Operating Costs", pct: WATERFALL.operatingCosts, amount: waterfall.operatingCosts, color: "bg-red-200" },
-                  { label: "Operator Fee (Rentor)", pct: WATERFALL.operatorFee, amount: waterfall.operatorFee, color: "bg-indigo-200" },
+                  { label: "Insurance — Rentor", pct: WATERFALL.insurance, amount: waterfall.insurance, color: "bg-yellow-200" },
+                  { label: "Operating Costs — Rentor", pct: WATERFALL.operatingCosts, amount: waterfall.operatingCosts, color: "bg-red-200" },
+                  { label: "Operator Fee — Rentor", pct: WATERFALL.operatorFee, amount: waterfall.operatorFee, color: "bg-indigo-200" },
                   { label: "Distributed to Investors", pct: WATERFALL.netToInvestors, amount: waterfall.netToInvestors, color: "bg-green-200" },
                 ].map((item) => (
                   <div key={item.label}>

@@ -11,12 +11,13 @@ import { useVehicleNFT } from "@/hooks/useContracts";
 import { parseGwei, decodeEventLog } from "viem";
 
 // Revenue waterfall percentages from RevenueDistributor.sol
+// Insurance (5%) + Operating (10%) + Operator (10%) = 25% total → withdrawable by rentor
 const WATERFALL = {
   platformFee: 0.15,
   maintenance: 0.10,
-  insurance: 0.05,
-  operatingCosts: 0.10,
-  operatorFee: 0.10,
+  insurance: 0.05,       // Rentor responsibility
+  operatingCosts: 0.10,  // Rentor responsibility
+  operatorFee: 0.10,     // Rentor responsibility
   netToInvestors: 0.50,
 } as const;
 

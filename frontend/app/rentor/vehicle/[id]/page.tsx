@@ -769,12 +769,13 @@ export default function RentorVehicleDetailPage() {
     : 0;
 
   // Revenue waterfall percentages from RevenueDistributor.sol
+  // Insurance (5%) + Operating (10%) + Operator (10%) = 25% total → withdrawable by rentor
   const WATERFALL = {
     platformFee: 0.15,
     maintenance: 0.10,
-    insurance: 0.05,
-    operatingCosts: 0.10,
-    operatorFee: 0.10,
+    insurance: 0.05,       // Rentor responsibility
+    operatingCosts: 0.10,  // Rentor responsibility
+    operatorFee: 0.10,     // Rentor responsibility
     netToInvestors: 0.50,
   };
 
@@ -1037,9 +1038,9 @@ export default function RentorVehicleDetailPage() {
                 {[
                   { label: "Platform Fee", pct: WATERFALL.platformFee, amount: waterfall.platformFee, color: "bg-gray-200" },
                   { label: "Maintenance Reserve", pct: WATERFALL.maintenance, amount: waterfall.maintenance, color: "bg-orange-200" },
-                  { label: "Insurance", pct: WATERFALL.insurance, amount: waterfall.insurance, color: "bg-yellow-200" },
-                  { label: "Operating Costs", pct: WATERFALL.operatingCosts, amount: waterfall.operatingCosts, color: "bg-red-200" },
-                  { label: "Operator Fee (Rentor)", pct: WATERFALL.operatorFee, amount: waterfall.operatorFee, color: "bg-indigo-200" },
+                  { label: "Insurance — Rentor", pct: WATERFALL.insurance, amount: waterfall.insurance, color: "bg-yellow-200" },
+                  { label: "Operating Costs — Rentor", pct: WATERFALL.operatingCosts, amount: waterfall.operatingCosts, color: "bg-red-200" },
+                  { label: "Operator Fee — Rentor", pct: WATERFALL.operatorFee, amount: waterfall.operatorFee, color: "bg-indigo-200" },
                   { label: "Distributed to Investors", pct: WATERFALL.netToInvestors, amount: waterfall.netToInvestors, color: "bg-green-200" },
                 ].map((item) => (
                   <div key={item.label}>
@@ -2091,10 +2092,18 @@ function VehicleComplianceCard({ vehicleNftId }: { vehicleNftId: bigint }) {
 
   if (validation.isError) return null;
 
-  const result = validation.data as [boolean, number, number] | undefined;
+  // Parse validation result: struct { bool isValid, uint8 reason, struct { ..., uint8 status, ... } operationalData }
+  const result = validation.data as
+    | { isValid: boolean; reason: number; operationalData?: { status: number } }
+    | [boolean, number, any]
+    | undefined;
   if (!result) return null;
 
-  const [isValid, reason, status] = result;
+  const isValid = Array.isArray(result) ? result[0] : result?.isValid;
+  const reason = Array.isArray(result) ? result[1] : result?.reason;
+  const status = Array.isArray(result)
+    ? (result[2]?.status ?? result[2] ?? 0)
+    : (result?.operationalData?.status ?? 0);
   const isOperational = operational.data as boolean | undefined;
   const statusInfo = VEHICLE_OP_STATUS[status] || VEHICLE_OP_STATUS[0];
 

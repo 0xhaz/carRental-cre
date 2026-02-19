@@ -8,10 +8,13 @@ import Link from "next/link";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading } = useUserStore();
+  const { user, isAuthenticated, isLoading, isHydrated } = useUserStore();
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
+    // Wait for Zustand to hydrate from localStorage before making redirect decisions
+    if (!isHydrated) return;
+
     // Check if user is admin
     if (!isLoading) {
       if (!isAuthenticated || user?.role !== "admin") {
@@ -20,10 +23,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         setIsChecking(false);
       }
     }
-  }, [isAuthenticated, user, isLoading, router]);
+  }, [isAuthenticated, user, isLoading, isHydrated, router]);
 
   // Show loading state while checking authentication
-  if (isLoading || isChecking) {
+  if (!isHydrated || isLoading || isChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

@@ -19,9 +19,12 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user } = useUserStore();
+  const { user, isHydrated } = useUserStore();
 
   useEffect(() => {
+    // Wait for Zustand to hydrate from localStorage before making redirect decisions
+    if (!isHydrated) return;
+
     // If no user, redirect to home
     if (!user) {
       toast.error("Please login to access this page");
@@ -46,10 +49,10 @@ export function ProtectedRoute({
           router.push(redirectTo);
       }
     }
-  }, [user, allowedRoles, router, redirectTo, pathname]);
+  }, [user, isHydrated, allowedRoles, router, redirectTo, pathname]);
 
-  // If user doesn't have permission, don't render children
-  if (!user || (user.role && !allowedRoles.includes(user.role))) {
+  // Show nothing while hydrating or if user doesn't have permission
+  if (!isHydrated || !user || (user.role && !allowedRoles.includes(user.role))) {
     return null;
   }
 

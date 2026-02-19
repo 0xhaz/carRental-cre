@@ -49,9 +49,9 @@ export function RevenueDistributionTracker({
     isLoading: totalLoading,
   } = useVehicleRevenue(vehicleId);
 
-  // Extract total distributed from vehicle revenue data
+  // Extract total distributed from vehicle revenue data (VehicleRevenue struct)
   const totalFormatted = vehicleRevenueData
-    ? formatEther((vehicleRevenueData as any).totalRevenue || BigInt(0))
+    ? formatEther((vehicleRevenueData as any).totalDistributed || BigInt(0))
     : "0";
 
   // Claim revenue hook

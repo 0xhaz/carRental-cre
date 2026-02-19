@@ -23,6 +23,11 @@ const nextConfig: NextConfig = {
         hostname: "www.completecar.ie",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "www.tesla.com",
+        pathname: "/**",
+      },
     ],
   },
 };

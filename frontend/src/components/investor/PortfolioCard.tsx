@@ -1,13 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { Investment, Vehicle } from "@/types";
 import { Card, CardContent, Badge, Button } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils";
 import { useAccount, useReadContract } from "wagmi";
-import { formatUnits } from "viem";
+import { formatUnits, formatEther } from "viem";
 import Image from "next/image";
 import Link from "next/link";
 import { SEPOLIA_CHAIN_ID, getEtherscanUrl } from "@/constants/contracts";
+import { useMyClaimableRevenue } from "@/hooks/useInvestment";
+import { useEthPrice } from "@/hooks/usePriceFeed";
+
+const FALLBACK_IMAGE = "/assets/car_image1.png";
 
 const ERC20_ABI = [
   {
@@ -56,9 +61,13 @@ function OnChainBalance({ tokenAddress, label }: { tokenAddress: string; label: 
   return (
     <div>
       <p className="text-xs text-gray-600">{displayLabel}</p>
-      <p className="text-base font-semibold text-blue-600">
-        {formatted > 0 ? formatted.toLocaleString(undefined, { maximumFractionDigits: 4 }) : "0"}
-      </p>
+      {formatted > 0 ? (
+        <p className="text-base font-semibold text-blue-600">
+          {formatted.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+        </p>
+      ) : (
+        <p className="text-base font-semibold text-gray-400">Pending</p>
+      )}
     </div>
   );
 }
@@ -73,6 +82,27 @@ function useTokenSymbol(tokenAddress?: string) {
   return symbol as string | undefined;
 }
 
+function OnChainRevenue({ vehicleNftId, dbRevenue }: { vehicleNftId?: number | null; dbRevenue: number }) {
+  const nftId = vehicleNftId != null ? BigInt(vehicleNftId) : undefined;
+  const { data: claimableWei } = useMyClaimableRevenue(nftId);
+  const { price: ethPrice } = useEthPrice();
+
+  // DB stores already-claimed revenue; on-chain shows unclaimed. Total = both.
+  const claimable = claimableWei ? parseFloat(formatEther(claimableWei as bigint)) : 0;
+  const onChainUsd = claimable * (ethPrice || 0);
+  const totalRevenue = (dbRevenue || 0) + onChainUsd;
+
+  if (totalRevenue > 0) {
+    return (
+      <p className="text-base font-semibold text-green-600">
+        {formatCurrency(totalRevenue)}
+      </p>
+    );
+  }
+
+  return <p className="text-base font-semibold text-gray-400">$0</p>;
+}
+
 export interface PortfolioCardProps {
   investment: Investment;
   vehicle?: Vehicle;
@@ -85,6 +115,7 @@ export function PortfolioCard({
   vehicle,
   className
 }: PortfolioCardProps) {
+  const [imgSrc, setImgSrc] = useState(vehicle?.image || FALLBACK_IMAGE);
   const v = vehicle as any;
   const assetTokenAddr = v?.assetTokenAddress;
   const revenueTokenAddr = v?.revenueTokenAddress;
@@ -104,11 +135,12 @@ export function PortfolioCard({
         {vehicle && (
           <div className="relative w-full md:w-48 h-48 overflow-hidden">
             <Image
-              src={vehicle.image || "/assets/car_image1.png"}
+              src={imgSrc}
               alt={`${vehicle.brand} ${vehicle.model}`}
               className="w-full h-full object-cover"
               width={192}
               height={192}
+              onError={() => setImgSrc(FALLBACK_IMAGE)}
             />
             <div className="absolute top-2 left-2">
               <Badge
@@ -175,9 +207,7 @@ export function PortfolioCard({
             )}
             <div>
               <p className="text-xs text-gray-600">Revenue Earned</p>
-              <p className="text-base font-semibold text-green-600">
-                {formatCurrency(investment.totalRevenueEarned)}
-              </p>
+              <OnChainRevenue vehicleNftId={v?.vehicleNftId} dbRevenue={investment.totalRevenueEarned} />
             </div>
           </div>
 

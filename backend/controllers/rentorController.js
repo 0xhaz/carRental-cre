@@ -380,13 +380,19 @@ export const getVehiclesPendingRegistration = async (req, res) => {
 };
 
 // Mark token registration as complete and notify the rentor
+// Also syncs token addresses if provided (ensures DB matches on-chain state)
 export const completeTokenRegistration = async (req, res) => {
   try {
     const { vehicleId } = req.params;
+    const { assetTokenAddress, revenueTokenAddress } = req.body || {};
     const car = await Car.findById(vehicleId).populate("owner");
     if (!car) {
       return res.status(404).json({ success: false, message: "Vehicle not found" });
     }
+
+    // Sync token addresses from on-chain if provided
+    if (assetTokenAddress) car.assetTokenAddress = assetTokenAddress;
+    if (revenueTokenAddress) car.revenueTokenAddress = revenueTokenAddress;
 
     // Mark registration as complete on the vehicle
     car.tokenRegistrationComplete = true;
@@ -404,6 +410,48 @@ export const completeTokenRegistration = async (req, res) => {
     res.json({ success: true, message: "Registration complete notification sent" });
   } catch (error) {
     console.error("Complete token registration error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Sync vehicle token addresses (admin utility to update DB from on-chain state)
+export const syncVehicleTokenAddresses = async (req, res) => {
+  try {
+    const { vehicleId } = req.params;
+    const { assetTokenAddress, revenueTokenAddress } = req.body;
+
+    if (!assetTokenAddress || !revenueTokenAddress) {
+      return res.status(400).json({
+        success: false,
+        message: "Both assetTokenAddress and revenueTokenAddress are required",
+      });
+    }
+
+    const car = await Car.findById(vehicleId);
+    if (!car) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+
+    const oldAsset = car.assetTokenAddress;
+    const oldRevenue = car.revenueTokenAddress;
+
+    car.assetTokenAddress = assetTokenAddress;
+    car.revenueTokenAddress = revenueTokenAddress;
+    await car.save();
+
+    res.json({
+      success: true,
+      message: "Token addresses synced",
+      data: {
+        vehicleId: car._id,
+        brand: car.brand,
+        model: car.model,
+        old: { assetTokenAddress: oldAsset, revenueTokenAddress: oldRevenue },
+        new: { assetTokenAddress, revenueTokenAddress },
+      },
+    });
+  } catch (error) {
+    console.error("Sync vehicle token addresses error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };

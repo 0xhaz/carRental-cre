@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button, Input, Separator, Badge, Card, CardContent } from "@/components/ui";
 import { Vehicle } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -39,6 +39,7 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
   const [additionalDriver, setAdditionalDriver] = useState(false);
   const [insuranceUpgrade, setInsuranceUpgrade] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false); // Synchronous guard against double-submission
   const [cryptoBookingId, setCryptoBookingId] = useState<string | null>(null);
   const [showCryptoPayment, setShowCryptoPayment] = useState(false);
 
@@ -156,6 +157,10 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
         return;
       }
 
+      // Synchronous guard: useRef prevents double-submission even if React
+      // hasn't re-rendered yet (useState is async, so rapid clicks can bypass it)
+      if (submittingRef.current) return;
+      submittingRef.current = true;
       setIsSubmitting(true);
 
       try {
@@ -211,6 +216,7 @@ export function BookingFlowEnhanced({ vehicle, onComplete, onCancel }: BookingFl
         console.error("Booking submission error:", error);
         toast.error(error.response?.data?.message || "Failed to submit booking");
       } finally {
+        submittingRef.current = false;
         setIsSubmitting(false);
       }
     }

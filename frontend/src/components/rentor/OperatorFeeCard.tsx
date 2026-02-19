@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Card, CardContent, Heading, Button } from "@/components/ui";
 import { useOperatorFees, useWithdrawOperatorFees } from "@/hooks/useInvestment";
+import { useAccount } from "wagmi";
 import { toast } from "react-hot-toast";
 import { SEPOLIA_CHAIN_ID, getEtherscanUrl } from "@/constants/contracts";
 
@@ -12,6 +13,7 @@ interface OperatorFeeCardProps {
 }
 
 export default function OperatorFeeCard({ vehicleId, vehicleName }: OperatorFeeCardProps) {
+  const { isConnected } = useAccount();
   const { formatted: fees, refetch } = useOperatorFees(vehicleId);
   const {
     withdrawFees,
@@ -46,7 +48,7 @@ export default function OperatorFeeCard({ vehicleId, vehicleName }: OperatorFeeC
 
         <div className="space-y-3">
           <p className="text-sm text-gray-600">
-            Your accumulated operator fees for {vehicleName} from revenue distributions.
+            Your accumulated fees for {vehicleName} — includes operator fee (10%), insurance (5%), and operating costs (10%).
           </p>
 
           <div className="bg-indigo-50 rounded-lg p-4 text-center">
@@ -56,10 +58,12 @@ export default function OperatorFeeCard({ vehicleId, vehicleName }: OperatorFeeC
 
           <Button
             onClick={() => withdrawFees(vehicleId)}
-            disabled={isPending || isConfirming || !hasFees}
+            disabled={!isConnected || isPending || isConfirming || !hasFees}
             className="w-full"
           >
-            {isPending
+            {!isConnected
+              ? "Connect Wallet"
+              : isPending
               ? "Confirm in Wallet..."
               : isConfirming
               ? "Withdrawing..."

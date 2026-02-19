@@ -1,10 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Heading, Paragraph, Card, CardContent, Badge } from "@/components/ui";
+import { Heading, Paragraph, Card, CardContent, Badge, Button } from "@/components/ui";
+import { EthUsdDisplay } from "@/components/web3";
 import { kycApi, vehicleApi } from "@/lib/api";
 import { ExplorerLink } from "@/components/web3";
 import { useCREActivityFeed } from "@/hooks/useCRE";
+import { usePlatformFees, useWithdrawPlatformFees } from "@/hooks/useInvestment";
+import { useRevenueDistributor } from "@/hooks/useContracts";
+import { useBalance, useAccount } from "wagmi";
+import { toast } from "react-hot-toast";
+import { SEPOLIA_CHAIN_ID, getEtherscanUrl } from "@/constants/contracts";
 import type { CREEventType } from "@/types/cre";
 import Link from "next/link";
 
@@ -18,6 +24,35 @@ export default function AdminDashboard() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const { feed, counts } = useCREActivityFeed();
+
+  // Platform revenue
+  const { address: adminAddress } = useAccount();
+  const { address: distributorAddress } = useRevenueDistributor();
+  const { data: platformFeesData, formatted: platformFeesFormatted, refetch: refetchFees } = usePlatformFees();
+  const platformFeesWei = platformFeesData as bigint | undefined;
+  const hasFees = platformFeesWei && platformFeesWei > BigInt(0);
+  const { data: contractBalance } = useBalance({ address: distributorAddress });
+  const {
+    withdraw: withdrawPlatformFees,
+    hash: withdrawHash,
+    isConfirming: isWithdrawConfirming,
+    isSuccess: withdrawSuccess,
+    isPending: isWithdrawPending,
+    error: withdrawError,
+  } = useWithdrawPlatformFees();
+
+  useEffect(() => {
+    if (withdrawSuccess) {
+      toast.success("Platform fees withdrawn successfully!");
+      refetchFees();
+    }
+  }, [withdrawSuccess]);
+
+  useEffect(() => {
+    if (withdrawError) {
+      toast.error(withdrawError.message?.slice(0, 100) || "Withdrawal failed");
+    }
+  }, [withdrawError]);
 
   useEffect(() => {
     loadStats();
@@ -118,6 +153,55 @@ export default function AdminDashboard() {
           </Card>
         </Link>
       </div>
+
+      {/* Platform Revenue */}
+      <Card className="mb-8">
+        <CardContent className="p-6">
+          <Heading as="h2" className="mb-4">
+            Platform Revenue
+          </Heading>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="bg-gray-50 rounded-lg p-4">
+              <p className="text-xs text-gray-500 mb-1">Contract Balance</p>
+              {contractBalance ? (
+                <EthUsdDisplay amountWei={contractBalance.value} primary="ETH" />
+              ) : (
+                <p className="text-sm text-gray-400">Loading...</p>
+              )}
+            </div>
+            <div className="bg-purple-50 rounded-lg p-4">
+              <p className="text-xs text-gray-500 mb-1">Platform Fees (Withdrawable)</p>
+              {platformFeesWei !== undefined ? (
+                <EthUsdDisplay amountWei={platformFeesWei} primary="ETH" />
+              ) : (
+                <p className="text-sm text-gray-400">Loading...</p>
+              )}
+            </div>
+            <div className="flex items-end">
+              <Button
+                onClick={() => adminAddress && withdrawPlatformFees(adminAddress)}
+                disabled={!hasFees || isWithdrawPending || isWithdrawConfirming}
+                className="w-full"
+              >
+                {isWithdrawPending ? "Confirm in Wallet..." : isWithdrawConfirming ? "Withdrawing..." : "Withdraw Platform Fees"}
+              </Button>
+            </div>
+          </div>
+          {withdrawHash && (
+            <a
+              href={getEtherscanUrl(SEPOLIA_CHAIN_ID, withdrawHash, "tx")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-500 hover:underline"
+            >
+              Tx: {withdrawHash.slice(0, 14)}...
+            </a>
+          )}
+          <p className="text-xs text-gray-400 mt-2">
+            Platform fees (15%) accumulate from all vehicle revenue distributions. Insurance (5%), operating costs (10%), and operator fee (10%) are withdrawable by the rentor. Maintenance (10%) is admin-managed.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Quick Actions */}
       <Card>

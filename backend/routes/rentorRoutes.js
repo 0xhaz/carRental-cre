@@ -14,6 +14,7 @@ import {
   setVehicleTokens,
   getVehiclesPendingRegistration,
   completeTokenRegistration,
+  syncVehicleTokenAddresses,
   uploadMilestoneDocuments,
   getMilestoneDocuments,
   getVehicleByNftId,
@@ -74,6 +75,7 @@ rentorRouter.post("/vehicle/:vehicleId/set-nft-id", protect, setVehicleNftId);
 rentorRouter.post("/vehicle/:vehicleId/set-tokens", protect, setVehicleTokens);
 rentorRouter.get("/vehicles-pending-registration", protect, getVehiclesPendingRegistration);
 rentorRouter.post("/vehicle/:vehicleId/complete-registration", protect, completeTokenRegistration);
+rentorRouter.post("/vehicle/:vehicleId/sync-token-addresses", protect, syncVehicleTokenAddresses);
 rentorRouter.get("/dashboard", protect, getDashboardData);
 rentorRouter.post(
   "/update-image",

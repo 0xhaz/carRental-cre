@@ -88,8 +88,29 @@ export const vehicleApi = {
   },
 
   // Mark token registration as complete (notifies the rentor)
-  completeTokenRegistration: async (vehicleId: string): Promise<{ success: boolean }> => {
-    const { data } = await apiClient.post(`/rentor/vehicle/${vehicleId}/complete-registration`);
+  // Also syncs on-chain token addresses to DB to prevent address mismatch
+  completeTokenRegistration: async (
+    vehicleId: string,
+    assetTokenAddress?: string,
+    revenueTokenAddress?: string
+  ): Promise<{ success: boolean }> => {
+    const { data } = await apiClient.post(`/rentor/vehicle/${vehicleId}/complete-registration`, {
+      assetTokenAddress,
+      revenueTokenAddress,
+    });
+    return data;
+  },
+
+  // Sync vehicle token addresses from on-chain state to DB
+  syncTokenAddresses: async (
+    vehicleId: string,
+    assetTokenAddress: string,
+    revenueTokenAddress: string
+  ): Promise<{ success: boolean; message: string; data: any }> => {
+    const { data } = await apiClient.post(`/rentor/vehicle/${vehicleId}/sync-token-addresses`, {
+      assetTokenAddress,
+      revenueTokenAddress,
+    });
     return data;
   },
 

@@ -240,6 +240,31 @@ export const submitBooking = async (req, res) => {
       });
     }
 
+    // Prevent duplicate bookings (same user, vehicle, and dates within 30 seconds)
+    const duplicateWindow = new Date(Date.now() - 30 * 1000);
+    const existingBooking = await Booking.findOne({
+      car: vehicleId,
+      user: userId,
+      pickupDate: dates.pickupDate,
+      returnDate: dates.returnDate,
+      status: "pending",
+      createdAt: { $gte: duplicateWindow },
+    });
+
+    if (existingBooking) {
+      // Return the existing booking instead of creating a duplicate
+      await existingBooking.populate([
+        { path: "car", select: "brand model year image pricePerDay" },
+        { path: "owner", select: "name email" },
+        { path: "renterProfile" },
+      ]);
+      return res.status(200).json({
+        success: true,
+        message: "Booking already submitted",
+        booking: existingBooking,
+      });
+    }
+
     // Create booking
     const booking = await Booking.create({
       car: vehicleId,
