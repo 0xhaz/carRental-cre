@@ -15,7 +15,9 @@ import { Investment } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { investmentApi } from "@/lib/api";
 import { useAccount, useReadContract } from "wagmi";
-import { formatUnits } from "viem";
+import { formatUnits, formatEther } from "viem";
+import { useMyClaimableRevenue } from "@/hooks/useInvestment";
+import { useEthPrice } from "@/hooks/usePriceFeed";
 import Image from "next/image";
 import { toast } from "react-hot-toast";
 import { SEPOLIA_CHAIN_ID, getEtherscanUrl } from "@/constants/contracts";
@@ -101,6 +103,17 @@ function OnChainTokenBalance({
   );
 }
 
+/** Combines DB claimed revenue + on-chain unclaimed revenue */
+function useTotalRevenue(vehicleNftId?: number | null, dbRevenue: number = 0) {
+  const nftId = vehicleNftId != null ? BigInt(vehicleNftId) : undefined;
+  const { data: claimableWei } = useMyClaimableRevenue(nftId);
+  const { price: ethPrice } = useEthPrice();
+
+  const claimable = claimableWei ? parseFloat(formatEther(claimableWei as bigint)) : 0;
+  const onChainUsd = claimable * (ethPrice || 0);
+  return (dbRevenue || 0) + onChainUsd;
+}
+
 export default function InvestmentDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -109,6 +122,10 @@ export default function InvestmentDetailPage() {
 
   const [investment, setInvestment] = useState<Investment | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Extract vehicle NFT ID for on-chain revenue (must be called unconditionally)
+  const vehicleData = investment && typeof investment.vehicle === "object" ? (investment.vehicle as any) : null;
+  const totalRevenue = useTotalRevenue(vehicleData?.vehicleNftId, investment?.totalRevenueEarned ?? 0);
 
   useEffect(() => {
     const loadInvestment = async () => {
@@ -171,7 +188,7 @@ export default function InvestmentDetailPage() {
 
   // Calculate metrics
   const totalValue = investment.amount * 1.1;
-  const profitLoss = totalValue - investment.amount + investment.totalRevenueEarned;
+  const profitLoss = totalValue - investment.amount + totalRevenue;
   const profitLossPercentage = (profitLoss / investment.amount) * 100;
   const isProfit = profitLoss >= 0;
 
@@ -274,7 +291,7 @@ export default function InvestmentDetailPage() {
                 <div className="bg-green-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Total Revenue Earned</p>
                   <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(investment.totalRevenueEarned)}
+                    {formatCurrency(totalRevenue)}
                   </p>
                 </div>
                 <div className={`rounded-lg p-4 ${isProfit ? "bg-green-50" : "bg-red-50"}`}>
@@ -362,7 +379,7 @@ export default function InvestmentDetailPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Revenue Earned</span>
                   <span className="font-semibold text-green-600">
-                    {formatCurrency(investment.totalRevenueEarned)}
+                    {formatCurrency(totalRevenue)}
                   </span>
                 </div>
               </div>

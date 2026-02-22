@@ -97,6 +97,193 @@
 
 ---
 
+### Key Data Flows
+
+| User Type    | Key Actions                                     | Data Flow Path                                                                                              |
+| ------------ | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Renter**   | Browse vehicles, book, pay, complete rental     | Frontend → Backend (vehicle list) → Frontend → Smart Contract (RentalBooking) → Onboarding CRE              |
+|              | Submit damage reports                           | Frontend → Backend (incident log) → Vehicle CRE → VehicleReceiver → VehicleNFT                              |
+| **Investor** | Browse campaigns, request access, fund, claim   | Frontend → Smart Contract (InvestorRequestManager) → Onboarding CRE → OnboardingReceiver → IdentityRegistry |
+|              | Trade tokens (AssetToken/RevenueToken)          | Frontend → Smart Contract (Token.transfer) → ComplianceRules (ERC-3643 checks) → TransferRestrictions       |
+| **Rentor**   | Add vehicle, create campaign, submit milestones | Frontend → Backend (metadata) → Smart Contract (VehicleNFT mint) → Frontend (campaign creation)             |
+|              | Complete milestones (insurance, registration)   | Frontend → Backend (proof upload) → Payment CRE → NHTSA API validation → PaymentReceiver → Escrow release   |
+|              | Withdraw operator fees                          | Frontend → Smart Contract (RevenueDistributor.withdrawOperatorFees) → ETH transfer                          |
+
+### Cross-Layer Interactions
+
+1. **On-Chain ↔ Off-Chain Sync**: CRE workflows read blockchain events (via RPC) and submit verified reports back to receiver contracts
+2. **Frontend ↔ Backend**: Next.js fetches off-chain metadata (vehicle images, descriptions, KYC docs) from Express API + MongoDB
+3. **Frontend ↔ Blockchain**: Wagmi hooks enable direct smart contract reads/writes via Viem RPC provider
+4. **Backend ↔ Blockchain**: Express server monitors events (using `viem.watchEvent`) to update MongoDB with latest on-chain state
+
+---
+
+## Interactive DFD
+
+This interactive diagram renders on GitHub/GitLab and can be explored dynamically:
+
+```mermaid
+graph TB
+    %% User Layer
+    subgraph Users["👥 Platform Users"]
+        Renter["🚗 RENTER<br/>Vehicle User<br/>────────<br/>• Browse vehicles<br/>• Submit booking<br/>• Pay rental fee<br/>• Complete rental"]
+        Investor["💰 INVESTOR<br/>Capital Provider<br/>────────<br/>• Browse campaigns<br/>• Request investment<br/>• Fund campaign<br/>• Claim revenue<br/>• Trade tokens"]
+        Rentor["🏢 RENTOR<br/>Vehicle Operator<br/>────────<br/>• Add vehicle<br/>• Create campaign<br/>• Submit milestones<br/>• Withdraw fees<br/>• Manage bookings"]
+    end
+
+    %% Frontend Layer
+    subgraph Frontend["⚛️ Frontend Layer - Next.js 16 + React 19"]
+        RenterPortal["Renter Portal"]
+        InvestorPortal["Investor Portal"]
+        RentorPortal["Rentor Portal"]
+        AdminPortal["Admin Portal"]
+        Web3Libs["Web3 Stack<br/>────────<br/>Wagmi v3 | Viem v2<br/>Zustand | TanStack Query<br/>Thirdweb | WalletConnect"]
+    end
+
+    %% Backend Layer
+    subgraph Backend["🖥️ Backend Layer - Express.js 5 + MongoDB"]
+        APIRoutes["API Routes<br/>────────<br/>/api/vehicles<br/>/api/campaigns<br/>/api/bookings<br/>/api/auth<br/>/api/investors"]
+        MongoDB["MongoDB Database<br/>────────<br/>• Vehicle metadata<br/>• Campaign details<br/>• Booking history<br/>• User profiles KYC<br/>• Revenue records"]
+    end
+
+    %% Smart Contract Layer
+    subgraph Blockchain["⛓️ Blockchain Layer - Ethereum Sepolia"]
+        subgraph TokenLayer["ERC-3643 Token Layer"]
+            AssetToken["AssetToken<br/>RevenueToken"]
+            IdentityReg["IdentityRegistry"]
+            Compliance["ComplianceRules<br/>TransferRestrictions"]
+        end
+
+        subgraph IdentityLayer["Identity Layer ERC-734/735"]
+            OnchainID["OnchainID<br/>ClaimIssuer"]
+            WorldID["WorldIDVerifier"]
+        end
+
+        subgraph VehicleLayer["Vehicle & Rental System"]
+            VehicleNFT["VehicleNFT ERC-721"]
+            RentalBooking["RentalBooking<br/>RentalOperations"]
+            RenterComp["RenterCompliance<br/>OperationalCompliance"]
+        end
+
+        subgraph PaymentLayer["Payment & Revenue System"]
+            PaymentProto["PaymentProtocol<br/>PaymentEscrow"]
+            RefundMgr["RefundManager<br/>DisputeResolver"]
+            RevenueDist["RevenueDistributor"]
+        end
+
+        subgraph InvestorLayer["Investor Management"]
+            InvestorMgr["InvestorRequestManager<br/>MultiSigWallet"]
+        end
+    end
+
+    %% CRE Receiver Layer
+    subgraph CREReceivers["🔗 CRE Receiver Contracts - Bridge: Off-Chain → On-Chain"]
+        OnboardingRcv["OnboardingReceiver"]
+        PaymentRcv["PaymentReceiver"]
+        VehicleRcv["VehicleReceiver"]
+        ComplianceRcv["ComplianceReceiver"]
+        CampaignRcv["CampaignMonitorReceiver"]
+    end
+
+    %% Chainlink CRE Layer
+    subgraph ChainlinkCRE["⚡ Chainlink CRE - Off-Chain Compute with DON Consensus"]
+        subgraph OnboardingWF["Onboarding Workflow"]
+            OnbActions["• Read investor requests<br/>• Validate identity World ID<br/>• Auto-approve/reject<br/>• Read pending bookings<br/>• Validate renter compliance<br/>• Auto-approve/reject booking"]
+        end
+
+        subgraph PaymentWF["Payment Workflow"]
+            PayActions["• Verify milestones via API<br/>  ├─ VEHICLE_IDENTIFIED<br/>  │  NHTSA VIN Decoder API<br/>  ├─ PURCHASE_VERIFIED<br/>  ├─ INSURANCE_OBTAINED<br/>  └─ REGISTRATION_COMPLETED<br/>• Trigger escrow release"]
+        end
+
+        subgraph VehicleWF["Vehicle Workflow"]
+            VehActions["• Monitor mileage odometer<br/>• Record incidents<br/>• Track maintenance"]
+        end
+
+        subgraph ComplianceWF["Compliance Workflow"]
+            CompActions["• Check registration expiry<br/>• Check insurance expiry<br/>• Suspend non-compliant<br/>• Blacklist risky renters"]
+        end
+
+        subgraph CampaignWF["Campaign Monitor Workflow"]
+            CampActions["• Detect failed campaigns<br/>• Trigger batch refunds<br/>• Handle cancellations"]
+        end
+    end
+
+    %% User to Frontend Connections
+    Renter --> RenterPortal
+    Investor --> InvestorPortal
+    Rentor --> RentorPortal
+
+    RenterPortal --> Web3Libs
+    InvestorPortal --> Web3Libs
+    RentorPortal --> Web3Libs
+    AdminPortal --> Web3Libs
+
+    %% Frontend to Backend (API Calls)
+    Web3Libs -->|"REST API Requests<br/>Vehicle metadata, KYC docs"| APIRoutes
+    APIRoutes --> MongoDB
+    MongoDB -->|"Off-chain data enrichment"| VehicleNFT
+
+    %% Frontend to Blockchain (Web3 RPC)
+    Web3Libs -->|"Web3 RPC Calls via Viem<br/>Direct smart contract reads/writes"| TokenLayer
+    Web3Libs --> IdentityLayer
+    Web3Libs --> VehicleLayer
+    Web3Libs --> PaymentLayer
+    Web3Libs --> InvestorLayer
+
+    %% Smart Contract Events to CRE Receivers
+    TokenLayer -->|"Emit Events<br/>TokensMinted, TransferBlocked"| OnboardingRcv
+    PaymentLayer -->|"FundsReceived, MilestoneCompleted"| PaymentRcv
+    VehicleLayer -->|"VehicleRegistered, BookingCreated"| VehicleRcv
+    RenterComp -->|"ComplianceViolation, VehicleSuspended"| ComplianceRcv
+    InvestorMgr -->|"CampaignFailed, RefundRequired"| CampaignRcv
+
+    %% CRE Receivers to Workflows
+    OnboardingRcv -.->|"Read blockchain state"| OnbActions
+    PaymentRcv -.->|"Read blockchain state"| PayActions
+    VehicleRcv -.->|"Read blockchain state"| VehActions
+    ComplianceRcv -.->|"Read blockchain state"| CompActions
+    CampaignRcv -.->|"Read blockchain state"| CampActions
+
+    %% Workflows back to Receivers (Reports)
+    OnbActions -->|"Submit verified reports"| OnboardingRcv
+    PayActions -->|"Submit verified reports"| PaymentRcv
+    VehActions -->|"Submit verified reports"| VehicleRcv
+    CompActions -->|"Submit verified reports"| ComplianceRcv
+    CampActions -->|"Submit verified reports"| CampaignRcv
+
+    %% External Integrations
+    PayActions -->|"External API Call"| NHTSA["NHTSA VIN Decoder API"]
+
+    %% Styling
+    classDef userClass fill:#000000,stroke:#0288d1,stroke-width:2px
+    classDef frontendClass fill:#000000,stroke:#f57c00,stroke-width:2px
+    classDef backendClass fill:#000000,stroke:#7b1fa2,stroke-width:2px
+    classDef blockchainClass fill:#000000,stroke:#388e3c,stroke-width:2px
+    classDef creClass fill:#000000,stroke:#f9a825,stroke-width:2px
+    classDef receiverClass fill:#000000,stroke:#c2185b,stroke-width:2px
+
+    class Renter,Investor,Rentor userClass
+    class RenterPortal,InvestorPortal,RentorPortal,AdminPortal,Web3Libs frontendClass
+    class APIRoutes,MongoDB backendClass
+    class AssetToken,IdentityReg,Compliance,OnchainID,WorldID,VehicleNFT,RentalBooking,RenterComp,PaymentProto,RefundMgr,RevenueDist,InvestorMgr blockchainClass
+    class OnboardingRcv,PaymentRcv,VehicleRcv,ComplianceRcv,CampaignRcv receiverClass
+    class OnbActions,PayActions,VehActions,CompActions,CampActions creClass
+```
+
+**Diagram Legend:**
+
+- **Solid arrows** (→): Direct data flow or function calls
+- **Dotted arrows** (-.->): Event-driven or polling interactions
+- **Color coding**: Users (blue), Frontend (orange), Backend (purple), Blockchain (green), CRE Workflows (yellow), Receivers (pink)
+
+**How to interact with this diagram:**
+
+1. View on GitHub/GitLab - it renders automatically
+2. Try [Mermaid Live Editor](https://mermaid.live/) to edit and export as SVG/PNG
+3. Hover over nodes to see connections highlighted (on supported platforms)
+
+---
+
 ## Chainlink CRE Workflows
 
 RegShield leverages **5 Chainlink CRE (Compute Runtime Environment)** workflows deployed on Ethereum Sepolia. Each workflow runs off-chain with DON consensus and submits verified reports to on-chain receiver contracts.

@@ -1,3 +1,5 @@
+"use client";
+
 import { Fragment } from "react";
 import { Badge } from "@/components/ui";
 import {
@@ -9,6 +11,8 @@ import {
   ArrowRight,
   ArrowDown,
 } from "lucide-react";
+import { motion } from "motion/react";
+import { fadeUp, staggerContainer, scrollTrigger } from "@/lib/motionVariants";
 
 const stages = [
   {
@@ -46,7 +50,13 @@ const stages = [
 export default function TokenLifecycle() {
   return (
     <section className="py-24 px-6 md:px-16 lg:px-24 xl:px-32 bg-white">
-      <div className="text-center mb-16">
+      <motion.div
+        className="text-center mb-16"
+        variants={fadeUp}
+        initial="hidden"
+        whileInView="visible"
+        viewport={scrollTrigger}
+      >
         <Badge variant="primary" className="mb-4">
           Token Lifecycle
         </Badge>
@@ -56,13 +66,22 @@ export default function TokenLifecycle() {
         <p className="text-gray-500 text-lg max-w-2xl mx-auto">
           The complete journey of a tokenized vehicle investment
         </p>
-      </div>
+      </motion.div>
 
       {/* Desktop: Horizontal flow */}
-      <div className="hidden md:flex items-start justify-between gap-2 max-w-5xl mx-auto">
+      <motion.div
+        className="hidden md:flex items-start justify-between gap-2 max-w-5xl mx-auto"
+        variants={staggerContainer}
+        initial="hidden"
+        whileInView="visible"
+        viewport={scrollTrigger}
+      >
         {stages.map((stage, i) => (
           <Fragment key={stage.title}>
-            <div className="flex flex-col items-center text-center flex-1">
+            <motion.div
+              variants={fadeUp}
+              className="flex flex-col items-center text-center flex-1"
+            >
               <div
                 className={`w-16 h-16 rounded-2xl ${stage.bgColor} flex items-center justify-center mb-3`}
               >
@@ -74,21 +93,30 @@ export default function TokenLifecycle() {
               <p className="text-xs text-gray-500 max-w-32">
                 {stage.subtitle}
               </p>
-            </div>
+            </motion.div>
             {i < stages.length - 1 && (
-              <div className="flex items-center pt-6">
+              <motion.div variants={fadeUp} className="flex items-center pt-6">
                 <ArrowRight className="text-borderColor" size={20} />
-              </div>
+              </motion.div>
             )}
           </Fragment>
         ))}
-      </div>
+      </motion.div>
 
       {/* Mobile: Vertical flow */}
-      <div className="md:hidden flex flex-col items-center gap-2">
+      <motion.div
+        className="md:hidden flex flex-col items-center gap-2"
+        variants={staggerContainer}
+        initial="hidden"
+        whileInView="visible"
+        viewport={scrollTrigger}
+      >
         {stages.map((stage, i) => (
           <Fragment key={stage.title}>
-            <div className="flex items-center gap-4 w-full max-w-sm">
+            <motion.div
+              variants={fadeUp}
+              className="flex items-center gap-4 w-full max-w-sm"
+            >
               <div
                 className={`w-14 h-14 rounded-xl ${stage.bgColor} flex items-center justify-center shrink-0`}
               >
@@ -100,13 +128,15 @@ export default function TokenLifecycle() {
                 </h3>
                 <p className="text-xs text-gray-500">{stage.subtitle}</p>
               </div>
-            </div>
+            </motion.div>
             {i < stages.length - 1 && (
-              <ArrowDown className="text-borderColor" size={20} />
+              <motion.div variants={fadeUp}>
+                <ArrowDown className="text-borderColor" size={20} />
+              </motion.div>
             )}
           </Fragment>
         ))}
-      </div>
+      </motion.div>
     </section>
   );
 }

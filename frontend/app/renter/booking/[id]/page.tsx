@@ -11,7 +11,7 @@ import {
   Badge,
 } from "@/components/ui";
 import { ReviewModal, ReviewList, ReviewStats } from "@/components/shared";
-import { bookingApi } from "@/lib/api";
+import { bookingApi, reviewApi } from "@/lib/api";
 import { useVehicleMetadata, useVehicleInfo } from "@/hooks/useVehicleData";
 import { Booking, Vehicle, Review, ReviewFormData } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -87,26 +87,26 @@ export default function RenterBookingDetailPage() {
     setIsReviewModalOpen(true);
   };
 
-  const handleReviewSubmit = (formData: ReviewFormData) => {
-    // Create new review (local only for now)
-    const newReview: Review = {
-      _id: `review-${Date.now()}`,
-      booking: bookingId,
-      vehicle: vehicle?._id || "",
-      renter: "current-user",
-      rentor: booking?.owner as string || "",
-      rating: formData.rating,
-      comment: formData.comment,
-      vehicleCondition: formData.vehicleCondition,
-      cleanliness: formData.cleanliness,
-      communication: formData.communication,
-      wouldRecommend: formData.wouldRecommend,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+  const handleReviewSubmit = async (formData: ReviewFormData) => {
+    if (!vehicle?._id) {
+      toast.error("Vehicle information not available");
+      return;
+    }
 
-    setReviews((prev) => [newReview, ...prev]);
-    setHasUserReviewed(true);
+    try {
+      const res = await reviewApi.create(bookingId, vehicle._id, formData);
+      if (res.success) {
+        toast.success("Review submitted successfully!");
+        setReviews((prev) => [res.data, ...prev]);
+        setHasUserReviewed(true);
+        setIsReviewModalOpen(false);
+      } else {
+        toast.error("Failed to submit review");
+      }
+    } catch (error: any) {
+      console.error("Review submission error:", error);
+      toast.error(error.response?.data?.message || "Failed to submit review");
+    }
   };
 
   const handleDownloadReceipt = () => {
@@ -462,7 +462,7 @@ export default function RenterBookingDetailPage() {
                   </Button>
                 )}
 
-                {booking.status === "completed" && !hasUserReviewed && (
+                {(booking.status === "completed" || new Date(booking.returnDate) <= new Date()) && !hasUserReviewed && (
                   <Button
                     variant="default"
                     className="w-full"
@@ -472,7 +472,7 @@ export default function RenterBookingDetailPage() {
                   </Button>
                 )}
 
-                {booking.status === "completed" && hasUserReviewed && (
+                {(booking.status === "completed" || new Date(booking.returnDate) <= new Date()) && hasUserReviewed && (
                   <Button
                     variant="outline"
                     className="w-full"

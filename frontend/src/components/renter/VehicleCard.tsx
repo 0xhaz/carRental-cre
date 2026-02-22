@@ -1,5 +1,5 @@
 import { Vehicle } from "@/types";
-import { Card, Badge } from "@/components/ui";
+import { Card, Badge, StarRating } from "@/components/ui";
 import { assets } from "@/constants/menuLinks";
 import Image from "next/image";
 import Link from "next/link";
@@ -72,6 +72,18 @@ export function VehicleCard({
               </p>
             </div>
           </div>
+
+          {/* Rating */}
+          {vehicle.reviewCount != null && vehicle.reviewCount > 0 && (
+            <div className="mt-2 mb-3">
+              <StarRating
+                rating={vehicle.averageRating || 0}
+                size="sm"
+                showCount
+                reviewCount={vehicle.reviewCount}
+              />
+            </div>
+          )}
 
           {/* Vehicle Specs Grid */}
           <div className="mt-4 grid grid-cols-2 gap-y-2 text-gray-600">

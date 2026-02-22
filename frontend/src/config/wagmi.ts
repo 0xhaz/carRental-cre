@@ -27,6 +27,9 @@ export const thirdwebClient = createThirdwebClient({
 /**
  * Wagmi Configuration
  * Primary Web3 connection manager
+ *
+ * Note: To enable WalletConnect, set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+ * Get your project ID at https://cloud.walletconnect.com/
  */
 export const config = createConfig({
   chains: [sepolia],
@@ -34,17 +37,6 @@ export const config = createConfig({
     // MetaMask & Browser Wallets
     injected({
       target: "metaMask",
-    }),
-    // WalletConnect
-    walletConnect({
-      projectId: WALLETCONNECT_PROJECT_ID,
-      metadata: {
-        name: "RegShield",
-        description: "Tokenized Rental Car Platform with ERC-3643 Compliance",
-        url: "https://regshield.io",
-        icons: ["https://regshield.io/logo.png"],
-      },
-      showQrModal: true,
     }),
     // Coinbase Wallet
     coinbaseWallet({

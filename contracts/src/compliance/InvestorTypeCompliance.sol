@@ -369,6 +369,13 @@ contract InvestorTypeCompliance is ICompliance, Ownable, ReentrancyGuard {
         if (lastTransfer == 0) {
             return true;
         }
+
+        // Get cooldown period from investor type registry
+        uint256 cooldownMinutes = investorTypeRegistry.getTransferCooldown(_investor);
+        uint256 cooldownSeconds = cooldownMinutes * 60;
+
+        // Check if cooldown period has passed
+        return block.timestamp >= lastTransfer + cooldownSeconds;
     }
 
     /**

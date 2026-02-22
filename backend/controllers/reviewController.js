@@ -1,6 +1,7 @@
 import Review from "../models/Review.js";
 import Booking from "../models/Booking.js";
 import Car from "../models/Car.js";
+import Notification from "../models/Notification.js";
 
 // @desc    Create a new review
 // @route   POST /api/reviews/create
@@ -28,8 +29,9 @@ export const createReview = async (req, res) => {
       return res.status(403).json({ success: false, message: "Not authorized" });
     }
 
-    // Check if booking is completed
-    if (booking.status !== "completed") {
+    // Check if booking is completed or return date has passed
+    const isPastReturnDate = new Date(booking.returnDate) <= new Date();
+    if (booking.status !== "completed" && !isPastReturnDate) {
       return res.status(400).json({
         success: false,
         message: "Can only review completed bookings",
@@ -57,6 +59,28 @@ export const createReview = async (req, res) => {
       cleanliness,
       communication,
       wouldRecommend,
+    });
+
+    // Update vehicle average rating
+    const allReviews = await Review.find({ vehicle: vehicleId });
+    const avgRating = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
+    await Car.findByIdAndUpdate(vehicleId, {
+      averageRating: avgRating,
+      reviewCount: allReviews.length,
+    });
+
+    // Notify rentor about the new review
+    await Notification.create({
+      userId: booking.owner,
+      type: "review_received",
+      title: "New Review Received",
+      message: `${req.user.name} left a ${rating}-star review for your vehicle.`,
+      link: `/rentor/vehicle/${vehicleId}`,
+      metadata: {
+        reviewId: review._id.toString(),
+        vehicleId: vehicleId,
+        rating: rating,
+      },
     });
 
     res.status(201).json({ success: true, data: review });
@@ -142,7 +166,8 @@ export const canReviewBooking = async (req, res) => {
     }
 
     const existingReview = await Review.findOne({ booking: req.params.bookingId });
-    const canReview = booking.status === "completed" && !existingReview;
+    const isPastReturnDate = new Date(booking.returnDate) <= new Date();
+    const canReview = (booking.status === "completed" || isPastReturnDate) && !existingReview;
 
     res.json({
       success: true,

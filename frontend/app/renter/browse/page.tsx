@@ -22,6 +22,7 @@ const DEFAULT_FILTERS: VehicleFilterState = {
   transmission: [],
   priceRange: [0, 1000],
   seatingCapacity: [],
+  minRating: 0,
   sortBy: "newest",
 };
 
@@ -100,6 +101,14 @@ export default function RenterBrowse() {
         return false;
       }
 
+      // Minimum rating filter
+      if (filters.minRating > 0) {
+        const rating = vehicle.averageRating || 0;
+        if (rating < filters.minRating) {
+          return false;
+        }
+      }
+
       return true;
     })
     .sort((a, b) => {
@@ -109,8 +118,10 @@ export default function RenterBrowse() {
         case "price-high":
           return b.pricePerDay - a.pricePerDay;
         case "rating":
-          // Mock rating - in real app this would come from reviews
-          return 0;
+          // Sort by rating (highest first), with unrated vehicles at the end
+          const aRating = a.averageRating || 0;
+          const bRating = b.averageRating || 0;
+          return bRating - aRating;
         case "newest":
         default:
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

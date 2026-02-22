@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
   assets,
   menuLinks,
@@ -16,11 +17,19 @@ import { useUserStore } from "@/store";
 import { UserRole } from "@/types";
 import { UserMenu } from "./UserMenu";
 import { NotificationBell } from "./NotificationBell";
+import { UserGuideModal } from "./UserGuideModal";
 import { useAppContext } from "@/context/AppContext";
+
+// Dynamically import WalletConnectButton to avoid SSR issues
+const WalletConnectButton = dynamic(
+  () => import("./WalletConnectButton").then((mod) => mod.WalletConnectButton),
+  { ssr: false }
+);
 
 export function Header() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   // Use both Zustand and Context during migration
   const { user: zustandUser } = useUserStore();
@@ -51,6 +60,14 @@ export function Header() {
     }
   }, [user]);
 
+  // On home page, only show first link (Dashboard) for logged-in users
+  const displayLinks = useMemo(() => {
+    if (pathname === "/" && user) {
+      return navigationLinks.slice(0, 1); // Only show Dashboard
+    }
+    return navigationLinks;
+  }, [pathname, user, navigationLinks]);
+
   return (
     <nav className="flex items-center justify-between px-6 md:px-16 lg:px-24 xl:px-32 py-4 text-gray-600 border-b border-borderColor relative transition-all bg-light">
       {/* Logo */}
@@ -66,7 +83,7 @@ export function Header() {
 
       {/* Desktop Navigation */}
       <div className="hidden md:flex items-center gap-8">
-        {navigationLinks.map(link => {
+        {displayLinks.map(link => {
           const isActive =
             pathname === link.path || pathname.startsWith(link.path + "/");
 
@@ -85,15 +102,16 @@ export function Header() {
           );
         })}
 
-        {/* Search Input (Desktop) */}
-        {/* <div className="hidden lg:flex items-center text-sm gap-2 border border-borderColor px-3 rounded-full max-w-56">
-          <input
-            type="text"
-            className="py-1.5 w-full bg-transparent outline-none placeholder-gray-500"
-            placeholder="Search vehicles"
-          />
-          <Image src={assets.search_icon} alt="Search" width={68} height={68} />
-        </div> */}
+        {/* User Guide Button */}
+        <button
+          onClick={() => setShowGuide(true)}
+          className="text-gray-600 hover:text-primary transition-colors font-medium"
+        >
+          User Guide
+        </button>
+
+        {/* Wallet Connect Button (Client-side only) */}
+        <WalletConnectButton />
 
         {/* Notifications */}
         <NotificationBell />
@@ -122,7 +140,7 @@ export function Header() {
         flex flex-col items-start gap-4 p-4 transition-all duration-300 z-50 bg-white
         ${open ? "translate-x-0" : "translate-x-full"}`}
       >
-        {navigationLinks.map(link => {
+        {displayLinks.map(link => {
           const isActive =
             pathname === link.path || pathname.startsWith(link.path + "/");
 
@@ -140,11 +158,30 @@ export function Header() {
           );
         })}
 
+        {/* Mobile User Guide Button */}
+        <button
+          onClick={() => {
+            setShowGuide(true);
+            setOpen(false);
+          }}
+          className="text-gray-600 font-medium"
+        >
+          User Guide
+        </button>
+
+        {/* Mobile Wallet Connect (Client-side only) */}
+        <div onClick={() => setOpen(false)}>
+          <WalletConnectButton compact />
+        </div>
+
         {/* Mobile User Menu */}
         <div onClick={() => setOpen(false)}>
           <UserMenu />
         </div>
       </nav>
+
+      {/* User Guide Modal */}
+      <UserGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </nav>
   );
 }

@@ -19,6 +19,10 @@ const carSchema = new mongoose.Schema(
     description: { type: String, required: true },
     isAvailable: { type: Boolean, default: true },
 
+    // Rating and Reviews
+    averageRating: { type: Number, default: 0 },
+    reviewCount: { type: Number, default: 0 },
+
     // NEW: Additional vehicle details
     vin: { type: String, unique: true, sparse: true },
     color: { type: String },

@@ -91,8 +91,6 @@ export const assets = {
 
 export const menuLinks = [
   { name: "Home", path: "/" },
-  { name: "Browse Cars", path: "/renter/browse" },
-  { name: "Invest", path: "/investor/marketplace" },
 ];
 
 export const ownerMenuLinks = [

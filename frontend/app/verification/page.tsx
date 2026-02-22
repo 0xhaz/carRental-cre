@@ -144,7 +144,9 @@ function VerificationContent() {
         setUser(response.user);
         toast.success("Wallet connected successfully!");
         // If inside World App, go to World ID step first
-        if (MiniKit.isInstalled()) {
+        let miniKitReady = false;
+        try { miniKitReady = MiniKit.isInstalled(); } catch {}
+        if (miniKitReady) {
           setCurrentStep("world-id");
         } else {
           setCurrentStep(isInvestor ? "investor-type" : "kyc-upload");
@@ -292,7 +294,10 @@ function VerificationContent() {
   };
 
   // Steps configuration — investors have 5 steps, rentors have 4
-  const isMiniApp = typeof window !== "undefined" && MiniKit.isInstalled();
+  let isMiniApp = false;
+  try {
+    isMiniApp = typeof window !== "undefined" && MiniKit.isInstalled();
+  } catch {}
 
   const investorSteps = [
     {

@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Car,
   Users,
@@ -8,6 +10,8 @@ import {
   CheckCircle,
   PiggyBank,
 } from "lucide-react";
+import { motion } from "motion/react";
+import { fadeUp, staggerContainer, scrollTrigger } from "@/lib/motionVariants";
 
 const stats = [
   { icon: <Car className="text-primary" size={24} />, value: "142", label: "Vehicles Tokenized" },
@@ -49,38 +53,57 @@ const FeaturedSection = () => {
       {/* Stats Bar */}
       <section className="bg-light border-y border-borderColor">
         <div className="px-6 md:px-16 lg:px-24 xl:px-32 py-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center max-w-5xl mx-auto">
+          <motion.div
+            className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center max-w-5xl mx-auto"
+            variants={staggerContainer}
+            initial="hidden"
+            whileInView="visible"
+            viewport={scrollTrigger}
+          >
             {stats.map((stat) => (
-              <div key={stat.label}>
+              <motion.div key={stat.label} variants={fadeUp}>
                 <div className="flex items-center justify-center mb-2">
                   {stat.icon}
                 </div>
                 <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
                 <p className="text-sm text-gray-500 mt-1">{stat.label}</p>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* How It Works */}
       <section className="py-24 px-6 md:px-16 lg:px-24 xl:px-32">
-        <div className="text-center mb-16">
+        <motion.div
+          className="text-center mb-16"
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="visible"
+          viewport={scrollTrigger}
+        >
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             How It Works
           </h2>
           <p className="text-gray-500 text-lg max-w-2xl mx-auto">
             From investment to revenue in four verified steps
           </p>
-        </div>
+        </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 relative max-w-5xl mx-auto">
+        <motion.div
+          className="grid grid-cols-1 md:grid-cols-4 gap-8 relative max-w-5xl mx-auto"
+          variants={staggerContainer}
+          initial="hidden"
+          whileInView="visible"
+          viewport={scrollTrigger}
+        >
           {/* Connecting line (desktop only) */}
           <div className="hidden md:block absolute top-6 left-[12.5%] right-[12.5%] h-0.5 bg-borderColor" />
 
           {steps.map((step, i) => (
-            <div
+            <motion.div
               key={step.title}
+              variants={fadeUp}
               className="flex flex-col items-center text-center relative"
             >
               {/* Step number circle */}
@@ -99,9 +122,9 @@ const FeaturedSection = () => {
               <p className="text-sm text-gray-500 max-w-48">
                 {step.description}
               </p>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </section>
     </>
   );

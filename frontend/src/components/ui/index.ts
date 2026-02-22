@@ -13,3 +13,4 @@ export * from "./Progress";
 export * from "./Typography";
 export * from "./Loader";
 export * from "./Separator";
+export * from "./StarRating";

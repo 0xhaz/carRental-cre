@@ -12,6 +12,7 @@ export interface VehicleFilterState {
   transmission: string[];
   priceRange: [number, number];
   seatingCapacity: number[];
+  minRating: number;
   sortBy: string;
 }
 
@@ -65,7 +66,8 @@ export function VehicleFilters({
     filters.transmission.length > 0 ||
     filters.seatingCapacity.length > 0 ||
     filters.priceRange[0] > 0 ||
-    filters.priceRange[1] < 1000;
+    filters.priceRange[1] < 1000 ||
+    filters.minRating > 0;
 
   return (
     <Card className={className}>
@@ -151,6 +153,25 @@ export function VehicleFilters({
                   <span>${filters.priceRange[0]}</span>
                   <span>${filters.priceRange[1]}</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Minimum Rating */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Minimum Rating
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[0, 3, 4, 4.5].map((rating) => (
+                  <Badge
+                    key={rating}
+                    variant={filters.minRating === rating ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => updateFilter("minRating", rating)}
+                  >
+                    {rating === 0 ? "All" : `${rating}+ ⭐`}
+                  </Badge>
+                ))}
               </div>
             </div>
 

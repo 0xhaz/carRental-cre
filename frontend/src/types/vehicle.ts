@@ -55,6 +55,10 @@ export interface Vehicle {
   image: string;
   isAvailable: boolean;
 
+  // Rating and Reviews
+  averageRating?: number;
+  reviewCount?: number;
+
   // NEW: Additional details
   vin?: string;
   color?: string;

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Heading, Paragraph, Button, Badge, Card, CardContent, Separator } from "@/components/ui";
 import { BookingFlowEnhanced } from "@/components/renter";
 import { ReviewList, ReviewStats, RoleSwitchModal } from "@/components/shared";
-import { vehicleApi } from "@/lib/api";
+import { vehicleApi, reviewApi } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { Vehicle, Review, UserRole } from "@/types";
 import { toast } from "react-hot-toast";
@@ -21,7 +21,7 @@ export default function VehicleDetails() {
   const [showBookingFlow, setShowBookingFlow] = useState(false);
   const [showRoleSwitchModal, setShowRoleSwitchModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [reviews] = useState<Review[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const { canAct: isRenterVerified, reason: verificationReason, isLoading: isVerificationLoading } = useCanRenterAct();
 
   useEffect(() => {
@@ -44,6 +44,21 @@ export default function VehicleDetails() {
     };
 
     loadVehicle();
+  }, [vehicleId]);
+
+  useEffect(() => {
+    const loadReviews = async () => {
+      try {
+        const res = await reviewApi.getByVehicle(vehicleId);
+        if (res.success && res.data) {
+          setReviews(res.data);
+        }
+      } catch (error) {
+        console.error("Failed to load reviews:", error);
+      }
+    };
+
+    loadReviews();
   }, [vehicleId]);
 
   if (isLoading || !vehicle) {

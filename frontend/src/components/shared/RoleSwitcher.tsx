@@ -4,11 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserRole } from "@/types";
 import { useUserStore } from "@/store";
+import { useAppContext } from "@/context/AppContext";
 import { toast } from "react-hot-toast";
 
 export function RoleSwitcher() {
   const router = useRouter();
-  const { user, setUser } = useUserStore();
+  const { user, setUser, logout: zustandLogout } = useUserStore();
+  const { logout: contextLogout } = useAppContext();
   const [isOpen, setIsOpen] = useState(false);
 
   if (!user) return null;
@@ -57,6 +59,19 @@ export function RoleSwitcher() {
 
     // Navigate to the new portal
     router.push(route);
+  };
+
+  const handleLogout = () => {
+    // Clear both stores
+    zustandLogout();
+    contextLogout();
+
+    // Clear persisted Zustand storage
+    localStorage.removeItem("regshield-user-storage");
+
+    setIsOpen(false);
+    router.push("/");
+    toast.success("Logged out successfully");
   };
 
   return (
@@ -146,6 +161,12 @@ export function RoleSwitcher() {
                 className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
               >
                 View all roles
+              </button>
+              <button
+                onClick={handleLogout}
+                className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md font-medium"
+              >
+                Logout
               </button>
             </div>
           </div>

@@ -7,12 +7,15 @@ import {
   useDistributeRevenue,
   useVehicleRevenue,
   useRevenueWaterfall,
+  useMaintenanceReserve,
+  useWithdrawMaintenanceReserve,
 } from "@/hooks/useInvestment";
 import { parseEther, formatEther } from "viem";
 import { toast } from "react-hot-toast";
 import { SEPOLIA_CHAIN_ID, getEtherscanUrl } from "@/constants/contracts";
 import { investmentApi } from "@/lib/api";
 import { useEthPrice } from "@/hooks/usePriceFeed";
+import { useAccount } from "wagmi";
 
 interface RevenueAdminProps {
   vehicleId: bigint;
@@ -20,8 +23,12 @@ interface RevenueAdminProps {
 
 export default function RevenueAdmin({ vehicleId }: RevenueAdminProps) {
   const [addAmount, setAddAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawRecipient, setWithdrawRecipient] = useState("");
   const { price: ethPrice } = useEthPrice();
+  const { address: adminAddress } = useAccount();
   const { data: vehicleRevenue, refetch: refetchRevenue } = useVehicleRevenue(vehicleId);
+  const { data: maintenanceReserveData, formatted: maintenanceFormatted, refetch: refetchMaintenance } = useMaintenanceReserve(vehicleId);
 
   const amountWei = addAmount && parseFloat(addAmount) > 0 ? parseEther(addAmount) : undefined;
   const { data: waterfallData } = useRevenueWaterfall(amountWei);
@@ -43,6 +50,15 @@ export default function RevenueAdmin({ vehicleId }: RevenueAdminProps) {
     isPending: isDistPending,
     error: distError,
   } = useDistributeRevenue();
+
+  const {
+    withdraw: withdrawMaintenance,
+    hash: withdrawHash,
+    isConfirming: isWithdrawConfirming,
+    isSuccess: withdrawSuccess,
+    isPending: isWithdrawPending,
+    error: withdrawError,
+  } = useWithdrawMaintenanceReserve();
 
   const [lastAddedAmount, setLastAddedAmount] = useState("");
 
@@ -78,6 +94,20 @@ export default function RevenueAdmin({ vehicleId }: RevenueAdminProps) {
   useEffect(() => {
     if (distError) toast.error(distError.message?.slice(0, 100) || "Failed to distribute revenue");
   }, [distError]);
+
+  useEffect(() => {
+    if (withdrawSuccess && withdrawHash) {
+      toast.success("Maintenance reserve withdrawn!");
+      setWithdrawAmount("");
+      setWithdrawRecipient("");
+      refetchMaintenance();
+      refetchRevenue();
+    }
+  }, [withdrawSuccess, withdrawHash]);
+
+  useEffect(() => {
+    if (withdrawError) toast.error(withdrawError.message?.slice(0, 100) || "Failed to withdraw maintenance");
+  }, [withdrawError]);
 
   // Parse vehicle revenue data
   const revenue = vehicleRevenue as any;
@@ -182,6 +212,60 @@ export default function RevenueAdmin({ vehicleId }: RevenueAdminProps) {
           {distHash && (
             <a href={getEtherscanUrl(SEPOLIA_CHAIN_ID, distHash, "tx")} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">
               Tx: {distHash.slice(0, 14)}...
+            </a>
+          )}
+        </div>
+
+        <Separator className="my-4" />
+
+        {/* Withdraw Maintenance Reserve */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Maintenance Reserve</p>
+            <p className="text-lg font-bold text-purple-700">{maintenanceFormatted} ETH</p>
+          </div>
+          <p className="text-xs text-gray-600">
+            The 10% maintenance reserve can be withdrawn by admin to cover vehicle maintenance costs.
+          </p>
+          <Input
+            type="text"
+            label="Recipient Address"
+            placeholder={adminAddress || "0x..."}
+            value={withdrawRecipient}
+            onChange={(e) => setWithdrawRecipient(e.target.value)}
+          />
+          <Input
+            type="number"
+            label="Amount (ETH)"
+            placeholder="0.01"
+            value={withdrawAmount}
+            onChange={(e) => setWithdrawAmount(e.target.value)}
+            min={0}
+            step="0.001"
+            max={maintenanceFormatted}
+          />
+          <Button
+            onClick={() => {
+              if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
+                toast.error("Enter a valid amount");
+                return;
+              }
+              const recipient = (withdrawRecipient || adminAddress) as `0x${string}`;
+              if (!recipient) {
+                toast.error("Connect your wallet or enter a recipient address");
+                return;
+              }
+              withdrawMaintenance(vehicleId, recipient, parseEther(withdrawAmount));
+            }}
+            disabled={isWithdrawPending || isWithdrawConfirming || !withdrawAmount || maintenanceFormatted === "0"}
+            className="w-full"
+            variant="outline"
+          >
+            {isWithdrawPending ? "Confirm in Wallet..." : isWithdrawConfirming ? "Withdrawing..." : "Withdraw Maintenance"}
+          </Button>
+          {withdrawHash && (
+            <a href={getEtherscanUrl(SEPOLIA_CHAIN_ID, withdrawHash, "tx")} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">
+              Tx: {withdrawHash.slice(0, 14)}...
             </a>
           )}
         </div>

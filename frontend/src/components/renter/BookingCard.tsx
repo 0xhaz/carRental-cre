@@ -118,7 +118,7 @@ export function BookingCard({
                 Cancel Booking
               </Button>
             )}
-            {booking.status === "completed" && (
+            {(booking.status === "completed" || isPast) && (
               <Button
                 variant="default"
                 size="sm"

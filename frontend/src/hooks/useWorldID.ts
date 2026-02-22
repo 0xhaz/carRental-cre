@@ -25,7 +25,7 @@ export function useWorldID() {
   const [isMiniApp, setIsMiniApp] = useState(false);
 
   useEffect(() => {
-    setIsMiniApp(MiniKit.isInstalled());
+    try { setIsMiniApp(MiniKit.isInstalled()); } catch {}
   }, []);
 
   // Read on-chain verification status
@@ -43,7 +43,12 @@ export function useWorldID() {
 
   // Trigger World ID verification via MiniKit
   const verifyWithWorldID = useCallback(async () => {
-    if (!MiniKit.isInstalled()) {
+    try {
+      if (!MiniKit.isInstalled()) {
+        setVerifyError("World App not detected. Open RegShield inside World App.");
+        return false;
+      }
+    } catch {
       setVerifyError("World App not detected. Open RegShield inside World App.");
       return false;
     }
