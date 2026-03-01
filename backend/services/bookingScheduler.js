@@ -19,8 +19,12 @@ async function updateBookingStatuses() {
     }).populate("user", "name email");
 
     for (const booking of bookingsToActivate) {
-      booking.status = "active";
-      await booking.save();
+      // Use findByIdAndUpdate to avoid full document validation
+      await Booking.findByIdAndUpdate(
+        booking._id,
+        { status: "active" },
+        { runValidators: false } // Skip validation on fields we're not updating
+      );
       updatedCount++;
 
       // Notify renter that rental has started
@@ -46,8 +50,12 @@ async function updateBookingStatuses() {
     }).populate("user", "name email");
 
     for (const booking of bookingsToComplete) {
-      booking.status = "completed";
-      await booking.save();
+      // Use findByIdAndUpdate to avoid full document validation
+      await Booking.findByIdAndUpdate(
+        booking._id,
+        { status: "completed" },
+        { runValidators: false } // Skip validation on fields we're not updating
+      );
       updatedCount++;
 
       // Notify renter that rental is completed and they can leave a review

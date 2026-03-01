@@ -6,6 +6,7 @@ import Notification from "../models/Notification.js";
 import imageKit from "../configs/imageKit.js";
 import fs from "fs";
 import Booking from "../models/Booking.js";
+import { getVehicleRevenueUsd } from "../services/revenueContractService.js";
 
 // Change Role to Rentor
 export const changeRoleToRentor = async (req, res) => {
@@ -44,13 +45,71 @@ export const addCar = async (req, res) => {
   }
 };
 
-// API to list Rentor Cars
+// API to list Rentor Cars with Campaign and Revenue Data
 export const getRentorCars = async (req, res) => {
   try {
     const { _id } = req.user;
     const cars = await Car.find({ owner: _id });
 
-    res.json({ success: true, cars });
+    // Enrich each car with campaign and revenue data
+    const carsWithRevenue = await Promise.all(
+      cars.map(async (car) => {
+        // Find campaign for this vehicle
+        const campaign = await Campaign.findOne({ vehicle: car._id }).lean();
+
+        // Calculate revenue from bookings (total accumulated revenue)
+        const completedBookings = await Booking.find({
+          car: car._id,
+          status: { $in: ["completed", "active"] },
+        });
+
+        const totalRevenue = completedBookings.reduce(
+          (sum, booking) => sum + (booking.price || 0),
+          0
+        );
+
+        // Calculate distributed amount - prefer on-chain data if vehicle is registered
+        let distributed = 0;
+
+        if (car.vehicleNftId) {
+          try {
+            // Fetch distributed amount from smart contract with Chainlink ETH/USD conversion
+            const onChainRevenue = await getVehicleRevenueUsd(car.vehicleNftId);
+            distributed = onChainRevenue.totalDistributedUsd;
+            console.log(`[Revenue] Vehicle ${car.vehicleNftId}: $${distributed.toFixed(2)} distributed (${onChainRevenue.totalDistributedEth} ETH @ $${onChainRevenue.ethPrice.toFixed(2)}/ETH)`);
+          } catch (error) {
+            console.log(`Failed to fetch on-chain revenue for vehicle ${car.vehicleNftId}, falling back to DB`);
+            // Fallback to database calculation
+            const investments = await Investment.find({ vehicle: car._id });
+            distributed = investments.reduce(
+              (sum, inv) => sum + (inv.totalRevenueEarned || 0),
+              0
+            );
+          }
+        } else {
+          // Vehicle not registered on-chain, use database
+          const investments = await Investment.find({ vehicle: car._id });
+          distributed = investments.reduce(
+            (sum, inv) => sum + (inv.totalRevenueEarned || 0),
+            0
+          );
+        }
+
+        const pending = totalRevenue - distributed;
+
+        return {
+          ...car.toObject(),
+          campaign: campaign || null,
+          revenue: {
+            totalRevenue,
+            distributed,
+            pending,
+          },
+        };
+      })
+    );
+
+    res.json({ success: true, cars: carsWithRevenue });
   } catch (error) {
     console.log(error.message);
     res.json({ success: false, message: error.message });
