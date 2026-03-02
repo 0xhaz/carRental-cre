@@ -83,6 +83,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 >
                   Disputes
                 </Link>
+                <Link
+                  href="/admin/refunds"
+                  className="text-gray-700 hover:text-primary transition-colors"
+                >
+                  Refunds
+                </Link>
+                <Link
+                  href="/admin/escrows"
+                  className="text-gray-700 hover:text-primary transition-colors"
+                >
+                  Escrows
+                </Link>
+                <Link
+                  href="/admin/token-compliance"
+                  className="text-gray-700 hover:text-primary transition-colors"
+                >
+                  Tokens
+                </Link>
               </nav>
             </div>
             <div className="flex items-center gap-4">

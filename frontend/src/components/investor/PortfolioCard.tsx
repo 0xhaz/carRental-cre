@@ -4,65 +4,49 @@ import { useState } from "react";
 import { Investment, Vehicle } from "@/types";
 import { Card, CardContent, Badge, Button } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils";
-import { useAccount, useReadContract } from "wagmi";
-import { formatUnits, formatEther } from "viem";
+import { formatEther } from "viem";
 import Image from "next/image";
 import Link from "next/link";
 import { SEPOLIA_CHAIN_ID, getEtherscanUrl } from "@/constants/contracts";
 import { useMyClaimableRevenue } from "@/hooks/useInvestment";
 import { useEthPrice } from "@/hooks/usePriceFeed";
+import {
+  useMyAssetTokenBalance,
+  useMyAssetTokenIsFrozen,
+  useMyOwnershipPercentage,
+  useAssetTokenVehicleInfo,
+} from "@/hooks/useAssetToken";
+import {
+  useMyRevenueTokenBalance,
+  useMyRevenueSharePercentage,
+  useRevenueTokenVehicleInfo,
+} from "@/hooks/useRevenueToken";
 
 const FALLBACK_IMAGE = "/assets/car_image1.png";
 
-const ERC20_ABI = [
-  {
-    name: "balanceOf",
-    type: "function",
-    stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "name",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "string" }],
-  },
-  {
-    name: "symbol",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "string" }],
-  },
-] as const;
+function OnChainBalance({ tokenAddress, label, variant }: { tokenAddress: string; label: string; variant: "asset" | "revenue" }) {
+  const assetAddr = variant === "asset" ? (tokenAddress as `0x${string}`) : undefined;
+  const revenueAddr = variant === "revenue" ? (tokenAddress as `0x${string}`) : undefined;
 
-function OnChainBalance({ tokenAddress, label }: { tokenAddress: string; label: string }) {
-  const { address } = useAccount();
-  const { data: balance } = useReadContract({
-    address: tokenAddress as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!tokenAddress },
-  });
+  const { formatted: assetBal } = useMyAssetTokenBalance(assetAddr);
+  const { formatted: revenueBal } = useMyRevenueTokenBalance(revenueAddr);
+  const { data: assetFrozen } = useMyAssetTokenIsFrozen(assetAddr);
 
-  const { data: tokenName } = useReadContract({
-    address: tokenAddress as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "name",
-    query: { enabled: !!tokenAddress },
-  });
+  const { vin: assetVin } = useAssetTokenVehicleInfo(assetAddr);
+  const { vin: revenueVin } = useRevenueTokenVehicleInfo(revenueAddr);
 
-  const formatted = balance ? parseFloat(formatUnits(balance as bigint, 18)) : 0;
-  const displayLabel = tokenName ? (tokenName as string) : label;
+  const formatted = parseFloat(variant === "asset" ? assetBal : revenueBal);
+  const isFrozen = variant === "asset" && assetFrozen === true;
+  const displayLabel = (variant === "asset" ? assetVin : revenueVin) || label;
 
   return (
     <div>
-      <p className="text-xs text-gray-600">{displayLabel}</p>
+      <div className="flex items-center gap-1">
+        <p className="text-xs text-gray-600">{displayLabel}</p>
+        {isFrozen && <Badge variant="error" className="text-[10px] px-1 py-0">Frozen</Badge>}
+      </div>
       {formatted > 0 ? (
-        <p className="text-base font-semibold text-blue-600">
+        <p className={`text-base font-semibold ${variant === "asset" ? "text-blue-600" : "text-green-600"}`}>
           {formatted.toLocaleString(undefined, { maximumFractionDigits: 4 })}
         </p>
       ) : (
@@ -72,14 +56,11 @@ function OnChainBalance({ tokenAddress, label }: { tokenAddress: string; label: 
   );
 }
 
-function useTokenSymbol(tokenAddress?: string) {
-  const { data: symbol } = useReadContract({
-    address: tokenAddress as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "symbol",
-    query: { enabled: !!tokenAddress },
-  });
-  return symbol as string | undefined;
+function useTokenSymbol(tokenAddress?: string, variant?: "asset" | "revenue") {
+  const addr = tokenAddress as `0x${string}` | undefined;
+  const { vin: assetVin } = useAssetTokenVehicleInfo(variant === "asset" ? addr : undefined);
+  const { vin: revenueVin } = useRevenueTokenVehicleInfo(variant === "revenue" ? addr : undefined);
+  return variant === "asset" ? assetVin : revenueVin;
 }
 
 function OnChainRevenue({ vehicleNftId, dbRevenue }: { vehicleNftId?: number | null; dbRevenue: number }) {
@@ -119,8 +100,12 @@ export function PortfolioCard({
   const v = vehicle as any;
   const assetTokenAddr = v?.assetTokenAddress;
   const revenueTokenAddr = v?.revenueTokenAddress;
-  const assetSymbol = useTokenSymbol(assetTokenAddr);
-  const revenueSymbol = useTokenSymbol(revenueTokenAddr);
+  const assetSymbol = useTokenSymbol(assetTokenAddr, "asset");
+  const revenueSymbol = useTokenSymbol(revenueTokenAddr, "revenue");
+
+  // On-chain ownership & revenue share
+  const { percentageDisplay: ownershipPct } = useMyOwnershipPercentage(assetTokenAddr as `0x${string}` | undefined);
+  const { percentageDisplay: revSharePct } = useMyRevenueSharePercentage(revenueTokenAddr as `0x${string}` | undefined);
 
   // Calculate current value (mock: 10% appreciation + revenue earned)
   const totalValue = investment.amount * 1.1;
@@ -198,7 +183,7 @@ export function PortfolioCard({
               </p>
             </div>
             {assetTokenAddr ? (
-              <OnChainBalance tokenAddress={assetTokenAddr} label="Asset Tokens" />
+              <OnChainBalance tokenAddress={assetTokenAddr} label="Asset Tokens" variant="asset" />
             ) : (
               <div>
                 <p className="text-xs text-gray-600">{assetSymbol || "Asset"} Tokens</p>
@@ -210,6 +195,20 @@ export function PortfolioCard({
               <OnChainRevenue vehicleNftId={v?.vehicleNftId} dbRevenue={investment.totalRevenueEarned} />
             </div>
           </div>
+
+          {/* Ownership & Revenue Share */}
+          {(ownershipPct !== "0%" || revSharePct !== "0%") && (
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-indigo-50 rounded-lg p-2 text-center">
+                <p className="text-xs text-gray-600">Ownership</p>
+                <p className="text-sm font-bold text-indigo-700">{ownershipPct}</p>
+              </div>
+              <div className="bg-emerald-50 rounded-lg p-2 text-center">
+                <p className="text-xs text-gray-600">Revenue Share</p>
+                <p className="text-sm font-bold text-emerald-700">{revSharePct}</p>
+              </div>
+            </div>
+          )}
 
           {/* Contract Addresses */}
           {(assetTokenAddr || revenueTokenAddr) && (

@@ -11,11 +11,11 @@ import {
   Badge,
   Progress,
 } from "@/components/ui";
-import { generateMockBookings, generateMockVehicles } from "@/lib/mockData";
 import { Booking, Vehicle } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Image from "next/image";
 import { toast } from "react-hot-toast";
+import { bookingApi, vehicleApi } from "@/lib/api";
 
 export default function ActiveRentalPage() {
   const router = useRouter();
@@ -24,41 +24,45 @@ export default function ActiveRentalPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState("");
 
-  // Mock live data
-  const [mockData, setMockData] = useState({
-    mileage: 12543,
-    fuelLevel: 75,
-    speed: 45,
-    location: "Downtown Los Angeles, CA",
-  });
-
   useEffect(() => {
     const loadActiveRental = async () => {
       setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      try {
+        const response = await bookingApi.getUserBookings();
+        if (response.success) {
+          const bookings = response.data || [];
+          const now = new Date();
+          const active = bookings.find(
+            (b: Booking) =>
+              b.status === "active" ||
+              (b.status === "confirmed" &&
+                new Date(b.pickupDate) <= now &&
+                new Date(b.returnDate) >= now)
+          );
 
-      // Find an active booking (mock)
-      const mockBookings = generateMockBookings(10);
-      const active = mockBookings.find(
-        (b) =>
-          b.status === "active" ||
-          (b.status === "confirmed" &&
-            new Date(b.pickupDate) <= new Date() &&
-            new Date(b.returnDate) >= new Date())
-      );
-
-      if (active) {
-        setActiveBooking(active);
-
-        // Find associated vehicle
-        const mockVehicles = generateMockVehicles(20);
-        const foundVehicle = mockVehicles.find((v) => v._id === active.car);
-        if (foundVehicle) {
-          setVehicle(foundVehicle);
+          if (active) {
+            setActiveBooking(active);
+            const carId = typeof active.car === "string" ? active.car : (active.car as any)?._id;
+            if (carId) {
+              try {
+                const vehicleRes = await vehicleApi.getById(carId);
+                if (vehicleRes.success) {
+                  setVehicle(vehicleRes.data);
+                }
+              } catch {
+                // Vehicle details may be embedded in booking
+                if (typeof active.car === "object") {
+                  setVehicle(active.car as unknown as Vehicle);
+                }
+              }
+            }
+          }
         }
+      } catch (error: any) {
+        console.error("Failed to load active rental:", error);
+      } finally {
+        setIsLoading(false);
       }
-
-      setIsLoading(false);
     };
 
     loadActiveRental();
@@ -92,24 +96,10 @@ export default function ActiveRentalPage() {
     };
 
     updateTime();
-    const interval = setInterval(updateTime, 60000); // Update every minute
+    const interval = setInterval(updateTime, 60000);
 
     return () => clearInterval(interval);
   }, [activeBooking]);
-
-  // Simulate live data updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMockData((prev) => ({
-        ...prev,
-        mileage: prev.mileage + Math.floor(Math.random() * 5),
-        fuelLevel: Math.max(10, prev.fuelLevel - Math.floor(Math.random() * 2)),
-        speed: Math.floor(Math.random() * 70),
-      }));
-    }, 5000); // Update every 5 seconds
-
-    return () => clearInterval(interval);
-  }, []);
 
   const handleExtendRental = () => {
     toast.success("Rental extension request submitted!");
@@ -188,7 +178,7 @@ export default function ActiveRentalPage() {
           </Paragraph>
         </div>
         <Badge variant={isOverdue ? "error" : "success"} className="text-lg px-4 py-2">
-          {isOverdue ? "⚠️ Overdue" : "✓ Active"}
+          {isOverdue ? "Overdue" : "Active"}
         </Badge>
       </div>
 
@@ -216,53 +206,10 @@ export default function ActiveRentalPage() {
                 {vehicle.brand} {vehicle.model} ({vehicle.year})
               </Heading>
               <div className="flex flex-wrap gap-3 text-sm text-gray-600 mb-4">
-                <span>📍 {vehicle.location}</span>
-                <span>🚗 {vehicle.category}</span>
-                <span>⛽ {vehicle.fuel_type}</span>
-                <span>👥 {vehicle.seating_capacity} seats</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Live Vehicle Status */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <Heading as="h3">Live Vehicle Status</Heading>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-sm text-gray-600">Live</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <p className="text-sm text-gray-600 mb-1">Current Speed</p>
-                  <p className="text-2xl font-bold text-blue-600">{mockData.speed} mph</p>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4">
-                  <p className="text-sm text-gray-600 mb-1">Fuel Level</p>
-                  <p className="text-2xl font-bold text-green-600">{mockData.fuelLevel}%</p>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-4">
-                  <p className="text-sm text-gray-600 mb-1">Mileage</p>
-                  <p className="text-2xl font-bold text-purple-600">
-                    {mockData.mileage.toLocaleString()}
-                  </p>
-                </div>
-                <div className="bg-orange-50 rounded-lg p-4">
-                  <p className="text-sm text-gray-600 mb-1">Location</p>
-                  <p className="text-sm font-semibold text-orange-600">
-                    {mockData.location.split(",")[0]}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <span>📍</span>
-                  <span>{mockData.location}</span>
-                </div>
+                <span>{vehicle.location}</span>
+                <span>{vehicle.category}</span>
+                <span>{vehicle.fuel_type}</span>
+                <span>{vehicle.seating_capacity} seats</span>
               </div>
             </CardContent>
           </Card>
@@ -316,7 +263,7 @@ export default function ActiveRentalPage() {
               {isOverdue && (
                 <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-sm text-red-800">
-                    <strong>⚠️ Rental Overdue:</strong> Please return the vehicle as soon
+                    <strong>Rental Overdue:</strong> Please return the vehicle as soon
                     as possible to avoid additional charges.
                   </p>
                 </div>
@@ -369,28 +316,28 @@ export default function ActiveRentalPage() {
                     className="w-full"
                     onClick={handleExtendRental}
                   >
-                    ⏰ Extend Rental
+                    Extend Rental
                   </Button>
                   <Button
                     variant="outline"
                     className="w-full"
                     onClick={handleReportIssue}
                   >
-                    ⚠️ Report Issue
+                    Report Issue
                   </Button>
                   <Button
                     variant="outline"
                     className="w-full"
                     onClick={handleEmergencyContact}
                   >
-                    🚨 Emergency Contact
+                    Emergency Contact
                   </Button>
                   <Button
                     variant="destructive"
                     className="w-full"
                     onClick={handleEndRental}
                   >
-                    🏁 End Rental Early
+                    End Rental Early
                   </Button>
                 </div>
               </CardContent>
@@ -403,11 +350,11 @@ export default function ActiveRentalPage() {
                   Important Reminders
                 </Heading>
                 <ul className="space-y-2 text-sm text-blue-800">
-                  <li>• Return vehicle with same fuel level</li>
-                  <li>• Take photos before returning</li>
-                  <li>• Report any damage immediately</li>
-                  <li>• Return to: {vehicle.location}</li>
-                  <li>• Late returns incur $50/hour fee</li>
+                  <li>Return vehicle with same fuel level</li>
+                  <li>Take photos before returning</li>
+                  <li>Report any damage immediately</li>
+                  <li>Return to: {vehicle.location}</li>
+                  <li>Late returns incur additional charges</li>
                 </ul>
               </CardContent>
             </Card>
@@ -421,16 +368,6 @@ export default function ActiveRentalPage() {
                 <Paragraph className="text-sm text-gray-600 mb-4">
                   Our support team is available 24/7 to assist you.
                 </Paragraph>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span>📞</span>
-                    <span className="font-mono">+1 (555) 123-4567</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span>📧</span>
-                    <span className="font-mono">support@regshield.com</span>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>

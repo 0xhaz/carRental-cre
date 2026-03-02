@@ -1,9 +1,28 @@
 /**
- * ORIGINAL DB-BASED BOOKING SCHEDULER
- * Backup: ./backup/bookingScheduler.original.js
- * CRE replacement: rental-cre/rental-workflow/
- * To revert from CRE: copy backup file here and restart server
+ * BACKUP — Original bookingScheduler.js (pre-CRE replacement)
+ *
+ * Created: 2026-03-02
+ * Reason: Backing up before replacing with CRE rental-workflow
+ *
+ * TO REVERT:
+ *   1. Copy this file to ../bookingScheduler.js
+ *   2. In server.js, ensure the import is:
+ *      import { startBookingScheduler } from "./services/bookingScheduler.js";
+ *   3. Ensure startBookingScheduler() is called after DB connects
+ *   4. Remove or disable the CRE rental-workflow if running
+ *
+ * WHAT THIS SERVICE DOES:
+ *   - Runs a cron job every 15 minutes
+ *   - Transitions bookings: confirmed → active (when pickupDate passes)
+ *   - Transitions bookings: active → completed (when returnDate passes)
+ *   - Creates notifications for renters on each transition
+ *   - Also runs once on server startup (5s delay)
+ *
+ * DEPENDENCIES:
+ *   - node-cron
+ *   - models: Booking, Notification
  */
+
 import cron from "node-cron";
 import Booking from "../models/Booking.js";
 import Notification from "../models/Notification.js";

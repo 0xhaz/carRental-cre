@@ -74,6 +74,7 @@ export default function RentorDashboard() {
           completedBookings: 0,
           recentBookings: [],
           monthlyRevenue: 0,
+          totalRevenue: 0,
         });
       } finally {
         setIsLoading(false);
@@ -85,7 +86,7 @@ export default function RentorDashboard() {
 
   // Calculate stats from real data
   const stats = {
-    totalRevenue: dashboardData?.monthlyRevenue || 0,
+    totalRevenue: dashboardData?.totalRevenue || dashboardData?.monthlyRevenue || 0,
     totalBookings: dashboardData?.totalBookings || 0,
     activeBookings: dashboardData?.pendingBookings || 0,
     utilizationRate: dashboardData?.totalCars
@@ -94,7 +95,7 @@ export default function RentorDashboard() {
   };
 
   const vehicleStats = {
-    totalRevenue: dashboardData?.monthlyRevenue || 0,
+    totalRevenue: dashboardData?.totalRevenue || dashboardData?.monthlyRevenue || 0,
     totalBookings: dashboardData?.totalBookings || 0,
     activeBookings: dashboardData?.pendingBookings || 0,
     completedBookings: dashboardData?.completedBookings || 0,

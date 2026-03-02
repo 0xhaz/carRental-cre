@@ -1,67 +1,92 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { RevenueChart } from "@/components/investor";
 import { VehicleStatsCard } from "@/components/rentor";
-import { Heading, Paragraph, Card, CardContent, Badge, Select } from "@/components/ui";
-import { generateMockRevenueData } from "@/lib/mockData";
+import { Heading, Paragraph, Card, CardContent, Select } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils";
 import { Vehicle } from "@/types";
-import { rentorApi, vehicleApi, bookingApi } from "@/lib/api";
+import { rentorApi, vehicleApi } from "@/lib/api";
+import { RevenueHistoryEntry } from "@/lib/api/rentorApi";
 import { toast } from "react-hot-toast";
 
+const periodToMonths: Record<string, number> = {
+  week: 2,
+  month: 3,
+  quarter: 6,
+  year: 12,
+};
+
 export default function RentorAnalytics() {
-  const [revenueData, setRevenueData] = useState<any[]>([]);
+  const [revenueData, setRevenueData] = useState<RevenueHistoryEntry[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<"week" | "month" | "quarter" | "year">("month");
 
-  useEffect(() => {
-    loadAnalytics();
+  const loadRevenueHistory = useCallback(async (period: string) => {
+    try {
+      const months = periodToMonths[period] || 6;
+      const response = await rentorApi.getRevenueHistory(months);
+      if (response.success && response.data) {
+        setRevenueData(response.data);
+      }
+    } catch (error: any) {
+      console.error("Failed to load revenue history:", error);
+    }
   }, []);
 
-  const loadAnalytics = async () => {
-    setIsLoading(true);
-    try {
-      // Load rentor's dashboard data and vehicles in parallel
-      const [dashResponse, vehiclesResponse] = await Promise.all([
-        rentorApi.getDashboard(),
-        vehicleApi.getRentorVehicles(),
-      ]);
+  useEffect(() => {
+    const loadAnalytics = async () => {
+      setIsLoading(true);
+      try {
+        // Load dashboard data, vehicles, and revenue history in parallel
+        const [dashResponse, vehiclesResponse] = await Promise.all([
+          rentorApi.getDashboard(),
+          vehicleApi.getRentorVehicles(),
+        ]);
 
-      if (dashResponse.success) {
-        setDashboardData(dashResponse.dashboardData);
+        if (dashResponse.success) {
+          setDashboardData(dashResponse.dashboardData);
+        }
+
+        if (vehiclesResponse.success) {
+          setVehicles(vehiclesResponse.data || []);
+        }
+
+        // Load revenue history
+        await loadRevenueHistory(selectedPeriod);
+      } catch (error: any) {
+        console.error("Failed to load analytics:", error);
+        toast.error(error.response?.data?.message || "Failed to load analytics");
+
+        setDashboardData({
+          totalCars: 0,
+          totalBookings: 0,
+          pendingBookings: 0,
+          completedBookings: 0,
+          monthlyRevenue: 0,
+          totalRevenue: 0,
+        });
+        setVehicles([]);
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      if (vehiclesResponse.success) {
-        setVehicles(vehiclesResponse.data || []);
-      }
+    loadAnalytics();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-      // Generate mock revenue data for visualization (TODO: Replace with real data from backend)
-      const mockRevenue = generateMockRevenueData(12);
-      setRevenueData(mockRevenue);
-    } catch (error: any) {
-      console.error("Failed to load analytics:", error);
-      toast.error(error.response?.data?.message || "Failed to load analytics");
-
-      setDashboardData({
-        totalCars: 0,
-        totalBookings: 0,
-        pendingBookings: 0,
-        completedBookings: 0,
-        monthlyRevenue: 0,
-      });
-      setVehicles([]);
-    } finally {
-      setIsLoading(false);
+  // Refetch revenue history when period changes
+  useEffect(() => {
+    if (!isLoading) {
+      loadRevenueHistory(selectedPeriod);
     }
-  };
+  }, [selectedPeriod]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Calculate aggregate stats from real data
-  const totalRevenue = dashboardData?.monthlyRevenue || 0;
+  const totalRevenue = dashboardData?.totalRevenue || dashboardData?.monthlyRevenue || 0;
   const totalBookings = dashboardData?.totalBookings || 0;
-  const averageRevenuePerMonth = totalRevenue; // For current month
   const activeVehicles = vehicles.filter((v) => v.isAvailable).length;
   const utilizationRate = vehicles.length > 0
     ? ((totalBookings / (vehicles.length * 30)) * 100).toFixed(1)
@@ -114,7 +139,7 @@ export default function RentorAnalytics() {
             <p className="text-3xl font-bold text-blue-700">
               {formatCurrency(totalRevenue)}
             </p>
-            <p className="text-xs text-gray-600 mt-2">Current period</p>
+            <p className="text-xs text-gray-600 mt-2">All time</p>
           </CardContent>
         </Card>
 

@@ -22,6 +22,7 @@ export default function InvestorPortfolio() {
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [roi, setRoi] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasMounted, setHasMounted] = useState(false);
 
   const loadPortfolio = async () => {
     setIsLoading(true);
@@ -48,6 +49,7 @@ export default function InvestorPortfolio() {
 
   useEffect(() => {
     loadPortfolio();
+    setHasMounted(true);
   }, []);
 
   // Calculate portfolio stats
@@ -205,7 +207,7 @@ export default function InvestorPortfolio() {
       )}
 
       {/* Wallet Connection Prompt */}
-      {!isConnected && investments.length > 0 && (
+      {hasMounted && !isConnected && investments.length > 0 && (
         <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
           <div className="flex items-center gap-4">
             <div className="text-5xl">🔗</div>

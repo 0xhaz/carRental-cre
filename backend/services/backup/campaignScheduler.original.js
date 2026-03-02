@@ -1,9 +1,29 @@
 /**
- * ORIGINAL DB-BASED CAMPAIGN SCHEDULER
- * Backup: ./backup/campaignScheduler.original.js
- * CRE replacement: rental-cre/campaign-workflow/
- * To revert from CRE: copy backup file here and restart server
+ * BACKUP — Original campaignScheduler.js (pre-CRE replacement)
+ *
+ * Created: 2026-03-02
+ * Reason: Backing up before replacing with CRE campaign-workflow
+ *
+ * TO REVERT:
+ *   1. Copy this file to ../campaignScheduler.js
+ *   2. In server.js, ensure the import is:
+ *      import { startCampaignScheduler } from "./services/campaignScheduler.js";
+ *   3. Ensure startCampaignScheduler() is called after DB connects
+ *   4. Remove or disable the CRE campaign-workflow if running
+ *
+ * WHAT THIS SERVICE DOES:
+ *   - Runs a cron job every hour (at minute 0)
+ *   - Finds active campaigns past their endDate
+ *   - If below minimum funding threshold: cancels campaign, refunds investors (DB + on-chain), notifies rentor
+ *   - If met minimum threshold: marks as "funded", notifies rentor
+ *   - Also runs once on server startup (5s delay)
+ *
+ * DEPENDENCIES:
+ *   - node-cron, ethers
+ *   - models: Campaign, Investment, Car, Notification
+ *   - env: SEPOLIA_RPC_URL, SCHEDULER_PRIVATE_KEY, INVESTMENT_PAYMENT_PROTOCOL
  */
+
 import cron from "node-cron";
 import { ethers } from "ethers";
 import Campaign from "../models/Campaign.js";

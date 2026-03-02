@@ -1,14 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, Heading, Paragraph, Badge, Button, Input } from "@/components/ui";
+import { useState, useEffect } from "react";
+import { Card, CardContent, Heading, Badge, Button, Input } from "@/components/ui";
 import { ExplorerLink } from "@/components/web3";
 import {
   useDisputeDetails,
   useDisputesByPayment,
+  useDisputesByDisputer,
   useDisputeVoteCounts,
+  useIsDisputeExpired,
+  useAssignedOracles,
+  useHasOracleVoted,
   useEmergencyResolveDispute,
   useCloseDispute,
+  useResolveDispute,
+  useAppealDispute,
+  useSubmitOracleVote,
   DISPUTE_STATE_LABELS,
   DISPUTE_STATE_VARIANTS,
   DISPUTE_OUTCOME_LABELS,
@@ -16,35 +23,101 @@ import {
 import { formatEther } from "viem";
 import { toast } from "react-hot-toast";
 import { investmentApi } from "@/lib/api";
+import { useAccount } from "wagmi";
+
+function OraclePanel({ disputeId }: { disputeId: bigint }) {
+  const { address: myAddress } = useAccount();
+  const { data: oracles } = useAssignedOracles(disputeId);
+  const { data: hasVoted } = useHasOracleVoted(disputeId, myAddress);
+  const [favorsPayer, setFavorsPayer] = useState(true);
+  const [reasoning, setReasoning] = useState("");
+
+  const vote = useSubmitOracleVote();
+
+  useEffect(() => {
+    if (vote.isSuccess) toast.success("Oracle vote submitted");
+  }, [vote.isSuccess]);
+
+  const oracleList = (oracles as `0x${string}`[]) || [];
+
+  return (
+    <div className="mt-3 p-3 bg-yellow-50 rounded-lg space-y-2">
+      <p className="text-xs font-medium text-yellow-800">Oracle Panel</p>
+      {oracleList.length > 0 ? (
+        <div className="text-xs text-gray-600 space-y-1">
+          <p className="font-medium">Assigned Oracles:</p>
+          {oracleList.map((o, i) => (
+            <ExplorerLink key={i} value={o} type="address" className="text-xs block" />
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500">No oracles assigned</p>
+      )}
+
+      {myAddress && oracleList.some(o => o.toLowerCase() === myAddress.toLowerCase()) && !Boolean(hasVoted) && (
+        <div className="space-y-2 pt-2 border-t border-yellow-200">
+          <p className="text-xs font-medium">Cast Your Vote</p>
+          <div className="flex gap-2">
+            <Button size="sm" variant={favorsPayer ? "default" : "outline"} onClick={() => setFavorsPayer(true)}>
+              Favor Payer
+            </Button>
+            <Button size="sm" variant={!favorsPayer ? "default" : "outline"} onClick={() => setFavorsPayer(false)}>
+              Favor Payee
+            </Button>
+          </div>
+          <Input
+            type="text"
+            value={reasoning}
+            onChange={(e) => setReasoning(e.target.value)}
+            placeholder="Reasoning..."
+            className="text-sm"
+          />
+          <Button
+            size="sm"
+            onClick={() => vote.submitOracleVote(disputeId, favorsPayer, reasoning)}
+            disabled={vote.isPending || vote.isConfirming || !reasoning}
+            className="w-full"
+          >
+            {vote.isPending ? "Confirm..." : vote.isConfirming ? "Submitting..." : "Submit Vote"}
+          </Button>
+        </div>
+      )}
+      {Boolean(hasVoted) && <Badge variant="success" className="text-xs">You have voted</Badge>}
+    </div>
+  );
+}
 
 function DisputeCard({ disputeId }: { disputeId: bigint }) {
   const { data: dispute } = useDisputeDetails(disputeId);
   const { data: voteCounts } = useDisputeVoteCounts(disputeId);
+  const { data: isExpired } = useIsDisputeExpired(disputeId);
   const [showResolve, setShowResolve] = useState(false);
+  const [showAppeal, setShowAppeal] = useState(false);
+  const [showOracles, setShowOracles] = useState(false);
   const [outcome, setOutcome] = useState("1");
   const [refundAmount, setRefundAmount] = useState("");
+  const [appealReason, setAppealReason] = useState("");
 
   const emergency = useEmergencyResolveDispute();
   const close = useCloseDispute();
+  const resolve = useResolveDispute();
+  const appeal = useAppealDispute();
+
+  useEffect(() => {
+    if (resolve.isSuccess) toast.success(`Dispute #${disputeId} resolved via oracle vote`);
+  }, [resolve.isSuccess]);
+
+  useEffect(() => {
+    if (appeal.isSuccess) toast.success(`Dispute #${disputeId} appealed`);
+  }, [appeal.isSuccess]);
 
   if (!dispute) {
     return <div className="h-32 bg-gray-100 rounded animate-pulse" />;
   }
 
-  // DisputeResolver.getDispute returns a tuple
   const d = dispute as [
-    bigint,   // disputeId
-    bigint,   // paymentId
-    string,   // disputer
-    string,   // respondent
-    number,   // state
-    number,   // outcome
-    string,   // reason
-    string,   // evidenceHash
-    bigint,   // filedAt
-    bigint,   // reviewDeadline
-    bigint,   // resolvedAt
-    bigint,   // refundAmount
+    bigint, bigint, string, string, number, number,
+    string, string, bigint, bigint, bigint, bigint,
   ];
 
   const state = Number(d[4]);
@@ -52,19 +125,16 @@ function DisputeCard({ disputeId }: { disputeId: bigint }) {
   const filedDate = new Date(Number(d[8]) * 1000);
   const deadline = new Date(Number(d[9]) * 1000);
   const votes = voteCounts as [bigint, bigint] | undefined;
-  const canResolve = state === 0 || state === 1;
+  const canEmergencyResolve = state === 0 || state === 1;
+  const canResolve = state === 1;
   const canClose = state === 2;
+  const canAppeal = state === 2;
 
   const handleEmergencyResolve = () => {
     const refund = refundAmount ? BigInt(refundAmount) : BigInt(0);
     emergency.emergencyResolve(disputeId, parseInt(outcome), refund);
   };
 
-  const handleClose = () => {
-    close.closeDispute(disputeId);
-  };
-
-  // Sync emergency resolve to DB
   if (emergency.isSuccess && emergency.hash && !emergency.isPending) {
     investmentApi.recordDisputeResolution({
       disputeId: Number(disputeId),
@@ -81,17 +151,14 @@ function DisputeCard({ disputeId }: { disputeId: bigint }) {
     <Card>
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <Heading as="h4" className="text-sm">
-            Dispute #{Number(disputeId)}
-          </Heading>
+          <Heading as="h4" className="text-sm">Dispute #{Number(disputeId)}</Heading>
           <div className="flex items-center gap-2">
+            {Boolean(isExpired) && <Badge variant="error">Expired</Badge>}
             <Badge variant={DISPUTE_STATE_VARIANTS[state] || "info"}>
               {DISPUTE_STATE_LABELS[state] || `State ${state}`}
             </Badge>
             {outcomeVal > 0 && (
-              <Badge variant="info">
-                {DISPUTE_OUTCOME_LABELS[outcomeVal] || `Outcome ${outcomeVal}`}
-              </Badge>
+              <Badge variant="info">{DISPUTE_OUTCOME_LABELS[outcomeVal] || `Outcome ${outcomeVal}`}</Badge>
             )}
           </div>
         </div>
@@ -141,43 +208,39 @@ function DisputeCard({ disputeId }: { disputeId: bigint }) {
         </div>
 
         {/* Admin Actions */}
-        <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+        <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
           {canResolve && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowResolve(!showResolve)}
-            >
-              Emergency Resolve
+            <Button size="sm" onClick={() => resolve.resolveDispute(disputeId)} disabled={resolve.isPending || resolve.isConfirming}>
+              {resolve.isPending || resolve.isConfirming ? "Resolving..." : "Resolve (Vote)"}
             </Button>
           )}
+          {canEmergencyResolve && (
+            <Button size="sm" variant="outline" onClick={() => setShowResolve(!showResolve)}>Emergency Resolve</Button>
+          )}
+          {canAppeal && (
+            <Button size="sm" variant="outline" onClick={() => setShowAppeal(!showAppeal)}>Appeal</Button>
+          )}
           {canClose && (
-            <Button
-              size="sm"
-              onClick={handleClose}
-              disabled={close.isPending || close.isConfirming}
-            >
+            <Button size="sm" onClick={() => close.closeDispute(disputeId)} disabled={close.isPending || close.isConfirming}>
               {close.isPending || close.isConfirming ? "Closing..." : "Close Dispute"}
             </Button>
           )}
-          {emergency.hash && (
-            <ExplorerLink value={emergency.hash} type="tx" label="View tx" className="text-xs" />
-          )}
-          {close.hash && (
-            <ExplorerLink value={close.hash} type="tx" label="View tx" className="text-xs" />
+          <Button size="sm" variant="outline" onClick={() => setShowOracles(!showOracles)}>
+            {showOracles ? "Hide" : "Show"} Oracles
+          </Button>
+          {[emergency, close, resolve, appeal].map((h, i) =>
+            h.hash ? <ExplorerLink key={i} value={h.hash} type="tx" label="View tx" className="text-xs" /> : null
           )}
         </div>
 
-        {showResolve && canResolve && (
+        {showOracles && <OraclePanel disputeId={disputeId} />}
+
+        {showResolve && canEmergencyResolve && (
           <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-2">
             <div className="flex items-center gap-3">
               <div className="flex-1">
                 <label className="block text-xs text-gray-600 mb-1">Outcome</label>
-                <select
-                  value={outcome}
-                  onChange={(e) => setOutcome(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                >
+                <select value={outcome} onChange={(e) => setOutcome(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
                   <option value="1">Favor Payer (Full Refund)</option>
                   <option value="2">Favor Payee (No Refund)</option>
                   <option value="3">Partial Refund (50%)</option>
@@ -186,32 +249,23 @@ function DisputeCard({ disputeId }: { disputeId: bigint }) {
               </div>
               <div className="flex-1">
                 <label className="block text-xs text-gray-600 mb-1">Refund Amount (wei)</label>
-                <Input
-                  type="text"
-                  value={refundAmount}
-                  onChange={(e) => setRefundAmount(e.target.value)}
-                  placeholder="0"
-                  className="text-sm"
-                />
+                <Input type="text" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} placeholder="0" className="text-sm" />
               </div>
             </div>
-            <Button
-              size="sm"
-              onClick={handleEmergencyResolve}
-              disabled={emergency.isPending || emergency.isConfirming}
-              className="w-full"
-            >
-              {emergency.isPending
-                ? "Confirm in Wallet..."
-                : emergency.isConfirming
-                  ? "Confirming..."
-                  : "Submit Resolution"}
+            <Button size="sm" onClick={handleEmergencyResolve} disabled={emergency.isPending || emergency.isConfirming} className="w-full">
+              {emergency.isPending ? "Confirm in Wallet..." : emergency.isConfirming ? "Confirming..." : "Submit Resolution"}
             </Button>
-            {emergency.error && (
-              <p className="text-xs text-red-600">
-                {(emergency.error as Error).message?.slice(0, 80)}
-              </p>
-            )}
+            {emergency.error && <p className="text-xs text-red-600">{(emergency.error as Error).message?.slice(0, 80)}</p>}
+          </div>
+        )}
+
+        {showAppeal && canAppeal && (
+          <div className="mt-3 p-3 bg-orange-50 rounded-lg space-y-2">
+            <label className="block text-xs text-gray-600 mb-1">Appeal Reason</label>
+            <Input type="text" value={appealReason} onChange={(e) => setAppealReason(e.target.value)} placeholder="Reason for appeal..." className="text-sm" />
+            <Button size="sm" onClick={() => appeal.appealDispute(disputeId, appealReason)} disabled={appeal.isPending || appeal.isConfirming || !appealReason} className="w-full">
+              {appeal.isPending ? "Confirm..." : appeal.isConfirming ? "Submitting..." : "Submit Appeal"}
+            </Button>
           </div>
         )}
       </CardContent>
@@ -220,78 +274,81 @@ function DisputeCard({ disputeId }: { disputeId: bigint }) {
 }
 
 export function DisputeManagement() {
-  const [lookupType, setLookupType] = useState<"dispute" | "payment">("dispute");
+  const [lookupType, setLookupType] = useState<"dispute" | "payment" | "disputer">("dispute");
   const [idInput, setIdInput] = useState("");
   const [searchDisputeId, setSearchDisputeId] = useState<bigint | undefined>();
   const [searchPaymentId, setSearchPaymentId] = useState<bigint | undefined>();
+  const [searchDisputer, setSearchDisputer] = useState<string | undefined>();
 
   const { data: disputeIdsByPayment } = useDisputesByPayment(searchPaymentId);
+  const { data: disputeIdsByDisputer } = useDisputesByDisputer(searchDisputer);
   const paymentDisputeIds = (disputeIdsByPayment as bigint[]) || [];
+  const disputerDisputeIds = (disputeIdsByDisputer as bigint[]) || [];
 
   const handleSearch = () => {
     if (!idInput.trim()) return;
-    const id = BigInt(idInput);
     if (lookupType === "dispute") {
-      setSearchDisputeId(id);
+      setSearchDisputeId(BigInt(idInput));
       setSearchPaymentId(undefined);
-    } else {
-      setSearchPaymentId(id);
+      setSearchDisputer(undefined);
+    } else if (lookupType === "payment") {
+      setSearchPaymentId(BigInt(idInput));
       setSearchDisputeId(undefined);
+      setSearchDisputer(undefined);
+    } else {
+      setSearchDisputer(idInput);
+      setSearchDisputeId(undefined);
+      setSearchPaymentId(undefined);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Search */}
       <Card>
         <CardContent className="p-6">
-          <Heading as="h3" className="mb-3">
-            Look Up Disputes
-          </Heading>
+          <Heading as="h3" className="mb-3">Look Up Disputes</Heading>
           <div className="flex items-center gap-3">
             <select
               value={lookupType}
-              onChange={(e) => setLookupType(e.target.value as "dispute" | "payment")}
+              onChange={(e) => setLookupType(e.target.value as "dispute" | "payment" | "disputer")}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm"
             >
               <option value="dispute">By Dispute ID</option>
               <option value="payment">By Payment ID</option>
+              <option value="disputer">By Disputer Address</option>
             </select>
             <Input
-              type="number"
+              type={lookupType === "disputer" ? "text" : "number"}
               value={idInput}
               onChange={(e) => setIdInput(e.target.value)}
-              placeholder={lookupType === "dispute" ? "Dispute ID" : "Payment ID"}
+              placeholder={lookupType === "dispute" ? "Dispute ID" : lookupType === "payment" ? "Payment ID" : "0x..."}
               className="max-w-xs"
             />
-            <Button onClick={handleSearch} disabled={!idInput.trim()}>
-              Search
-            </Button>
+            <Button onClick={handleSearch} disabled={!idInput.trim()}>Search</Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Single dispute lookup */}
-      {searchDisputeId !== undefined && (
-        <DisputeCard disputeId={searchDisputeId} />
-      )}
+      {searchDisputeId !== undefined && <DisputeCard disputeId={searchDisputeId} />}
 
-      {/* Payment disputes */}
       {searchPaymentId !== undefined && (
         <div className="space-y-4">
-          <Heading as="h3">
-            Disputes for Payment #{Number(searchPaymentId)}
-          </Heading>
+          <Heading as="h3">Disputes for Payment #{Number(searchPaymentId)}</Heading>
           {paymentDisputeIds.length === 0 ? (
-            <Card>
-              <CardContent className="p-6 text-center">
-                <p className="text-sm text-gray-500">No disputes found for this payment</p>
-              </CardContent>
-            </Card>
+            <Card><CardContent className="p-6 text-center"><p className="text-sm text-gray-500">No disputes found for this payment</p></CardContent></Card>
           ) : (
-            paymentDisputeIds.map((id) => (
-              <DisputeCard key={id.toString()} disputeId={id} />
-            ))
+            paymentDisputeIds.map((id) => <DisputeCard key={id.toString()} disputeId={id} />)
+          )}
+        </div>
+      )}
+
+      {searchDisputer && (
+        <div className="space-y-4">
+          <Heading as="h3">Disputes by {searchDisputer.slice(0, 8)}...</Heading>
+          {disputerDisputeIds.length === 0 ? (
+            <Card><CardContent className="p-6 text-center"><p className="text-sm text-gray-500">No disputes found for this address</p></CardContent></Card>
+          ) : (
+            disputerDisputeIds.map((id) => <DisputeCard key={id.toString()} disputeId={id} />)
           )}
         </div>
       )}

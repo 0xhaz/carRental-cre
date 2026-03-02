@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { Button } from "@/components/ui";
-import { generateMockAddress } from "@/lib/utils";
-import { toast } from "react-hot-toast";
 
 export interface ConnectWalletProps {
   onConnect?: (address: string) => void;
@@ -16,29 +14,23 @@ export function ConnectWallet({
   onDisconnect,
   className,
 }: ConnectWalletProps) {
-  const [isConnected, setIsConnected] = useState(false);
-  const [address, setAddress] = useState<string | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const { address, isConnected } = useAccount();
+  const { connect, connectors, isPending } = useConnect();
+  const { disconnect } = useDisconnect();
 
-  const handleConnect = async () => {
-    setIsConnecting(true);
-
-    // Simulate wallet connection delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const mockAddress = generateMockAddress();
-    setAddress(mockAddress);
-    setIsConnected(true);
-    setIsConnecting(false);
-
-    toast.success("Wallet connected (mock)");
-    onConnect?.(mockAddress);
+  const handleConnect = () => {
+    const connector = connectors[0];
+    if (connector) {
+      connect({ connector }, {
+        onSuccess: (data) => {
+          onConnect?.(data.accounts[0]);
+        },
+      });
+    }
   };
 
   const handleDisconnect = () => {
-    setAddress(null);
-    setIsConnected(false);
-    toast.success("Wallet disconnected");
+    disconnect();
     onDisconnect?.();
   };
 
@@ -54,8 +46,8 @@ export function ConnectWallet({
 
   return (
     <div className={className}>
-      <Button onClick={handleConnect} isLoading={isConnecting}>
-        {isConnecting ? "Connecting..." : "Connect Wallet"}
+      <Button onClick={handleConnect} isLoading={isPending}>
+        {isPending ? "Connecting..." : "Connect Wallet"}
       </Button>
     </div>
   );

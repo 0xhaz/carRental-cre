@@ -6,7 +6,7 @@ import Notification from "../models/Notification.js";
 import imageKit from "../configs/imageKit.js";
 import fs from "fs";
 import Booking from "../models/Booking.js";
-import { getVehicleRevenueUsd } from "../services/revenueContractService.js";
+import RevenueRecord from "../models/RevenueRecord.js";
 
 // Change Role to Rentor
 export const changeRoleToRentor = async (req, res) => {
@@ -68,32 +68,8 @@ export const getRentorCars = async (req, res) => {
           0
         );
 
-        // Calculate distributed amount - prefer on-chain data if vehicle is registered
-        let distributed = 0;
-
-        if (car.vehicleNftId) {
-          try {
-            // Fetch distributed amount from smart contract with Chainlink ETH/USD conversion
-            const onChainRevenue = await getVehicleRevenueUsd(car.vehicleNftId);
-            distributed = onChainRevenue.totalDistributedUsd;
-            console.log(`[Revenue] Vehicle ${car.vehicleNftId}: $${distributed.toFixed(2)} distributed (${onChainRevenue.totalDistributedEth} ETH @ $${onChainRevenue.ethPrice.toFixed(2)}/ETH)`);
-          } catch (error) {
-            console.log(`Failed to fetch on-chain revenue for vehicle ${car.vehicleNftId}, falling back to DB`);
-            // Fallback to database calculation
-            const investments = await Investment.find({ vehicle: car._id });
-            distributed = investments.reduce(
-              (sum, inv) => sum + (inv.totalRevenueEarned || 0),
-              0
-            );
-          }
-        } else {
-          // Vehicle not registered on-chain, use database
-          const investments = await Investment.find({ vehicle: car._id });
-          distributed = investments.reduce(
-            (sum, inv) => sum + (inv.totalRevenueEarned || 0),
-            0
-          );
-        }
+        // Use DB-cached revenue data (synced every 30 min by revenueSyncService)
+        const distributed = car.revenue?.distributed || 0;
 
         const pending = totalRevenue - distributed;
 
@@ -247,13 +223,18 @@ export const getDashboardData = async (req, res) => {
 
     const completedBookings = await Booking.find({
       owner: _id,
-      status: "confirmed",
+      status: { $in: ["confirmed", "completed", "active"] },
     });
 
-    // Calculate monthly earnings from completed bookings
-    const monthlyRevenue = bookings
-      .slice()
-      .filter(booking => booking.status === "confirmed")
+    // Calculate revenue from confirmed/completed/active bookings
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const revenueBookings = bookings.filter((booking) =>
+      ["confirmed", "completed", "active"].includes(booking.status)
+    );
+    const totalRevenue = revenueBookings.reduce((acc, booking) => acc + booking.price, 0);
+    const monthlyRevenue = revenueBookings
+      .filter((booking) => new Date(booking.pickupDate) >= monthStart)
       .reduce((acc, booking) => acc + booking.price, 0);
 
     const dashboardData = {
@@ -263,6 +244,7 @@ export const getDashboardData = async (req, res) => {
       completedBookings: completedBookings.length,
       recentBookings: bookings.slice(0, 3),
       monthlyRevenue,
+      totalRevenue,
     };
 
     res.json({ success: true, dashboardData });
@@ -588,6 +570,97 @@ export const getVehicleByNftId = async (req, res) => {
     res.json({ success: true, data: car });
   } catch (error) {
     console.error("Get vehicle by NFT ID error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// API to get revenue history for analytics (monthly breakdown)
+export const getRevenueHistory = async (req, res) => {
+  try {
+    const { _id, role } = req.user;
+
+    if (role !== "rentor") {
+      return res.json({ success: false, message: "Not authorized" });
+    }
+
+    const months = parseInt(req.query.months) || 6;
+    const cars = await Car.find({ owner: _id }).select("_id");
+    const carIds = cars.map((c) => c._id);
+
+    if (carIds.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // Calculate date range
+    const now = new Date();
+    const startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+
+    // Query RevenueRecords for this rentor's vehicles
+    const records = await RevenueRecord.find({
+      vehicle: { $in: carIds },
+      $or: [
+        { year: { $gt: startDate.getFullYear() } },
+        {
+          year: startDate.getFullYear(),
+          month: { $gte: startDate.getMonth() + 1 },
+        },
+      ],
+    }).sort({ year: 1, month: 1 });
+
+    // Aggregate by month
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthMap = new Map();
+
+    // Pre-fill with zeros for all months in range
+    for (let i = 0; i < months; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - months + 1 + i, 1);
+      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+      monthMap.set(key, {
+        month: monthNames[d.getMonth()],
+        year: d.getFullYear(),
+        revenue: 0,
+        bookings: 0,
+        onChainRevenue: 0,
+      });
+    }
+
+    // Fill with actual data
+    for (const record of records) {
+      const key = `${record.year}-${record.month}`;
+      const existing = monthMap.get(key);
+      if (existing) {
+        existing.revenue += record.bookingRevenue?.totalAmount || 0;
+        existing.bookings += record.bookingRevenue?.count || 0;
+        existing.onChainRevenue += record.onChainRevenue?.totalUsd || 0;
+      }
+    }
+
+    // Backfill months that have no RevenueRecord data from live bookings
+    // (covers months before the sync service was deployed)
+    const keysWithSyncData = new Set(records.map((r) => `${r.year}-${r.month}`));
+    const liveBookings = await Booking.find({
+      car: { $in: carIds },
+      status: { $in: ["confirmed", "active", "completed"] },
+      pickupDate: { $gte: startDate },
+    });
+
+    for (const booking of liveBookings) {
+      const bDate = new Date(booking.pickupDate);
+      const bKey = `${bDate.getFullYear()}-${bDate.getMonth() + 1}`;
+      // Only backfill months that have no synced RevenueRecord
+      if (keysWithSyncData.has(bKey)) continue;
+      const entry = monthMap.get(bKey);
+      if (entry) {
+        entry.revenue += booking.price || 0;
+        entry.bookings += 1;
+      }
+    }
+
+    const data = Array.from(monthMap.values());
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error("Get revenue history error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };

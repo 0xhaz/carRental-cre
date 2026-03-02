@@ -12,6 +12,7 @@ import investmentRouter from "./routes/investmentRoutes.js";
 import kycRouter from "./routes/kycRoutes.js";
 import { startCampaignScheduler } from "./services/campaignScheduler.js";
 import { startBookingScheduler } from "./services/bookingScheduler.js";
+import { startRevenueSyncScheduler } from "./services/revenueSyncService.js";
 
 // Initialize Express app
 const app = express();
@@ -39,6 +40,7 @@ app.use("/api/kyc", kycRouter);
 // Start background services
 startCampaignScheduler();
 startBookingScheduler();
+startRevenueSyncScheduler();
 
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));

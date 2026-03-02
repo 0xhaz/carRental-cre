@@ -49,6 +49,8 @@ export function useContract<T extends keyof typeof ABIS>(contractName: T) {
     vehicleReceiver: "vehicleReceiver",
     onboardingReceiver: "onboardingReceiver",
     worldIDVerifier: "worldIDVerifier",
+    rentalPaymentEscrow: "rentalEscrow",
+    rentalRefundManager: "rentalRefundManager",
   };
 
   return {
@@ -101,3 +103,7 @@ export const useOnboardingReceiver = () => useContract("onboardingReceiver");
 
 // World ID
 export const useWorldIDVerifier = () => useContract("worldIDVerifier");
+
+// Rental-side payment contracts
+export const useRentalEscrow = () => useContract("rentalPaymentEscrow");
+export const useRentalRefundManager = () => useContract("rentalRefundManager");

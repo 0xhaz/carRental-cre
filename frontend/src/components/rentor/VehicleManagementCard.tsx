@@ -4,9 +4,18 @@ import { useState } from "react";
 import { Vehicle } from "@/types";
 import { Card, CardContent, Button, Badge, Progress } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils";
+import {
+  useOnChainVehicleStatus,
+  useVehicleInfo,
+  useLinkedTokens,
+  VEHICLE_STATUS_LABELS,
+} from "@/hooks/useVehicleData";
+import { useTotalVehicleRevenue } from "@/hooks/useRentalOperations";
+import { ExplorerLink } from "@/components/web3";
 
 export interface VehicleManagementCardProps {
   vehicle: Vehicle;
+  vehicleNftId?: bigint;
   onEdit?: (vehicleId: string) => void;
   onViewBookings?: (vehicleId: string) => void;
   onManageFundraising?: (vehicleId: string) => void;
@@ -17,6 +26,7 @@ export interface VehicleManagementCardProps {
 
 export function VehicleManagementCard({
   vehicle,
+  vehicleNftId,
   onEdit,
   onViewBookings,
   onManageFundraising,
@@ -26,6 +36,20 @@ export function VehicleManagementCard({
 }: VehicleManagementCardProps) {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const hasFundraising = vehicle.fundraising?.active;
+
+  // On-chain data (only when NFT ID is available)
+  const { data: onChainStatus } = useOnChainVehicleStatus(vehicleNftId);
+  const { data: vehicleInfoData } = useVehicleInfo(vehicleNftId);
+  const { data: linkedTokens } = useLinkedTokens(vehicleNftId);
+  const { formatted: totalRevenue } = useTotalVehicleRevenue(vehicleNftId);
+
+  const statusNum = onChainStatus !== undefined ? Number(onChainStatus) : undefined;
+  const statusLabel = statusNum !== undefined ? VEHICLE_STATUS_LABELS[statusNum] : undefined;
+  const vInfo = vehicleInfoData as any;
+  const onChainMileage = vInfo?.[0]?.mileage ? Number(vInfo[0].mileage) : undefined;
+  const maintenanceCount = vInfo?.[3] !== undefined ? Number(vInfo[3]) : undefined;
+  const incidentCount = vInfo?.[4] !== undefined ? Number(vInfo[4]) : undefined;
+  const tokens = linkedTokens as [`0x${string}`, `0x${string}`] | undefined;
   const fundingPercentage = hasFundraising
     ? (vehicle.fundraising!.currentAmount / vehicle.fundraising!.targetAmount) * 100
     : 0;
@@ -175,6 +199,56 @@ export function VehicleManagementCard({
                 </span>
               </div>
               <Progress value={fundingPercentage} variant="default" />
+            </div>
+          )}
+
+          {/* On-Chain Data */}
+          {vehicleNftId !== undefined && (
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-gray-700">On-Chain Status</p>
+                {statusLabel && (
+                  <Badge variant={statusNum === 0 ? "success" : statusNum === 2 ? "warning" : "default"}>
+                    {statusLabel}
+                  </Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                {onChainMileage !== undefined && (
+                  <div>
+                    <span className="text-gray-500">Mileage</span>
+                    <p className="font-semibold">{onChainMileage.toLocaleString()} km</p>
+                  </div>
+                )}
+                {maintenanceCount !== undefined && (
+                  <div>
+                    <span className="text-gray-500">Maintenance</span>
+                    <p className="font-semibold">{maintenanceCount} records</p>
+                  </div>
+                )}
+                {incidentCount !== undefined && (
+                  <div>
+                    <span className="text-gray-500">Incidents</span>
+                    <p className="font-semibold">{incidentCount} records</p>
+                  </div>
+                )}
+                {parseFloat(totalRevenue) > 0 && (
+                  <div>
+                    <span className="text-gray-500">On-Chain Revenue</span>
+                    <p className="font-semibold text-green-600">{totalRevenue} ETH</p>
+                  </div>
+                )}
+              </div>
+              {tokens && (
+                <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                  {tokens[0] !== "0x0000000000000000000000000000000000000000" && (
+                    <ExplorerLink value={tokens[0]} type="address" label="AssetToken" className="text-xs" />
+                  )}
+                  {tokens[1] !== "0x0000000000000000000000000000000000000000" && (
+                    <ExplorerLink value={tokens[1]} type="address" label="RevenueToken" className="text-xs" />
+                  )}
+                </div>
+              )}
             </div>
           )}
 

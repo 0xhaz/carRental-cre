@@ -32,6 +32,10 @@ import ParticipantTypeRegistryAbi from "./abis/ParticipantTypeRegistry.json";
 import AssetTokenFactoryAbi from "./abis/AssetTokenFactory.json";
 import RevenueTokenFactoryAbi from "./abis/RevenueTokenFactory.json";
 
+// Deployed Token Instances (dynamically deployed, not fixed-address)
+import AssetTokenAbi from "./abis/AssetToken.json";
+import RevenueTokenAbi from "./abis/RevenueToken.json";
+
 // Identity
 import ClaimIssuerAbi from "./abis/ClaimIssuer.json";
 
@@ -65,6 +69,8 @@ export const INVESTOR_TYPE_REGISTRY_ABI = InvestorTypeRegistryAbi.abi;
 export const PARTICIPANT_TYPE_REGISTRY_ABI = ParticipantTypeRegistryAbi.abi;
 export const ASSET_TOKEN_FACTORY_ABI = AssetTokenFactoryAbi.abi;
 export const REVENUE_TOKEN_FACTORY_ABI = RevenueTokenFactoryAbi.abi;
+export const ASSET_TOKEN_ABI = AssetTokenAbi.abi;
+export const REVENUE_TOKEN_ABI = RevenueTokenAbi.abi;
 export const CLAIM_ISSUER_ABI = ClaimIssuerAbi.abi;
 export const CAMPAIGN_MONITOR_RECEIVER_ABI = CampaignMonitorReceiverAbi.abi;
 export const PAYMENT_RECEIVER_ABI = PaymentReceiverAbi.abi;
@@ -101,6 +107,9 @@ export const ABIS = {
   vehicleReceiver: VEHICLE_RECEIVER_ABI,
   onboardingReceiver: ONBOARDING_RECEIVER_ABI,
   worldIDVerifier: WORLD_ID_VERIFIER_ABI,
+  // Rental-side payment contracts (same ABI, different addresses)
+  rentalPaymentEscrow: PAYMENT_ESCROW_ABI,
+  rentalRefundManager: REFUND_MANAGER_ABI,
 } as const;
 
 export default ABIS;

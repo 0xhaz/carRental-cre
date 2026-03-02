@@ -56,16 +56,6 @@ export function formatDate(date: string | Date): string {
 }
 
 /**
- * Generates a random mock wallet address
- * @returns Random Ethereum-style address
- */
-export function generateMockAddress(): string {
-  return `0x${Array.from({ length: 40 }, () =>
-    Math.floor(Math.random() * 16).toString(16)
-  ).join("")}`;
-}
-
-/**
  * Simulates an async operation with delay
  * @param ms - Milliseconds to delay
  */

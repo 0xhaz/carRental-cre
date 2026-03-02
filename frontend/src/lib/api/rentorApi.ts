@@ -25,6 +25,15 @@ export interface RentorDashboardData {
     createdAt: Date;
   }>;
   monthlyRevenue: number;
+  totalRevenue: number;
+}
+
+export interface RevenueHistoryEntry {
+  month: string;
+  year: number;
+  revenue: number;
+  bookings: number;
+  onChainRevenue: number;
 }
 
 export const rentorApi = {
@@ -46,6 +55,14 @@ export const rentorApi = {
     data: { vehicle: Vehicle; campaign: FundraisingCampaign | null; investments: Investment[] };
   }> => {
     const { data } = await apiClient.get(`/rentor/vehicle/${vehicleId}`);
+    return data;
+  },
+
+  // Get revenue history for analytics
+  getRevenueHistory: async (
+    months: number = 6
+  ): Promise<{ success: boolean; data: RevenueHistoryEntry[] }> => {
+    const { data } = await apiClient.get(`/rentor/analytics/revenue-history?months=${months}`);
     return data;
   },
 

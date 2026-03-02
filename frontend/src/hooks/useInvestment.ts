@@ -638,6 +638,66 @@ export function useRevenueWaterfall(grossRevenue?: bigint) {
 }
 
 // ═══════════════════════════════════════════════
+// Revenue Distribution Records
+// ═══════════════════════════════════════════════
+
+/**
+ * Get all distribution records for a vehicle
+ */
+export function useVehicleDistributions(vehicleId?: bigint) {
+  const { address, abi } = useRevenueDistributor();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getVehicleDistributions",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
+    },
+  });
+}
+
+/**
+ * Get a specific distribution record
+ */
+export function useDistributionRecord(vehicleId?: bigint, distributionId?: bigint) {
+  const { address, abi } = useRevenueDistributor();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getDistributionRecord",
+    args:
+      vehicleId !== undefined && distributionId !== undefined
+        ? [vehicleId, distributionId]
+        : undefined,
+    query: {
+      enabled: vehicleId !== undefined && distributionId !== undefined,
+    },
+  });
+}
+
+/**
+ * Get the total amount distributed across all vehicles
+ */
+export function useTotalDistributed() {
+  const { address, abi } = useRevenueDistributor();
+
+  const result = useReadContract({
+    address,
+    abi,
+    functionName: "getTotalDistributed",
+    query: { enabled: true },
+  });
+
+  return {
+    ...result,
+    formatted: result.data ? formatEther(result.data as bigint) : "0",
+  };
+}
+
+// ═══════════════════════════════════════════════
 // Milestone Management (Admin)
 // ═══════════════════════════════════════════════
 
@@ -965,3 +1025,461 @@ export function useVehicleOperator(vehicleId?: bigint) {
     },
   });
 }
+
+// ═══════════════════════════════════════════════
+// RegShieldPaymentProtocol — Payment Reads
+// ═══════════════════════════════════════════════
+
+/**
+ * Get payment state enum
+ */
+export function usePaymentState(paymentId?: bigint) {
+  const { address, abi } = useRegShieldPaymentProtocol();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getPaymentState",
+    args: paymentId !== undefined ? [paymentId] : undefined,
+    query: { enabled: paymentId !== undefined },
+  });
+}
+
+/**
+ * Check if a payment has expired
+ */
+export function useIsPaymentExpired(paymentId?: bigint) {
+  const { address, abi } = useRegShieldPaymentProtocol();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "isPaymentExpired",
+    args: paymentId !== undefined ? [paymentId] : undefined,
+    query: { enabled: paymentId !== undefined },
+  });
+}
+
+/**
+ * Check if a payment can be disputed
+ */
+export function useCanDispute(paymentId?: bigint) {
+  const { address, abi } = useRegShieldPaymentProtocol();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "canDispute",
+    args: paymentId !== undefined ? [paymentId] : undefined,
+    query: { enabled: paymentId !== undefined },
+  });
+}
+
+/**
+ * Get all payment IDs for a payer
+ */
+export function usePaymentsByPayer(payer?: `0x${string}`) {
+  const { address, abi } = useRegShieldPaymentProtocol();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getPaymentsByPayer",
+    args: payer ? [payer] : undefined,
+    query: { enabled: !!payer },
+  });
+}
+
+/**
+ * Get all payment IDs for a payee
+ */
+export function usePaymentsByPayee(payee?: `0x${string}`) {
+  const { address, abi } = useRegShieldPaymentProtocol();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getPaymentsByPayee",
+    args: payee ? [payee] : undefined,
+    query: { enabled: !!payee },
+  });
+}
+
+/** Get current user's payments as payer */
+export function useMyPaymentsAsPayer() {
+  const { address: userAddress } = useAccount();
+  return usePaymentsByPayer(userAddress);
+}
+
+/** Get current user's payments as payee */
+export function useMyPaymentsAsPayee() {
+  const { address: userAddress } = useAccount();
+  return usePaymentsByPayee(userAddress);
+}
+
+// ═══════════════════════════════════════════════
+// RegShieldPaymentProtocol — Payment Writes
+// ═══════════════════════════════════════════════
+
+/**
+ * Initiate a new payment
+ */
+export function useInitiatePayment() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const initiatePayment = (
+    payee: `0x${string}`,
+    amount: bigint,
+    reason: string,
+    value: bigint,
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "initiatePayment",
+      args: [payee, amount, reason],
+      value,
+      gas: BigInt(500_000),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { initiatePayment, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Confirm a payment (payee only)
+ */
+export function useConfirmPayment() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const confirmPayment = (paymentId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "confirmPayment",
+      args: [paymentId],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { confirmPayment, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Dispute a payment (payer only)
+ */
+export function useDisputePayment() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const disputePayment = (paymentId: bigint, reason: string) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "disputePayment",
+      args: [paymentId, reason],
+      gas: BigInt(500_000),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { disputePayment, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Cancel a payment (payer only)
+ */
+export function useCancelPayment() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const cancelPayment = (paymentId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "cancelPayment",
+      args: [paymentId],
+      gas: BigInt(500_000),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { cancelPayment, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Emergency refund a payment (owner only)
+ */
+export function useEmergencyRefundPayment() {
+  const { address, abi } = useRegShieldPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const emergencyRefund = (paymentId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "emergencyRefund",
+      args: [paymentId],
+      gas: BigInt(500_000),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { emergencyRefund, hash, isConfirming, isSuccess, isPending, error };
+}
+
+// ═══════════════════════════════════════════════
+// RevenueDistributor — Admin Functions
+// ═══════════════════════════════════════════════
+
+/**
+ * Check if a vehicle is registered in the revenue distributor
+ */
+export function useIsVehicleRegistered(vehicleId?: bigint) {
+  const { address, abi } = useRevenueDistributor();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "isVehicleRegistered",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: { enabled: vehicleId !== undefined },
+  });
+}
+
+/**
+ * Register a vehicle in the revenue distributor (owner only)
+ */
+export function useRegisterVehicle() {
+  const { address, abi } = useRevenueDistributor();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const registerVehicle = (vehicleId: bigint, revenueToken: `0x${string}`) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "registerVehicle",
+      args: [vehicleId, revenueToken],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { registerVehicle, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Set vehicle operator (owner only)
+ */
+export function useSetVehicleOperator() {
+  const { address, abi } = useRevenueDistributor();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const setOperator = (vehicleId: bigint, operator: `0x${string}`) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "setVehicleOperator",
+      args: [vehicleId, operator],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { setOperator, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Batch distribute revenue for multiple vehicles
+ */
+export function useBatchDistribute() {
+  const { address, abi } = useRevenueDistributor();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const batchDistribute = (vehicleIds: bigint[]) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "batchDistribute",
+      args: [vehicleIds],
+      gas: BigInt(3_000_000),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { batchDistribute, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Update revenue fee percentages (owner only)
+ */
+export function useUpdateFeePercentages() {
+  const { address, abi } = useRevenueDistributor();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const updateFees = (
+    platformFee: bigint,
+    maintenanceFee: bigint,
+    insuranceFee: bigint,
+    operatingFee: bigint,
+    operatorFee: bigint,
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "updateFeePercentages",
+      args: [platformFee, maintenanceFee, insuranceFee, operatingFee, operatorFee],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { updateFees, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Set authorized revenue source (owner only)
+ */
+export function useSetAuthorizedSource() {
+  const { address, abi } = useRevenueDistributor();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const setSource = (source: `0x${string}`, authorized: boolean) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "setAuthorizedSource",
+      args: [source, authorized],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { setSource, hash, isConfirming, isSuccess, isPending, error };
+}
+
+// ═══════════════════════════════════════════════
+// InvestorRequestManager — Admin Functions
+// ═══════════════════════════════════════════════
+
+/**
+ * Approve an investor request (bank only)
+ */
+export function useApproveInvestorRequest() {
+  const { address, abi } = useInvestorRequestManager();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const approve = (user: `0x${string}`) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "approveRequest",
+      args: [user],
+      gas: BigInt(500_000),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { approve, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Reject an investor request (bank only)
+ */
+export function useRejectInvestorRequest() {
+  const { address, abi } = useInvestorRequestManager();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const reject = (user: `0x${string}`, reason: string) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "rejectRequest",
+      args: [user, reason],
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { reject, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Create a multi-sig wallet for an investor (bank/owner only)
+ */
+export function useCreateMultiSigWallet() {
+  const { address, abi } = useInvestorRequestManager();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const createWallet = (user: `0x${string}`) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "createMultiSigWallet",
+      args: [user],
+      gas: BigInt(1_000_000),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { createWallet, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Create a multi-sig wallet for investor upgrade (bank/owner only)
+ */
+export function useCreateMultiSigWalletForUpgrade() {
+  const { address, abi } = useInvestorRequestManager();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const createWallet = (user: `0x${string}`) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "createMultiSigWalletForUpgrade",
+      args: [user],
+      gas: BigInt(1_000_000),
+      ...SEPOLIA_GAS_OVERRIDES,
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { createWallet, hash, isConfirming, isSuccess, isPending, error };
+}
+
+// Display labels for PaymentState enum
+export const PAYMENT_STATE_LABELS: Record<number, string> = {
+  0: "Initiated",
+  1: "Escrowed",
+  2: "Confirmed",
+  3: "Disputed",
+  4: "Refunded",
+  5: "Cancelled",
+  6: "Completed",
+  7: "Expired",
+};

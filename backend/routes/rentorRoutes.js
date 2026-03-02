@@ -18,6 +18,7 @@ import {
   uploadMilestoneDocuments,
   getMilestoneDocuments,
   getVehicleByNftId,
+  getRevenueHistory,
 } from "../controllers/rentorController.js";
 import upload from "../middleware/multer.js";
 import multer from "multer";
@@ -77,6 +78,7 @@ rentorRouter.get("/vehicles-pending-registration", protect, getVehiclesPendingRe
 rentorRouter.post("/vehicle/:vehicleId/complete-registration", protect, completeTokenRegistration);
 rentorRouter.post("/vehicle/:vehicleId/sync-token-addresses", protect, syncVehicleTokenAddresses);
 rentorRouter.get("/dashboard", protect, getDashboardData);
+rentorRouter.get("/analytics/revenue-history", protect, getRevenueHistory);
 rentorRouter.post(
   "/update-image",
   upload.single("image"),

@@ -1,42 +1,25 @@
 "use client";
 
-import { useAccount, useReadContract } from "wagmi";
-import { formatUnits } from "viem";
+import { useAccount } from "wagmi";
 import { Card, CardContent, Badge, Skeleton } from "@/components/ui";
 import { ExplorerLink } from "@/components/web3";
 import { Investment } from "@/types";
-
-// Minimal ERC20 ABI for reading balance, name, symbol, and decimals
-const ERC20_ABI = [
-  {
-    name: "balanceOf",
-    type: "function",
-    stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "name",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "string" }],
-  },
-  {
-    name: "symbol",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "string" }],
-  },
-  {
-    name: "decimals",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "uint8" }],
-  },
-] as const;
+import {
+  useAssetTokenBalance,
+  useAssetTokenFreeBalance,
+  useAssetTokenIsFrozen,
+  useAssetTokenFrozenTokens,
+  useAssetTokenPaused,
+  useAssetTokenVehicleInfo,
+} from "@/hooks/useAssetToken";
+import {
+  useRevenueTokenBalance,
+  useRevenueTokenFreeBalance,
+  useRevenueTokenIsFrozen,
+  useRevenueTokenFrozenTokens,
+  useRevenueTokenPaused,
+  useRevenueTokenVehicleInfo,
+} from "@/hooks/useRevenueToken";
 
 interface TokenBalanceProps {
   tokenAddress: `0x${string}`;
@@ -46,66 +29,60 @@ interface TokenBalanceProps {
 }
 
 function TokenBalance({ tokenAddress, userAddress, label, variant = "asset" }: TokenBalanceProps) {
-  const { data: balance, isLoading: balanceLoading } = useReadContract({
-    address: tokenAddress,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: [userAddress],
-  });
+  const isAsset = variant === "asset";
+  const assetAddr = isAsset ? tokenAddress : undefined;
+  const revenueAddr = isAsset ? undefined : tokenAddress;
 
-  const { data: tokenName } = useReadContract({
-    address: tokenAddress,
-    abi: ERC20_ABI,
-    functionName: "name",
-  });
+  const { formatted: assetBal, isLoading: assetLoading } = useAssetTokenBalance(assetAddr, userAddress);
+  const { formatted: revenueBal, isLoading: revenueLoading } = useRevenueTokenBalance(revenueAddr, userAddress);
+  const { formatted: assetFree } = useAssetTokenFreeBalance(assetAddr, userAddress);
+  const { formatted: revenueFree } = useRevenueTokenFreeBalance(revenueAddr, userAddress);
+  const { data: assetFrozen } = useAssetTokenIsFrozen(assetAddr, userAddress);
+  const { data: revenueFrozen } = useRevenueTokenIsFrozen(revenueAddr, userAddress);
+  const { formatted: assetFrozenAmt } = useAssetTokenFrozenTokens(assetAddr, userAddress);
+  const { formatted: revenueFrozenAmt } = useRevenueTokenFrozenTokens(revenueAddr, userAddress);
+  const { data: assetPaused } = useAssetTokenPaused(assetAddr);
+  const { data: revenuePaused } = useRevenueTokenPaused(revenueAddr);
+  const { vin: assetVin } = useAssetTokenVehicleInfo(assetAddr);
+  const { vin: revenueVin } = useRevenueTokenVehicleInfo(revenueAddr);
 
-  const { data: symbol } = useReadContract({
-    address: tokenAddress,
-    abi: ERC20_ABI,
-    functionName: "symbol",
-  });
-
-  const { data: decimals } = useReadContract({
-    address: tokenAddress,
-    abi: ERC20_ABI,
-    functionName: "decimals",
-  });
-
+  const balanceLoading = isAsset ? assetLoading : revenueLoading;
   if (balanceLoading) {
     return <Skeleton className="h-16 w-full" />;
   }
 
-  const formattedBalance = balance && decimals
-    ? formatUnits(balance as bigint, decimals as number)
-    : "0";
-
+  const formattedBalance = isAsset ? assetBal : revenueBal;
+  const freeBalance = isAsset ? assetFree : revenueFree;
+  const isFrozen = isAsset ? assetFrozen === true : revenueFrozen === true;
+  const frozenAmount = isAsset ? assetFrozenAmt : revenueFrozenAmt;
+  const isPaused = isAsset ? assetPaused === true : revenuePaused === true;
   const numericBalance = parseFloat(formattedBalance);
   const hasBalance = numericBalance > 0;
-
-  // Use on-chain name (e.g. "BMW X5 Asset") with symbol, fallback to prop label
-  const displayLabel = tokenName && symbol
-    ? `${tokenName} (${symbol})`
-    : tokenName
-    ? (tokenName as string)
-    : label;
+  const displayLabel = (isAsset ? assetVin : revenueVin) || label;
 
   return (
-    <div className={`p-4 rounded-lg ${variant === "asset" ? "bg-blue-50" : "bg-green-50"}`}>
+    <div className={`p-4 rounded-lg ${isAsset ? "bg-blue-50" : "bg-green-50"}`}>
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs text-gray-600">{displayLabel}</p>
-        {hasBalance && (
-          <Badge variant={variant === "asset" ? "default" : "success"} className="text-xs">
-            Active
-          </Badge>
-        )}
+        <div className="flex gap-1">
+          {isPaused && <Badge variant="warning" className="text-xs">Paused</Badge>}
+          {isFrozen && <Badge variant="error" className="text-xs">Frozen</Badge>}
+          {hasBalance && !isFrozen && !isPaused && (
+            <Badge variant={isAsset ? "default" : "success"} className="text-xs">Active</Badge>
+          )}
+        </div>
       </div>
-      <p className={`text-2xl font-bold ${variant === "asset" ? "text-blue-600" : "text-green-600"}`}>
-        {parseFloat(formattedBalance).toLocaleString(undefined, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 4,
-        })}{" "}
-        <span className="text-sm">{symbol || "TOKENS"}</span>
+      <p className={`text-2xl font-bold ${isAsset ? "text-blue-600" : "text-green-600"}`}>
+        {numericBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}
       </p>
+      {hasBalance && freeBalance !== formattedBalance && (
+        <div className="text-xs text-gray-500 mt-1 space-y-0.5">
+          <p>Free: {parseFloat(freeBalance).toLocaleString(undefined, { maximumFractionDigits: 4 })}</p>
+          {parseFloat(frozenAmount) > 0 && (
+            <p className="text-red-500">Frozen: {parseFloat(frozenAmount).toLocaleString(undefined, { maximumFractionDigits: 4 })}</p>
+          )}
+        </div>
+      )}
       <div className="mt-1">
         <ExplorerLink value={tokenAddress} type="address" className="text-xs text-gray-500" />
       </div>

@@ -5,7 +5,7 @@
  * All payments use native ETH (no ERC-20 tokens).
  */
 
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useRentalBooking, useRentalOperations, useRentalPaymentProtocol } from "./useContracts";
 import { formatEther } from "viem";
 
@@ -630,4 +630,273 @@ export function useApproveDamageAssessment() {
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
   return { approveDamageAssessment, hash, isConfirming, isSuccess, isPending, error };
+}
+
+// ═══════════════════════════════════════════════
+// Renter Booking History
+// ═══════════════════════════════════════════════
+
+/**
+ * Get all on-chain booking IDs for a renter
+ */
+export function useRenterBookings(renter?: `0x${string}`) {
+  const { address, abi } = useRentalBooking();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getRenterBookings",
+    args: renter ? [renter] : undefined,
+    query: {
+      enabled: !!renter,
+    },
+  });
+}
+
+/**
+ * Get the active booking ID for a vehicle
+ */
+export function useActiveBooking(vehicleId?: bigint) {
+  const { address, abi } = useRentalBooking();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getActiveBooking",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
+    },
+  });
+}
+
+/**
+ * Get current user's on-chain booking history
+ */
+export function useMyRenterBookings() {
+  const { address: userAddress } = useAccount();
+  return useRenterBookings(userAddress);
+}
+
+// ═══════════════════════════════════════════════
+// Overdue & Revenue (RentalOperations)
+// ═══════════════════════════════════════════════
+
+/**
+ * Calculate overdue charges for a booking (operator only, state-changing)
+ */
+export function useCalculateOverdueCharges() {
+  const { address, abi } = useRentalOperations();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const calculateOverdueCharges = (bookingId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "calculateOverdueCharges",
+      args: [bookingId],
+      gas: BigInt(300_000),
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { calculateOverdueCharges, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Get total accumulated revenue for a vehicle
+ */
+export function useTotalVehicleRevenue(vehicleId?: bigint) {
+  const { address, abi } = useRentalOperations();
+
+  const result = useReadContract({
+    address,
+    abi,
+    functionName: "getTotalVehicleRevenue",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
+    },
+  });
+
+  return {
+    ...result,
+    formatted: result.data ? formatEther(result.data as bigint) : "0",
+  };
+}
+
+/**
+ * Get all revenue records for a vehicle
+ * Returns: RevenueRecord[] { vehicleId, bookingId, rentalRevenue, damageRevenue, overdueCharges, timestamp }
+ */
+export function useVehicleRevenueRecords(vehicleId?: bigint) {
+  const { address, abi } = useRentalOperations();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getVehicleRevenue",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
+    },
+  });
+}
+
+/**
+ * Get a specific damage assessment for a booking
+ * Returns: DamageAssessment { timestamp, bookingId, damages[], costs[], totalCost, evidenceHashes[], assessor, approved }
+ */
+export function useDamageAssessment(bookingId?: bigint, assessmentId?: bigint) {
+  const { address, abi } = useRentalOperations();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getDamageAssessment",
+    args: bookingId !== undefined && assessmentId !== undefined
+      ? [bookingId, assessmentId]
+      : undefined,
+    query: {
+      enabled: bookingId !== undefined && assessmentId !== undefined,
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════
+// Renter Payment History (RentalPaymentProtocol)
+// ═══════════════════════════════════════════════
+
+/**
+ * Get all payment IDs for a renter
+ */
+export function useRenterPayments(renter?: `0x${string}`) {
+  const { address, abi } = useRentalPaymentProtocol();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getRenterPayments",
+    args: renter ? [renter] : undefined,
+    query: {
+      enabled: !!renter,
+    },
+  });
+}
+
+/**
+ * Get current user's payment history
+ */
+export function useMyRenterPayments() {
+  const { address: userAddress } = useAccount();
+  return useRenterPayments(userAddress);
+}
+
+/**
+ * Get revenue distribution breakdown for a vehicle
+ * Returns: RevenueDistribution { totalRevenue, platformFee, maintenanceReserve, netRevenue, distributedAt, distributed }
+ */
+export function useVehicleRevenueDistribution(vehicleId?: bigint) {
+  const { address, abi } = useRentalPaymentProtocol();
+
+  return useReadContract({
+    address,
+    abi,
+    functionName: "getVehicleRevenue",
+    args: vehicleId !== undefined ? [vehicleId] : undefined,
+    query: {
+      enabled: vehicleId !== undefined,
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════
+// Operator Functions (RentalOperations)
+// ═══════════════════════════════════════════════
+
+/**
+ * Perform vehicle handover (operator only)
+ */
+export function usePerformHandover() {
+  const { address, abi } = useRentalOperations();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const performHandover = (
+    bookingId: bigint,
+    preReport: {
+      mileage: bigint;
+      fuelLevel: number;
+      photoHashes: `0x${string}`[];
+      damageNotes: string[];
+    },
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "performHandover",
+      args: [bookingId, preReport],
+      gas: BigInt(500_000),
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { performHandover, hash, isConfirming, isSuccess, isPending, error };
+}
+
+/**
+ * Process vehicle return (operator only)
+ */
+export function useProcessReturn() {
+  const { address, abi } = useRentalOperations();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const processReturn = (
+    bookingId: bigint,
+    postReport: {
+      mileage: bigint;
+      fuelLevel: number;
+      photoHashes: `0x${string}`[];
+      damageNotes: string[];
+    },
+  ) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "processReturn",
+      args: [bookingId, postReport],
+      gas: BigInt(500_000),
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { processReturn, hash, isConfirming, isSuccess, isPending, error };
+}
+
+// ═══════════════════════════════════════════════
+// Cancel Rental (RentalPaymentProtocol)
+// ═══════════════════════════════════════════════
+
+/**
+ * Cancel a rental payment (renter or authorized operator)
+ */
+export function useCancelRental() {
+  const { address, abi } = useRentalPaymentProtocol();
+  const { data: hash, writeContract, isPending, error } = useWriteContract();
+
+  const cancelRental = (paymentId: bigint) => {
+    writeContract({
+      address,
+      abi,
+      functionName: "cancelRental",
+      args: [paymentId],
+      gas: BigInt(500_000),
+    });
+  };
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  return { cancelRental, hash, isConfirming, isSuccess, isPending, error };
 }
