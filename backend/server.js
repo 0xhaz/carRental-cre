@@ -10,9 +10,6 @@ import reviewRouter from "./routes/reviewRoutes.js";
 import notificationRouter from "./routes/notificationRoutes.js";
 import investmentRouter from "./routes/investmentRoutes.js";
 import kycRouter from "./routes/kycRoutes.js";
-import { startCampaignScheduler } from "./services/campaignScheduler.js";
-import { startBookingScheduler } from "./services/bookingScheduler.js";
-import { startRevenueSyncScheduler } from "./services/revenueSyncService.js";
 
 // Initialize Express app
 const app = express();
@@ -24,8 +21,10 @@ await connectDB();
 app.use(cors());
 app.use(express.json());
 
-// Serve static files for uploads
-app.use("/uploads", express.static("uploads"));
+// Serve static files for uploads (local dev only — Vercel has no writable filesystem)
+if (!process.env.VERCEL) {
+  app.use("/uploads", express.static("uploads"));
+}
 
 app.get("/", (req, res) => res.send("Server is running"));
 app.use("/api/user", userRouter);
@@ -37,12 +36,20 @@ app.use("/api/notifications", notificationRouter);
 app.use("/api/investments", investmentRouter);
 app.use("/api/kyc", kycRouter);
 
-// Start background services
-startCampaignScheduler();
-startBookingScheduler();
-startRevenueSyncScheduler();
+// Start background services (local dev only — Vercel serverless is ephemeral)
+if (!process.env.VERCEL) {
+  const { startCampaignScheduler } = await import("./services/campaignScheduler.js");
+  const { startBookingScheduler } = await import("./services/bookingScheduler.js");
+  const { startRevenueSyncScheduler } = await import("./services/revenueSyncService.js");
+  startCampaignScheduler();
+  startBookingScheduler();
+  startRevenueSyncScheduler();
+}
 
-const PORT = process.env.PORT || 3002;
-app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+// Only listen on a port locally — Vercel handles the HTTP server
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3002;
+  app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+}
 
 export default app;
