@@ -32,24 +32,26 @@ const kycRouter = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, "../uploads/kyc");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
 // Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    // Generate unique filename
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `kyc-${req.user._id}-${uniqueSuffix}${ext}`);
-  },
-});
+let storage;
+if (process.env.VERCEL) {
+  storage = multer.memoryStorage();
+} else {
+  const uploadsDir = path.join(__dirname, "../uploads/kyc");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, uploadsDir);
+    },
+    filename: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const ext = path.extname(file.originalname);
+      cb(null, `kyc-${req.user._id}-${uniqueSuffix}${ext}`);
+    },
+  });
+}
 
 // File filter - only allow images and PDFs
 const fileFilter = (req, file, cb) => {

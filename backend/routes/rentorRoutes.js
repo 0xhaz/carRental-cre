@@ -31,19 +31,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Milestone document upload config
-const milestonesDir = path.join(__dirname, "../uploads/milestones");
-if (!fs.existsSync(milestonesDir)) {
-  fs.mkdirSync(milestonesDir, { recursive: true });
+let milestoneStorage;
+if (process.env.VERCEL) {
+  milestoneStorage = multer.memoryStorage();
+} else {
+  const milestonesDir = path.join(__dirname, "../uploads/milestones");
+  if (!fs.existsSync(milestonesDir)) {
+    fs.mkdirSync(milestonesDir, { recursive: true });
+  }
+  milestoneStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, milestonesDir),
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const ext = path.extname(file.originalname);
+      cb(null, `milestone-${req.params.vehicleId}-${uniqueSuffix}${ext}`);
+    },
+  });
 }
-
-const milestoneStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, milestonesDir),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `milestone-${req.params.vehicleId}-${uniqueSuffix}${ext}`);
-  },
-});
 
 const milestoneFileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|pdf/;

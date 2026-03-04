@@ -1,9 +1,16 @@
 import ImageKit from "imagekit";
 
-const imageKit = new ImageKit({
-  publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
-});
+let imageKit = null;
 
-export default imageKit;
+function getImageKit() {
+  if (!imageKit) {
+    imageKit = new ImageKit({
+      publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+      privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+      urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+    });
+  }
+  return imageKit;
+}
+
+export default getImageKit;

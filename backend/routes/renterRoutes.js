@@ -19,24 +19,27 @@ import {
 
 const renterRouter = express.Router();
 
-// Create uploads directory if it doesn't exist
-const uploadDir = "./uploads/licenses";
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
 // Configure multer for driver's license uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const fieldName = file.fieldname; // licenseFront or licenseBack
-    cb(null, `${req.user._id}-${fieldName}-${uniqueSuffix}${ext}`);
-  },
-});
+let storage;
+if (process.env.VERCEL) {
+  storage = multer.memoryStorage();
+} else {
+  const uploadDir = "./uploads/licenses";
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const ext = path.extname(file.originalname);
+      const fieldName = file.fieldname;
+      cb(null, `${req.user._id}-${fieldName}-${uniqueSuffix}${ext}`);
+    },
+  });
+}
 
 // File filter - only accept images
 const fileFilter = (req, file, cb) => {

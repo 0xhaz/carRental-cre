@@ -3,7 +3,7 @@ import User from "../models/User.js";
 import Campaign from "../models/Campaign.js";
 import Investment from "../models/Investment.js";
 import Notification from "../models/Notification.js";
-import imageKit from "../configs/imageKit.js";
+import getImageKit from "../configs/imageKit.js";
 import fs from "fs";
 import Booking from "../models/Booking.js";
 import RevenueRecord from "../models/RevenueRecord.js";
@@ -387,7 +387,7 @@ export const updateUserImage = async (req, res) => {
     const fileBuffer = fs.readFileSync(imageFile.path);
 
     // Upload image to ImageKit
-    const response = await imageKit.upload({
+    const response = await getImageKit().upload({
       file: fileBuffer,
       fileName: imageFile.originalname,
       folder: "/users",
