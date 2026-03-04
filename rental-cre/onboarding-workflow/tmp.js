@@ -16089,246 +16089,333 @@ init_encodeAbiParameters();
 init_encodeFunctionData();
 var SEPOLIA_CHAIN_SELECTOR = 16015286601757825753n;
 var Action = {
-  UPDATE_MILEAGE: 0,
-  RECORD_MAINTENANCE: 1,
-  RECORD_INCIDENT: 2,
-  RESOLVE_INCIDENT: 3,
-  UPDATE_METADATA: 4
+  APPROVE_INVESTOR: 0,
+  REJECT_INVESTOR: 1,
+  APPROVE_BOOKING: 2,
+  REJECT_BOOKING: 3
 };
-var vehicleNftAbi = [
+var investorRequestManagerAbi = [
   {
-    name: "vehicleExists",
+    name: "getPendingRequests",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "tokenId", type: "uint256" }],
-    outputs: [{ name: "exists", type: "bool" }]
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }]
+  }
+];
+var identityRegistryAbi = [
+  {
+    name: "isVerified",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [{ name: "", type: "bool" }]
+  }
+];
+var rentalBookingAbi = [
+  {
+    name: "totalBookings",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }]
   },
   {
-    name: "getVehicleMetadata",
+    name: "getBooking",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "tokenId", type: "uint256" }],
+    inputs: [{ name: "bookingId", type: "uint256" }],
     outputs: [
       {
         name: "",
         type: "tuple",
         components: [
-          { name: "vin", type: "string" },
-          { name: "make", type: "string" },
-          { name: "model", type: "string" },
-          { name: "year", type: "uint256" },
-          { name: "color", type: "string" },
-          { name: "mileage", type: "uint256" },
-          { name: "registrationExpiry", type: "uint256" },
-          { name: "insuranceExpiry", type: "uint256" }
-        ]
-      }
-    ]
-  },
-  {
-    name: "getVehicleInfo",
-    type: "function",
-    stateMutability: "view",
-    inputs: [{ name: "tokenId", type: "uint256" }],
-    outputs: [
-      {
-        name: "",
-        type: "tuple",
-        components: [
-          { name: "maintenanceCount", type: "uint256" },
-          { name: "incidentCount", type: "uint256" },
-          { name: "lastMaintenanceDate", type: "uint256" }
+          { name: "renter", type: "address" },
+          { name: "vehicleId", type: "uint256" },
+          { name: "startDate", type: "uint256" },
+          { name: "endDate", type: "uint256" },
+          { name: "totalPrice", type: "uint256" },
+          { name: "status", type: "uint8" }
         ]
       }
     ]
   }
 ];
-function checkVehicleExists(runtime2, evm, tokenId) {
+var worldIDVerifierAbi = [
+  {
+    name: "isWorldIDVerified",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [{ name: "", type: "bool" }]
+  }
+];
+var renterComplianceAbi = [
+  {
+    name: "validateRenter",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "renter", type: "address" }],
+    outputs: [
+      { name: "isValid", type: "bool" },
+      { name: "reason", type: "uint8" }
+    ]
+  }
+];
+var BOOKING_STATUS_PENDING = 0;
+function readPendingInvestors(runtime2, evm) {
   const callData = encodeFunctionData({
-    abi: vehicleNftAbi,
-    functionName: "vehicleExists",
-    args: [tokenId]
+    abi: investorRequestManagerAbi,
+    functionName: "getPendingRequests"
   });
   const response = evm.callContract(runtime2, {
-    call: { to: runtime2.config.vehicleNftAddress, data: callData },
+    call: { to: runtime2.config.investorRequestManagerAddress, data: callData },
     blockNumber: LATEST_BLOCK_NUMBER
   }).result();
-  if (response.data.length === 0) {
-    throw new Error("Empty response from callContract (simulation mode)");
-  }
   return decodeFunctionResult({
-    abi: vehicleNftAbi,
-    functionName: "vehicleExists",
+    abi: investorRequestManagerAbi,
+    functionName: "getPendingRequests",
     data: bytesToHex(response.data)
   });
 }
-function discoverVehicleIds(runtime2, evm) {
-  const MAX_PROBE_ID = 50n;
-  const MAX_CONSECUTIVE_MISSES = 5;
-  const ids = [];
-  let consecutiveMisses = 0;
-  for (let id = 1n;id <= MAX_PROBE_ID; id++) {
-    try {
-      if (checkVehicleExists(runtime2, evm, id)) {
-        ids.push(id);
-        consecutiveMisses = 0;
-      } else {
-        consecutiveMisses++;
-      }
-    } catch {
-      consecutiveMisses++;
-    }
-    if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES)
-      break;
-  }
-  return ids;
-}
-function readVehicleMetadata(runtime2, evm, tokenId) {
+function isIdentityVerified(runtime2, evm, user) {
   const callData = encodeFunctionData({
-    abi: vehicleNftAbi,
-    functionName: "getVehicleMetadata",
-    args: [tokenId]
+    abi: identityRegistryAbi,
+    functionName: "isVerified",
+    args: [user]
   });
   const response = evm.callContract(runtime2, {
-    call: { to: runtime2.config.vehicleNftAddress, data: callData },
+    call: { to: runtime2.config.identityRegistryAddress, data: callData },
+    blockNumber: LATEST_BLOCK_NUMBER
+  }).result();
+  return decodeFunctionResult({
+    abi: identityRegistryAbi,
+    functionName: "isVerified",
+    data: bytesToHex(response.data)
+  });
+}
+function checkWorldIDVerified(runtime2, evm, user) {
+  const callData = encodeFunctionData({
+    abi: worldIDVerifierAbi,
+    functionName: "isWorldIDVerified",
+    args: [user]
+  });
+  const response = evm.callContract(runtime2, {
+    call: { to: runtime2.config.worldIDVerifierAddress, data: callData },
+    blockNumber: LATEST_BLOCK_NUMBER
+  }).result();
+  return decodeFunctionResult({
+    abi: worldIDVerifierAbi,
+    functionName: "isWorldIDVerified",
+    data: bytesToHex(response.data)
+  });
+}
+function readTotalBookings(runtime2, evm) {
+  const callData = encodeFunctionData({
+    abi: rentalBookingAbi,
+    functionName: "totalBookings"
+  });
+  const response = evm.callContract(runtime2, {
+    call: { to: runtime2.config.rentalBookingAddress, data: callData },
+    blockNumber: LATEST_BLOCK_NUMBER
+  }).result();
+  return decodeFunctionResult({
+    abi: rentalBookingAbi,
+    functionName: "totalBookings",
+    data: bytesToHex(response.data)
+  });
+}
+function readBooking(runtime2, evm, bookingId) {
+  const callData = encodeFunctionData({
+    abi: rentalBookingAbi,
+    functionName: "getBooking",
+    args: [bookingId]
+  });
+  const response = evm.callContract(runtime2, {
+    call: { to: runtime2.config.rentalBookingAddress, data: callData },
     blockNumber: LATEST_BLOCK_NUMBER
   }).result();
   const d = decodeFunctionResult({
-    abi: vehicleNftAbi,
-    functionName: "getVehicleMetadata",
+    abi: rentalBookingAbi,
+    functionName: "getBooking",
     data: bytesToHex(response.data)
   });
   return {
-    vin: d.vin,
-    make: d.make,
-    model: d.model,
-    year: d.year,
-    color: d.color,
-    mileage: d.mileage,
-    registrationExpiry: d.registrationExpiry,
-    insuranceExpiry: d.insuranceExpiry
+    renter: d.renter,
+    vehicleId: d.vehicleId,
+    status: Number(d.status)
   };
 }
-function generateTelemetryReading(vin, currentMileage, now) {
-  let vinHash = 0;
-  for (let i2 = 0;i2 < vin.length; i2++) {
-    vinHash = (vinHash << 5) - vinHash + vin.charCodeAt(i2) | 0;
-  }
-  const dailyMiles = 20 + Math.abs(vinHash % 60);
-  const daysSinceEpoch = Number(now / 86400n);
-  const newOdometer = Number(currentMileage) + dailyMiles * (daysSinceEpoch % 7);
-  return {
-    vin,
-    odometer: newOdometer,
-    engineHours: Math.abs(vinHash % 5000),
-    fuelLevel: 20 + Math.abs((vinHash >> 8) % 80),
-    timestamp: Number(now)
-  };
+function validateRenter(runtime2, evm, renter) {
+  const callData = encodeFunctionData({
+    abi: renterComplianceAbi,
+    functionName: "validateRenter",
+    args: [renter]
+  });
+  const response = evm.callContract(runtime2, {
+    call: { to: runtime2.config.renterComplianceAddress, data: callData },
+    blockNumber: LATEST_BLOCK_NUMBER
+  }).result();
+  const d = decodeFunctionResult({
+    abi: renterComplianceAbi,
+    functionName: "validateRenter",
+    data: bytesToHex(response.data)
+  });
+  return { isValid: d[0] || d.isValid, reason: Number(d[1] || d.reason) };
 }
-function encodeVehicleReport(action, actionData) {
+function encodeOnboardingReport(action, actionData) {
   return encodeAbiParameters([
     { name: "action", type: "uint8" },
     { name: "actionData", type: "bytes" }
   ], [action, actionData]);
 }
 function submitReport(runtime2, evm, action, actionData, label) {
-  const reportData = encodeVehicleReport(action, actionData);
+  const reportData = encodeOnboardingReport(action, actionData);
   const report2 = runtime2.report(prepareReportRequest(reportData)).result();
   evm.writeReport(runtime2, {
-    receiver: runtime2.config.vehicleReceiverAddress,
+    receiver: runtime2.config.onboardingReceiverAddress,
     report: report2,
     gasConfig: { gasLimit: "500000" }
   }).result();
   runtime2.log(`  -> ${label} report submitted`);
 }
-function getMockVehicles() {
+var REJECTION_REASONS = {
+  1: "Under minimum age",
+  2: "License expired",
+  3: "Insurance not valid",
+  4: "Poor credit score",
+  5: "Too many incidents",
+  6: "Blacklisted",
+  7: "Identity not verified",
+  8: "Region restricted",
+  9: "Account suspended",
+  10: "KYC incomplete",
+  11: "Sanctions match"
+};
+function getMockInvestors() {
   return [
-    {
-      vin: "1HGBH41JXMN109186",
-      make: "Honda",
-      model: "Civic",
-      year: 2021n,
-      color: "White",
-      mileage: 32000n,
-      registrationExpiry: 0n,
-      insuranceExpiry: 0n
-    },
-    {
-      vin: "5YJSA1DG9DFP14705",
-      make: "Tesla",
-      model: "Model S",
-      year: 2023n,
-      color: "Black",
-      mileage: 15000n,
-      registrationExpiry: 0n,
-      insuranceExpiry: 0n
-    },
-    {
-      vin: "WVWZZZ3CZWE123456",
-      make: "Volkswagen",
-      model: "Golf",
-      year: 2022n,
-      color: "Blue",
-      mileage: 48000n,
-      registrationExpiry: 0n,
-      insuranceExpiry: 0n
-    }
+    { address: "0xABCDEF1234567890ABCDEF1234567890ABCDEF12", verified: true, worldIdVerified: true },
+    { address: "0x1111222233334444555566667777888899990000", verified: false, worldIdVerified: false },
+    { address: "0xAAAABBBBCCCCDDDDEEEEFFFF0000111122223333", verified: true, worldIdVerified: false }
+  ];
+}
+function getMockBookings() {
+  return [
+    { renter: "0xFEDCBA9876543210FEDCBA9876543210FEDCBA98", vehicleId: 1n, status: BOOKING_STATUS_PENDING, isValid: true, reason: 0 },
+    { renter: "0x9999888877776666555544443333222211110000", vehicleId: 2n, status: BOOKING_STATUS_PENDING, isValid: false, reason: 6 },
+    { renter: "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", vehicleId: 1n, status: 1, isValid: true, reason: 0 }
   ];
 }
 var onCronTrigger = (runtime2) => {
-  runtime2.log("=== RegShield Vehicle Telematics Monitor ===");
+  runtime2.log("=== RegShield Onboarding Auto-Processor ===");
   const evm = new ClientCapability(SEPOLIA_CHAIN_SELECTOR);
-  const now = BigInt(Math.floor(runtime2.now().getTime() / 1000));
-  const MIN_MILEAGE_DELTA = 50n;
+  let reportsSubmitted = 0;
   let simulationMode = false;
-  const vehicles = [];
+  let pendingInvestors = [];
+  let mockInvestors = [];
   try {
-    checkVehicleExists(runtime2, evm, 1n);
-    const vehicleIds = discoverVehicleIds(runtime2, evm);
-    runtime2.log(`Found ${vehicleIds.length} vehicles on-chain`);
-    for (const id of vehicleIds) {
-      try {
-        const meta = readVehicleMetadata(runtime2, evm, id);
-        if (meta.vin !== "")
-          vehicles.push({ id, meta });
-      } catch {
-        continue;
-      }
-    }
+    pendingInvestors = readPendingInvestors(runtime2, evm);
+    runtime2.log(`Pending investor requests: ${pendingInvestors.length}`);
   } catch {
     simulationMode = true;
-    runtime2.log("No live chain data — running in SIMULATION MODE with mock vehicles");
-    const mocks = getMockVehicles();
-    mocks.forEach((meta, i2) => vehicles.push({ id: BigInt(i2 + 1), meta }));
-    runtime2.log(`Loaded ${vehicles.length} mock vehicles for simulation`);
+    runtime2.log("No live chain data — running in SIMULATION MODE with mock data");
+    mockInvestors = getMockInvestors();
+    runtime2.log(`Loaded ${mockInvestors.length} mock investor requests`);
   }
-  if (vehicles.length === 0) {
-    runtime2.log("No vehicles found. Idle.");
-    return "No vehicles to monitor";
-  }
-  let reportsSubmitted = 0;
-  for (const { id, meta } of vehicles) {
-    runtime2.log(`Vehicle #${id}: ${meta.make} ${meta.model} (VIN: ${meta.vin})`);
-    const telemetry = generateTelemetryReading(meta.vin, meta.mileage, now);
-    const newMileage = BigInt(telemetry.odometer);
-    const mileageDelta = newMileage > meta.mileage ? newMileage - meta.mileage : 0n;
-    if (mileageDelta >= MIN_MILEAGE_DELTA) {
-      runtime2.log(`  Mileage update: ${meta.mileage} → ${newMileage} (+${mileageDelta})`);
-      const actionData = encodeAbiParameters([
-        { name: "tokenId", type: "uint256" },
-        { name: "newMileage", type: "uint256" }
-      ], [id, newMileage]);
-      if (!simulationMode) {
-        submitReport(runtime2, evm, Action.UPDATE_MILEAGE, actionData, "UPDATE_MILEAGE");
+  if (simulationMode) {
+    for (const inv of mockInvestors) {
+      runtime2.log(`  Checking investor ${inv.address}...`);
+      runtime2.log(`  Identity: ${inv.verified}, World ID: ${inv.worldIdVerified}`);
+      if (inv.verified) {
+        runtime2.log(`  Identity verified${inv.worldIdVerified ? " + World ID verified" : ""} — auto-approving`);
+        runtime2.log(`  -> [SIM] Would submit APPROVE_INVESTOR for ${inv.address}`);
       } else {
-        runtime2.log(`  -> [SIM] Would submit UPDATE_MILEAGE (${meta.mileage} → ${newMileage})`);
+        runtime2.log(`  Identity NOT verified — rejecting`);
+        runtime2.log(`  -> [SIM] Would submit REJECT_INVESTOR for ${inv.address}`);
       }
       reportsSubmitted++;
-    } else {
-      runtime2.log(`  Mileage unchanged or delta too small (${mileageDelta})`);
+    }
+  } else {
+    for (const investor of pendingInvestors) {
+      runtime2.log(`  Checking investor ${investor}...`);
+      const identityVerified = isIdentityVerified(runtime2, evm, investor);
+      let worldIdVerified = false;
+      try {
+        worldIdVerified = checkWorldIDVerified(runtime2, evm, investor);
+      } catch {
+        runtime2.log(`  World ID check unavailable — skipping`);
+      }
+      runtime2.log(`  Identity: ${identityVerified}, World ID: ${worldIdVerified}`);
+      if (identityVerified) {
+        runtime2.log(`  Identity verified${worldIdVerified ? " + World ID verified" : ""} — auto-approving`);
+        const actionData = encodeAbiParameters([{ name: "investor", type: "address" }], [investor]);
+        submitReport(runtime2, evm, Action.APPROVE_INVESTOR, actionData, "APPROVE_INVESTOR");
+        reportsSubmitted++;
+      } else {
+        runtime2.log(`  Identity NOT verified — rejecting`);
+        const actionData = encodeAbiParameters([
+          { name: "investor", type: "address" },
+          { name: "reason", type: "string" }
+        ], [investor, "Identity not verified on IdentityRegistry — CRE auto-rejection"]);
+        submitReport(runtime2, evm, Action.REJECT_INVESTOR, actionData, "REJECT_INVESTOR");
+        reportsSubmitted++;
+      }
     }
   }
-  const summary = `${simulationMode ? "[SIMULATION] " : ""}Monitored ${vehicles.length} vehicles, submitted ${reportsSubmitted} telemetry reports`;
+  if (simulationMode) {
+    const mockBookings = getMockBookings();
+    runtime2.log(`Loaded ${mockBookings.length} mock bookings`);
+    for (let i2 = 0;i2 < mockBookings.length; i2++) {
+      const booking = mockBookings[i2];
+      if (booking.status !== BOOKING_STATUS_PENDING)
+        continue;
+      runtime2.log(`  Booking #${i2 + 1}: renter=${booking.renter}, vehicle=#${booking.vehicleId}`);
+      if (booking.isValid) {
+        runtime2.log(`  Renter compliant — auto-approving booking`);
+        runtime2.log(`  -> [SIM] Would submit APPROVE_BOOKING #${i2 + 1}`);
+      } else {
+        const reason = REJECTION_REASONS[booking.reason] || `Compliance check failed (code: ${booking.reason})`;
+        runtime2.log(`  Renter non-compliant: ${reason} — rejecting booking`);
+        runtime2.log(`  -> [SIM] Would submit REJECT_BOOKING #${i2 + 1}: ${reason}`);
+      }
+      reportsSubmitted++;
+    }
+  } else {
+    try {
+      const totalBookings = readTotalBookings(runtime2, evm);
+      runtime2.log(`Total bookings on-chain: ${totalBookings}`);
+      for (let i2 = 1n;i2 <= totalBookings; i2++) {
+        let booking;
+        try {
+          booking = readBooking(runtime2, evm, i2);
+        } catch {
+          continue;
+        }
+        if (booking.status !== BOOKING_STATUS_PENDING)
+          continue;
+        runtime2.log(`  Booking #${i2}: renter=${booking.renter}, vehicle=#${booking.vehicleId}`);
+        const validation = validateRenter(runtime2, evm, booking.renter);
+        if (validation.isValid) {
+          runtime2.log(`  Renter compliant — auto-approving booking`);
+          const actionData = encodeAbiParameters([{ name: "bookingId", type: "uint256" }], [i2]);
+          submitReport(runtime2, evm, Action.APPROVE_BOOKING, actionData, "APPROVE_BOOKING");
+          reportsSubmitted++;
+        } else {
+          const reason = REJECTION_REASONS[validation.reason] || `Compliance check failed (code: ${validation.reason})`;
+          runtime2.log(`  Renter non-compliant: ${reason} — rejecting booking`);
+          const actionData = encodeAbiParameters([
+            { name: "bookingId", type: "uint256" },
+            { name: "reason", type: "string" }
+          ], [i2, `${reason} — CRE auto-rejection`]);
+          submitReport(runtime2, evm, Action.REJECT_BOOKING, actionData, "REJECT_BOOKING");
+          reportsSubmitted++;
+        }
+      }
+    } catch {
+      runtime2.log(`Booking processing error`);
+    }
+  }
+  const summary = `${simulationMode ? "[SIMULATION] " : ""}Submitted ${reportsSubmitted} onboarding reports`;
   runtime2.log(summary);
   return summary;
 };

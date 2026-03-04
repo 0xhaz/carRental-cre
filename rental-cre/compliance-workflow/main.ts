@@ -70,11 +70,11 @@ const Action = {
 
 const vehicleNftAbi = [
   {
-    name: "totalSupply",
+    name: "vehicleExists",
     type: "function",
     stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "uint256" }],
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "exists", type: "bool" }],
   },
   {
     name: "getVehicleMetadata",
@@ -185,20 +185,60 @@ type VehicleInfo = {
 
 // ─── On-chain Reads ─────────────────────────────────────────────────────────
 
-function readTotalVehicles(runtime: Runtime<Config>, evm: EVMClient): bigint {
+function checkVehicleExists(
+  runtime: Runtime<Config>,
+  evm: EVMClient,
+  tokenId: bigint,
+): boolean {
   const callData = encodeFunctionData({
     abi: vehicleNftAbi,
-    functionName: "totalSupply",
+    functionName: "vehicleExists",
+    args: [tokenId],
   });
   const response = evm.callContract(runtime, {
     call: { to: runtime.config.vehicleNftAddress, data: callData },
     blockNumber: LATEST_BLOCK_NUMBER,
   }).result();
+  // CRE simulator returns empty bytes for callContract — detect and throw
+  // so the caller falls back to simulation mode with mock data.
+  if (response.data.length === 0) {
+    throw new Error("Empty response from callContract (simulation mode)");
+  }
   return decodeFunctionResult({
     abi: vehicleNftAbi,
-    functionName: "totalSupply",
+    functionName: "vehicleExists",
     data: bytesToHex(response.data),
-  }) as bigint;
+  }) as boolean;
+}
+
+/**
+ * Discover vehicles by iterating token IDs and checking vehicleExists().
+ * VehicleNFT does not have totalSupply() — IDs start at 1 and increment.
+ * We probe up to MAX_PROBE_ID and stop after MAX_CONSECUTIVE_MISSES misses.
+ */
+function discoverVehicleIds(
+  runtime: Runtime<Config>,
+  evm: EVMClient,
+): bigint[] {
+  const MAX_PROBE_ID = 50n;
+  const MAX_CONSECUTIVE_MISSES = 5;
+  const ids: bigint[] = [];
+  let consecutiveMisses = 0;
+
+  for (let id = 1n; id <= MAX_PROBE_ID; id++) {
+    try {
+      if (checkVehicleExists(runtime, evm, id)) {
+        ids.push(id);
+        consecutiveMisses = 0;
+      } else {
+        consecutiveMisses++;
+      }
+    } catch {
+      consecutiveMisses++;
+    }
+    if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) break;
+  }
+  return ids;
 }
 
 function readVehicleMetadata(
@@ -342,10 +382,15 @@ const onCronTrigger = (runtime: Runtime<Config>): string => {
   const vehicles: VehicleEntry[] = [];
 
   try {
-    const totalVehicles = readTotalVehicles(runtime, evm);
-    runtime.log(`Total vehicles on-chain: ${totalVehicles}`);
+    // Probe ID 1 first to test if on-chain reads work.
+    // CRE simulator returns empty bytes for callContract — checkVehicleExists
+    // will throw, triggering the simulation mode fallback below.
+    checkVehicleExists(runtime, evm, 1n);
 
-    for (let id = 1n; id <= totalVehicles; id++) {
+    const vehicleIds = discoverVehicleIds(runtime, evm);
+    runtime.log(`Found ${vehicleIds.length} vehicles on-chain`);
+
+    for (const id of vehicleIds) {
       try {
         const meta = readVehicleMetadata(runtime, evm, id);
         const info = readVehicleInfo(runtime, evm, id);

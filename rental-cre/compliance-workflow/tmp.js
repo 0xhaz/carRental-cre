@@ -16100,11 +16100,11 @@ var Action = {
 };
 var vehicleNftAbi = [
   {
-    name: "totalSupply",
+    name: "vehicleExists",
     type: "function",
     stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "uint256" }]
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "exists", type: "bool" }]
   },
   {
     name: "getVehicleMetadata",
@@ -16146,20 +16146,45 @@ var vehicleNftAbi = [
     ]
   }
 ];
-function readTotalVehicles(runtime2, evm) {
+function checkVehicleExists(runtime2, evm, tokenId) {
   const callData = encodeFunctionData({
     abi: vehicleNftAbi,
-    functionName: "totalSupply"
+    functionName: "vehicleExists",
+    args: [tokenId]
   });
   const response = evm.callContract(runtime2, {
     call: { to: runtime2.config.vehicleNftAddress, data: callData },
     blockNumber: LATEST_BLOCK_NUMBER
   }).result();
+  if (response.data.length === 0) {
+    throw new Error("Empty response from callContract (simulation mode)");
+  }
   return decodeFunctionResult({
     abi: vehicleNftAbi,
-    functionName: "totalSupply",
+    functionName: "vehicleExists",
     data: bytesToHex(response.data)
   });
+}
+function discoverVehicleIds(runtime2, evm) {
+  const MAX_PROBE_ID = 50n;
+  const MAX_CONSECUTIVE_MISSES = 5;
+  const ids = [];
+  let consecutiveMisses = 0;
+  for (let id = 1n;id <= MAX_PROBE_ID; id++) {
+    try {
+      if (checkVehicleExists(runtime2, evm, id)) {
+        ids.push(id);
+        consecutiveMisses = 0;
+      } else {
+        consecutiveMisses++;
+      }
+    } catch {
+      consecutiveMisses++;
+    }
+    if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES)
+      break;
+  }
+  return ids;
 }
 function readVehicleMetadata(runtime2, evm, tokenId) {
   const callData = encodeFunctionData({
@@ -16276,9 +16301,10 @@ var onCronTrigger = (runtime2) => {
   let simulationMode = false;
   const vehicles = [];
   try {
-    const totalVehicles = readTotalVehicles(runtime2, evm);
-    runtime2.log(`Total vehicles on-chain: ${totalVehicles}`);
-    for (let id = 1n;id <= totalVehicles; id++) {
+    checkVehicleExists(runtime2, evm, 1n);
+    const vehicleIds = discoverVehicleIds(runtime2, evm);
+    runtime2.log(`Found ${vehicleIds.length} vehicles on-chain`);
+    for (const id of vehicleIds) {
       try {
         const meta = readVehicleMetadata(runtime2, evm, id);
         const info = readVehicleInfo(runtime2, evm, id);

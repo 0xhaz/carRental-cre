@@ -16351,88 +16351,201 @@ function submitMilestone(runtime2, evm, paymentId, milestoneName) {
   }).result();
   runtime2.log(`  -> ${milestoneName} report submitted for payment #${paymentId}`);
 }
+function getMockPayments(now) {
+  return [
+    {
+      milestones: {
+        vehicleIdentified: false,
+        purchaseVerified: false,
+        insuranceObtained: false,
+        registrationCompleted: false,
+        fundsReleased: false,
+        vehicleId: 1n,
+        completedAt: 0n
+      },
+      vehicleMeta: {
+        vin: "1HGBH41JXMN109186",
+        make: "Honda",
+        model: "Civic",
+        year: 2021n,
+        color: "White",
+        mileage: 32000n,
+        registrationExpiry: now + 15552000n,
+        insuranceExpiry: now + 7776000n
+      },
+      vehicleStatus: 0,
+      investedWei: 500000000000000000n
+    },
+    {
+      milestones: {
+        vehicleIdentified: true,
+        purchaseVerified: false,
+        insuranceObtained: false,
+        registrationCompleted: false,
+        fundsReleased: false,
+        vehicleId: 2n,
+        completedAt: 0n
+      },
+      vehicleMeta: {
+        vin: "5YJSA1DG9DFP14705",
+        make: "Tesla",
+        model: "Model S",
+        year: 2023n,
+        color: "Black",
+        mileage: 15000n,
+        registrationExpiry: now + 15552000n,
+        insuranceExpiry: now + 7776000n
+      },
+      vehicleStatus: 0,
+      investedWei: 1000000000000000000n
+    },
+    {
+      milestones: {
+        vehicleIdentified: true,
+        purchaseVerified: true,
+        insuranceObtained: false,
+        registrationCompleted: false,
+        fundsReleased: false,
+        vehicleId: 3n,
+        completedAt: 0n
+      },
+      vehicleMeta: {
+        vin: "WVWZZZ3CZWE123456",
+        make: "Volkswagen",
+        model: "Golf",
+        year: 2022n,
+        color: "Blue",
+        mileage: 48000n,
+        registrationExpiry: now + 15552000n,
+        insuranceExpiry: now + 7776000n
+      },
+      vehicleStatus: 1,
+      investedWei: 750000000000000000n
+    }
+  ];
+}
 var onCronTrigger = (runtime2) => {
   runtime2.log("=== RegShield Vehicle Investment Lifecycle ===");
   const evm = new ClientCapability(SEPOLIA_CHAIN_SELECTOR);
   const http = new ClientCapability2;
+  const now = BigInt(Math.floor(runtime2.now().getTime() / 1000));
+  let simulationMode = false;
   let totalPayments;
   try {
     totalPayments = readTotalPayments(runtime2, evm);
   } catch {
-    runtime2.log("No chain data (simulation mode or RPC error). Exiting.");
-    return "No chain data available";
+    simulationMode = true;
+    totalPayments = 0n;
   }
-  runtime2.log(`Total payments on-chain: ${totalPayments}`);
-  if (totalPayments === 0n) {
-    runtime2.log("No payments found. Idle.");
-    return "No payments to process";
-  }
-  let reportsSubmitted = 0;
-  for (let i2 = 1n;i2 <= totalPayments; i2++) {
-    const ms = readMilestoneStatus(runtime2, evm, i2);
-    if (ms.fundsReleased)
-      continue;
-    if (ms.vehicleId === 0n)
-      continue;
-    runtime2.log(`Payment #${i2} — vehicle #${ms.vehicleId}`);
-    if (!ms.vehicleIdentified) {
-      const meta = readVehicleMetadata(runtime2, evm, ms.vehicleId);
-      if (meta.vin !== "") {
-        runtime2.log(`  Verifying VIN ${meta.vin} via NHTSA...`);
-        const nhtsa = decodeVIN(runtime2, http, meta.vin);
-        if (nhtsa.valid) {
-          runtime2.log(`  VIN valid: ${nhtsa.year} ${nhtsa.make} ${nhtsa.model} (${nhtsa.bodyClass})`);
-          submitMilestone(runtime2, evm, i2, "VEHICLE_IDENTIFIED");
-          reportsSubmitted++;
+  if (!simulationMode) {
+    runtime2.log(`Total payments on-chain: ${totalPayments}`);
+    if (totalPayments === 0n) {
+      runtime2.log("No payments found. Idle.");
+      return "No payments to process";
+    }
+    let reportsSubmitted2 = 0;
+    for (let i2 = 1n;i2 <= totalPayments; i2++) {
+      const ms = readMilestoneStatus(runtime2, evm, i2);
+      if (ms.fundsReleased)
+        continue;
+      if (ms.vehicleId === 0n)
+        continue;
+      runtime2.log(`Payment #${i2} — vehicle #${ms.vehicleId}`);
+      if (!ms.vehicleIdentified) {
+        const meta = readVehicleMetadata(runtime2, evm, ms.vehicleId);
+        if (meta.vin !== "") {
+          runtime2.log(`  Verifying VIN ${meta.vin} via NHTSA...`);
+          const nhtsa = decodeVIN(runtime2, http, meta.vin);
+          if (nhtsa.valid) {
+            runtime2.log(`  VIN valid: ${nhtsa.year} ${nhtsa.make} ${nhtsa.model} (${nhtsa.bodyClass})`);
+            submitMilestone(runtime2, evm, i2, "VEHICLE_IDENTIFIED");
+            reportsSubmitted2++;
+          } else {
+            runtime2.log(`  VIN invalid (error code: ${nhtsa.errorCode})`);
+          }
         } else {
-          runtime2.log(`  VIN invalid (error code: ${nhtsa.errorCode})`);
+          runtime2.log("  No VIN set on vehicle — skipping");
         }
-      } else {
-        runtime2.log("  No VIN set on vehicle — skipping");
+        continue;
       }
+      if (!ms.purchaseVerified) {
+        const status = readVehicleStatus(runtime2, evm, ms.vehicleId);
+        const invested = readVehicleInvestmentTotal(runtime2, evm, ms.vehicleId);
+        const statusLabels = ["Available", "Rented", "Maintenance", "Retired"];
+        runtime2.log(`  Vehicle status: ${statusLabels[status] ?? "Unknown"}, invested: ${invested} wei`);
+        if (status !== 3 && invested > 0n) {
+          runtime2.log("  Vehicle active and investment escrowed — purchase verified");
+          submitMilestone(runtime2, evm, i2, "PURCHASE_VERIFIED");
+          reportsSubmitted2++;
+        } else if (status === 3) {
+          runtime2.log("  Vehicle is retired — cannot verify purchase");
+        } else {
+          runtime2.log("  No investment found in escrow");
+        }
+        continue;
+      }
+      if (!ms.insuranceObtained) {
+        const meta = readVehicleMetadata(runtime2, evm, ms.vehicleId);
+        if (meta.insuranceExpiry > now) {
+          runtime2.log(`  Insurance valid until ${meta.insuranceExpiry}`);
+          submitMilestone(runtime2, evm, i2, "INSURANCE_OBTAINED");
+          reportsSubmitted2++;
+        } else {
+          runtime2.log(`  Insurance expired or not set (expiry: ${meta.insuranceExpiry})`);
+        }
+        continue;
+      }
+      if (!ms.registrationCompleted) {
+        const meta = readVehicleMetadata(runtime2, evm, ms.vehicleId);
+        if (meta.registrationExpiry > now) {
+          runtime2.log(`  Registration valid until ${meta.registrationExpiry}`);
+          submitMilestone(runtime2, evm, i2, "REGISTRATION_COMPLETED");
+          reportsSubmitted2++;
+        } else {
+          runtime2.log(`  Registration expired or not set (expiry: ${meta.registrationExpiry})`);
+        }
+      }
+    }
+    const summary2 = `Processed ${totalPayments} payments, submitted ${reportsSubmitted2} reports`;
+    runtime2.log(summary2);
+    return summary2;
+  }
+  runtime2.log("No live chain data — running in SIMULATION MODE with mock payments");
+  const mockPayments = getMockPayments(now);
+  runtime2.log(`Loaded ${mockPayments.length} mock investment payments`);
+  let reportsSubmitted = 0;
+  for (let idx = 0;idx < mockPayments.length; idx++) {
+    const paymentId = BigInt(idx + 1);
+    const { milestones: ms, vehicleMeta: meta, vehicleStatus, investedWei } = mockPayments[idx];
+    runtime2.log(`Payment #${paymentId} — vehicle #${ms.vehicleId} (${meta.make} ${meta.model})`);
+    if (!ms.vehicleIdentified) {
+      runtime2.log(`  Verifying VIN ${meta.vin} via NHTSA...`);
+      runtime2.log(`  VIN valid: ${meta.year} ${meta.make} ${meta.model}`);
+      runtime2.log(`  -> [SIM] Would submit VEHICLE_IDENTIFIED for payment #${paymentId}`);
+      reportsSubmitted++;
       continue;
     }
     if (!ms.purchaseVerified) {
-      const status = readVehicleStatus(runtime2, evm, ms.vehicleId);
-      const invested = readVehicleInvestmentTotal(runtime2, evm, ms.vehicleId);
       const statusLabels = ["Available", "Rented", "Maintenance", "Retired"];
-      runtime2.log(`  Vehicle status: ${statusLabels[status] ?? "Unknown"}, invested: ${invested} wei`);
-      if (status !== 3 && invested > 0n) {
-        runtime2.log("  Vehicle active and investment escrowed — purchase verified");
-        submitMilestone(runtime2, evm, i2, "PURCHASE_VERIFIED");
-        reportsSubmitted++;
-      } else if (status === 3) {
-        runtime2.log("  Vehicle is retired — cannot verify purchase");
-      } else {
-        runtime2.log("  No investment found in escrow");
-      }
+      runtime2.log(`  Vehicle status: ${statusLabels[vehicleStatus]}, invested: ${investedWei} wei`);
+      runtime2.log("  Vehicle active and investment escrowed — purchase verified");
+      runtime2.log(`  -> [SIM] Would submit PURCHASE_VERIFIED for payment #${paymentId}`);
+      reportsSubmitted++;
       continue;
     }
     if (!ms.insuranceObtained) {
-      const meta = readVehicleMetadata(runtime2, evm, ms.vehicleId);
-      const now = BigInt(Math.floor(runtime2.now().getTime() / 1000));
-      if (meta.insuranceExpiry > now) {
-        runtime2.log(`  Insurance valid until ${meta.insuranceExpiry}`);
-        submitMilestone(runtime2, evm, i2, "INSURANCE_OBTAINED");
-        reportsSubmitted++;
-      } else {
-        runtime2.log(`  Insurance expired or not set (expiry: ${meta.insuranceExpiry})`);
-      }
+      runtime2.log(`  Insurance valid until ${meta.insuranceExpiry}`);
+      runtime2.log(`  -> [SIM] Would submit INSURANCE_OBTAINED for payment #${paymentId}`);
+      reportsSubmitted++;
       continue;
     }
     if (!ms.registrationCompleted) {
-      const meta = readVehicleMetadata(runtime2, evm, ms.vehicleId);
-      const now = BigInt(Math.floor(runtime2.now().getTime() / 1000));
-      if (meta.registrationExpiry > now) {
-        runtime2.log(`  Registration valid until ${meta.registrationExpiry}`);
-        submitMilestone(runtime2, evm, i2, "REGISTRATION_COMPLETED");
-        reportsSubmitted++;
-      } else {
-        runtime2.log(`  Registration expired or not set (expiry: ${meta.registrationExpiry})`);
-      }
+      runtime2.log(`  Registration valid until ${meta.registrationExpiry}`);
+      runtime2.log(`  -> [SIM] Would submit REGISTRATION_COMPLETED for payment #${paymentId}`);
+      reportsSubmitted++;
     }
   }
-  const summary = `Processed ${totalPayments} payments, submitted ${reportsSubmitted} reports`;
+  const summary = `[SIMULATION] Processed ${mockPayments.length} payments, submitted ${reportsSubmitted} milestone reports`;
   runtime2.log(summary);
   return summary;
 };
