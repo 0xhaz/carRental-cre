@@ -191,6 +191,17 @@ add_text_box(slide, Inches(4), Inches(6.2), Inches(5), Inches(0.4),
 
 slide_number(slide, 1)
 
+# Speaker notes
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "Hi everyone, I'm [Your Name] and today I'm presenting RegShield — "
+    "a tokenized vehicle rental platform built for the Chainlink Block Magic Hackathon.\n\n"
+    "RegShield lets investors buy fractional ownership of real vehicles using blockchain, "
+    "and earn real rental revenue — all enforced on-chain with ERC-3643 compliance tokens.\n\n"
+    "We heavily leverage two sponsors: Chainlink CRE for decentralized automation, "
+    "and WorldID for sybil-resistant investor onboarding. Let me walk you through how it all works."
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SLIDE 2: THE PROBLEM
@@ -235,6 +246,20 @@ for i, (title, items, color) in enumerate(problems):
 
 slide_number(slide, 2)
 
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "So what problems are we solving?\n\n"
+    "First — centralized backend. Traditional rental platforms rely on cron jobs running on a single server "
+    "for bookings, campaigns, and revenue. If that server goes down, everything stops. There's no verifiability.\n\n"
+    "Second — no on-chain compliance. Vehicle investments today have no regulatory framework enforced by code. "
+    "Token transfers happen without any compliance checks.\n\n"
+    "Third — sybil vulnerability. Without proof-of-personhood, one person can create multiple investor accounts "
+    "and game investment allocations.\n\n"
+    "Fourth — manual milestone verification. An admin has to manually check VIN numbers, insurance documents, "
+    "and registration before releasing escrow funds. This is slow, error-prone, and doesn't scale.\n\n"
+    "RegShield solves ALL of these with Chainlink CRE and WorldID."
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SLIDE 3: OUR SOLUTION
@@ -278,6 +303,21 @@ for i, (title, color, items) in enumerate(pillars):
              title, items, color, title_size=20, body_size=14)
 
 slide_number(slide, 3)
+
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "Our solution has three pillars.\n\n"
+    "Chainlink CRE — this is the big one. We built 5 off-chain workflows that completely replace "
+    "our backend cron jobs. These run on Chainlink's Decentralized Oracle Network, so there's no single point of failure. "
+    "They handle everything from automated VIN validation via the NHTSA API, to milestone-based escrow verification, "
+    "to vehicle telematics monitoring.\n\n"
+    "WorldID — we use Orb-level zero-knowledge verification for investor onboarding. "
+    "This means one human equals one verified investor account. No sybil attacks possible. "
+    "The verification happens through our WorldIDVerifier smart contract on Sepolia.\n\n"
+    "ERC-3643 Security Tokens — every vehicle gets two compliance tokens. "
+    "An AssetToken representing fractional ownership, and a RevenueToken for quarterly rental income rights. "
+    "The Identity Registry enforces transfer restrictions based on investor type and KYC status."
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -348,6 +388,23 @@ add_text_box(slide, Inches(1.3), Inches(6.0), Inches(10.7), Inches(0.5),
 
 slide_number(slide, 4)
 
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "Here's the user journey in four steps.\n\n"
+    "Step 1 — An investor selects a vehicle campaign on our marketplace and commits ETH. "
+    "The funds are locked in our PaymentEscrow smart contract. Nothing gets released until milestones are verified.\n\n"
+    "Step 2 — This is where Chainlink CRE comes in. Our CRE workflows automatically verify 4 milestones: "
+    "VIN validation through the NHTSA API, proof of purchase, insurance verification, and vehicle registration. "
+    "No manual admin approval needed.\n\n"
+    "Step 3 — Once milestones are verified, ERC-3643 AssetTokens and RevenueTokens are minted "
+    "to the verified investors. These are compliance tokens — only KYC-verified, WorldID-verified investors can hold them.\n\n"
+    "Step 4 — The vehicle goes live on our rental platform and generates income. "
+    "Revenue is distributed quarterly through a waterfall model: 50% to investors, 10% to the vehicle operator, "
+    "and the rest covers maintenance and platform fees.\n\n"
+    "The key insight here — Chainlink CRE replaces 4 centralized backend services and adds 1 entirely new capability "
+    "that wasn't possible before: real-time compliance monitoring."
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SLIDE 5: CHAINLINK CRE DEEP DIVE
@@ -403,6 +460,24 @@ add_text_box(slide, Inches(0.8), Inches(6.8), Inches(11), Inches(0.4),
              font_size=12, color=MID_GRAY, alignment=PP_ALIGN.CENTER)
 
 slide_number(slide, 5)
+
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "Let's dive deeper into our Chainlink CRE integration — this is the core of our project.\n\n"
+    "We built 5 TypeScript workflows that compile to WASM and run on Chainlink DON nodes.\n\n"
+    "The Onboarding workflow replaces manual admin approval. It auto-verifies investor identity "
+    "by checking ERC-3643 Identity Registry and WorldID status, then generates 5 onboarding reports.\n\n"
+    "The Campaign Monitor workflow replaces our campaignScheduler.js cron job. It detects expired or underfunded "
+    "campaigns and triggers batch refunds automatically.\n\n"
+    "The Rental Lifecycle workflow replaces bookingScheduler.js. It handles 4-milestone verification: "
+    "VIN lookup, escrow check, insurance validation, and registration confirmation.\n\n"
+    "The Vehicle Telematics workflow replaces revenueSyncService.js. It polls odometer and telemetry data "
+    "and updates the VehicleNFT on-chain.\n\n"
+    "And finally, the Compliance Monitor — this is a completely NEW capability that didn't exist before. "
+    "It monitors registration expiry, insurance expiry, and overdue maintenance in real-time. "
+    "This was impossible with our centralized backend.\n\n"
+    "All 5 workflows submit ABI-encoded reports to 5 Receiver contracts deployed on Sepolia."
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -463,6 +538,24 @@ add_bullet_list(slide, Inches(1.1), Inches(5.9), Inches(10.5), Inches(1.0),
 
 slide_number(slide, 6)
 
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "Now let's look at our WorldID integration — our second sponsor technology.\n\n"
+    "The flow has 4 steps.\n\n"
+    "First, the investor opens RegShield in the World App and completes Orb-level ZK verification. "
+    "This generates a zero-knowledge proof that proves they're a unique human without revealing their identity.\n\n"
+    "Second, our backend API validates the proof via the Worldcoin cloud verification service. "
+    "It returns a merkle root and nullifier hash.\n\n"
+    "Third, our WorldIDVerifier smart contract — deployed at the address shown below — "
+    "calls the World ID Router contract to verify the proof on-chain. "
+    "It maps the wallet address as verified and stores the nullifier hash to prevent the same human from verifying twice.\n\n"
+    "Fourth, our frontend has a useComplianceStatus() hook that checks isWorldIDVerified() "
+    "before enabling any investment actions. If you're not WorldID verified, you simply cannot invest.\n\n"
+    "The key function is verifyAndRegister — it takes the signal, root, nullifier hash, and proof, "
+    "validates everything on-chain, and registers the user. The nullifier hash is the sybil resistance mechanism — "
+    "same human, same nullifier, can't register twice."
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SLIDE 7: ARCHITECTURE
@@ -520,6 +613,22 @@ for title, color, y_offset, items in layers:
                     items[mid:], font_size=12, color=LIGHT_GRAY, bullet_color=color)
 
 slide_number(slide, 7)
+
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "Here's our three-layer architecture.\n\n"
+    "The Frontend is built with Next.js. We use Wagmi and Viem for wallet and contract interaction, "
+    "Chainlink Price Feed hooks for live ETH/USD prices, WorldID MiniKit for identity verification, "
+    "and custom ERC-3643 compliance status hooks. We have role-based dashboards for all four user types.\n\n"
+    "The Smart Contract layer has 34 contracts deployed on Sepolia. Key ones include VehicleNFT for the vehicle registry, "
+    "PaymentEscrow for milestone-locked funds, the ERC-3643 token factories for AssetTokens and RevenueTokens, "
+    "WorldIDVerifier for proof-of-personhood, and 5 CRE Receiver contracts that accept reports from the DON.\n\n"
+    "The Chainlink CRE layer is the off-chain compute. Our 5 TypeScript workflows compile to WASM "
+    "and run on DON nodes with consensus aggregation. They can read on-chain state and call external APIs "
+    "like NHTSA for VIN validation. They submit ABI-encoded reports back to the Receiver contracts.\n\n"
+    "The important thing to note — CRE replaces our backend cron jobs: campaignScheduler, bookingScheduler, "
+    "and revenueSyncService. These were single points of failure. Now they run decentralized."
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -583,6 +692,23 @@ for i, (group_name, color, contracts) in enumerate(contract_groups):
 
 slide_number(slide, 8)
 
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "We have 34 smart contracts deployed on Sepolia. Let me highlight the key ones.\n\n"
+    "In the Identity and Compliance group — the IdentityRegistry is the ERC-3643 on-chain identity store. "
+    "The WorldIDVerifier handles proof-of-personhood verification. ComplianceRules enforces transfer restrictions.\n\n"
+    "In Tokens and Revenue — AssetTokenFactory and RevenueTokenFactory deploy ERC-3643 compliance tokens "
+    "for each vehicle. The RevenueDistributor handles the waterfall distribution engine — "
+    "it automatically splits rental revenue: 50% to investors, 10% to the operator.\n\n"
+    "In Vehicle and Payments — VehicleNFT is our ERC-721 vehicle registry where each car is an NFT. "
+    "InvestmentEscrow holds funds locked until milestones are verified. "
+    "RentalPaymentProtocol processes rental payments.\n\n"
+    "And our CRE Receivers — we have 5 Receiver contracts, one for each CRE workflow. "
+    "OnboardingReceiver accepts identity verification reports, VehicleReceiver accepts telematics data, "
+    "and PaymentReceiver accepts milestone completion reports. "
+    "All of these are verified on Sepolia and use the MockKeystoneForwarder for simulation."
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SLIDE 9: PLATFORM ROLES
@@ -632,6 +758,22 @@ for i, (role, color, features) in enumerate(roles):
 
 slide_number(slide, 9)
 
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "RegShield supports four user roles.\n\n"
+    "Investors can browse the vehicle marketplace, invest ETH into campaigns, and earn quarterly rental revenue. "
+    "They must complete WorldID verification for sybil resistance and upload KYC documents "
+    "which get registered on-chain via ERC-3643. Once verified, they receive AssetTokens and RevenueTokens.\n\n"
+    "Rentors — that's vehicle owners — can register their vehicles as ERC-721 NFTs, "
+    "create fundraising campaigns to tokenize their vehicles, manage rental bookings, "
+    "and earn a 10% operator fee on all revenue generated.\n\n"
+    "Renters can browse and filter available vehicles, book them with date selection, "
+    "optionally verify with WorldID for trusted rentals, and leave reviews.\n\n"
+    "Admins review KYC submissions, monitor the CRE activity feed to see all automated actions, "
+    "track milestone verification status, and manage disputes and refunds.\n\n"
+    "Each role has its own dedicated dashboard in the frontend with real-time data."
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SLIDE 10: CRE DEMO RESULTS
@@ -676,6 +818,21 @@ add_number_stat(slide, Inches(6.5), stat_y - Inches(0.3), "5", "Receiver Contrac
 add_number_stat(slide, Inches(9.0), stat_y - Inches(0.3), "34", "Smart Contracts", PURPLE)
 
 slide_number(slide, 10)
+
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "Here are our CRE simulation results — all 5 workflows pass successfully.\n\n"
+    "The onboarding workflow generates 5 reports covering investor identity verification. "
+    "The campaign workflow produces 2 reports for expired campaign detection. "
+    "The rental workflow generates 3 milestone verification reports. "
+    "The vehicle workflow produces 3 telemetry reports with odometer data. "
+    "And the compliance workflow generates 3 compliance monitoring reports.\n\n"
+    "That's 16 total reports across 5 workflows, all submitted to 5 Receiver contracts on Sepolia.\n\n"
+    "These workflows are currently running in simulation mode using the CRE SDK simulator. "
+    "The simulator validates the WASM binaries, consensus logic, and report encoding. "
+    "All 5 are ready for DON deployment once we have access to a live Chainlink node.\n\n"
+    "We have 34 smart contracts deployed on Sepolia backing all of this."
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -733,6 +890,24 @@ for i, (name, color, items) in enumerate(stacks):
 
 slide_number(slide, 11)
 
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "Quick overview of our tech stack.\n\n"
+    "Frontend — Next.js 14 with App Router, TypeScript, TailwindCSS for styling, "
+    "Wagmi v3 and Viem v2 for blockchain interaction, Thirdweb SDK for wallet connectivity, "
+    "and Framer Motion for animations.\n\n"
+    "Smart Contracts — Solidity 0.8.24, built and tested with Foundry. "
+    "34 contracts on Sepolia including ERC-721, ERC-3643 tokens, and OpenZeppelin v5.\n\n"
+    "Backend — Node.js with Express, MongoDB with Mongoose for data storage, "
+    "JWT authentication, node-cron schedulers for the centralized services that CRE replaces, "
+    "and ethers.js v6 for blockchain interaction.\n\n"
+    "Chainlink CRE — TypeScript workflows compiled to WASM using the CRE SDK and Bun, "
+    "running on DON nodes with consensus aggregation, with 5 Receiver contracts.\n\n"
+    "Identity — WorldID MiniKit v1.9 for Orb-level ZK proofs, "
+    "OnchainID from the T-REX protocol for ERC-3643 identity, "
+    "and a full KYC document management system."
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SLIDE 12: CLOSING / THANK YOU
@@ -786,6 +961,22 @@ for i, (label, color) in enumerate([
     tf.paragraphs[0].space_before = Pt(3)
 
 slide_number(slide, 12)
+
+notes = slide.notes_slide.notes_text_frame
+notes.text = (
+    "To wrap up — here are our key takeaways.\n\n"
+    "Chainlink CRE replaces 4 centralized backend services and adds 1 entirely new capability — "
+    "real-time compliance monitoring — that wasn't possible with our traditional architecture.\n\n"
+    "WorldID provides sybil-resistant proof-of-personhood, ensuring one human equals one verified investor. "
+    "No fake accounts, no gaming the system.\n\n"
+    "ERC-3643 security tokens enforce regulatory compliance on-chain. "
+    "Every token transfer is checked against the Identity Registry and compliance rules.\n\n"
+    "We deployed 34 smart contracts on Sepolia and built 5 CRE workflows — "
+    "all passing simulation and ready for DON deployment.\n\n"
+    "RegShield demonstrates how Chainlink CRE and WorldID can transform "
+    "a traditional rental platform into a fully decentralized, compliant, and automated system.\n\n"
+    "Thank you for your time. I'm happy to answer any questions."
+)
 
 
 # ── Save ────────────────────────────────────────────────────────────────────

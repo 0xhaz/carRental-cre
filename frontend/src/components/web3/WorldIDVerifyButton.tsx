@@ -2,7 +2,11 @@
 
 import { useWorldID } from "@/hooks/useWorldID";
 import { Button, Badge } from "@/components/ui";
-import { ShieldCheck, Globe, Loader2 } from "lucide-react";
+import { ShieldCheck, Globe, Loader2, Smartphone } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+
+const WORLD_APP_ID = process.env.NEXT_PUBLIC_WORLD_APP_ID || "";
+const WORLD_MINI_APP_URL = `https://worldcoin.org/mini-app?app_id=${WORLD_APP_ID}`;
 
 interface WorldIDVerifyButtonProps {
   className?: string;
@@ -62,21 +66,56 @@ export function WorldIDVerifyButton({
     );
   }
 
-  // Not running inside World App
+  // Not running inside World App — show QR code to open in World App
   if (!isMiniApp) {
     return (
       <div className={className}>
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-start gap-3">
-            <Globe size={20} className="text-blue-600 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-blue-800">
-                World ID Verification
+        <div className="p-6 bg-gradient-to-b from-blue-50 to-white border border-blue-200 rounded-xl">
+          <div className="flex items-center gap-2 mb-4">
+            <Globe size={20} className="text-blue-600" />
+            <p className="text-sm font-semibold text-blue-800">
+              World ID Verification
+            </p>
+          </div>
+
+          <div className="flex flex-col items-center gap-4">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <QRCodeSVG
+                value={WORLD_MINI_APP_URL}
+                size={180}
+                level="M"
+                includeMargin={false}
+              />
+            </div>
+
+            <div className="text-center space-y-2">
+              <div className="flex items-center justify-center gap-2 text-sm font-medium text-gray-800">
+                <Smartphone size={16} />
+                Scan with your phone camera
+              </div>
+              <p className="text-xs text-gray-500 max-w-[280px]">
+                This opens RegShield inside the World App where you can verify
+                your identity with zero-knowledge proof for Sybil resistance.
               </p>
-              <p className="text-xs text-blue-600 mt-1">
-                Open RegShield inside the World App to verify your identity with
-                World ID for enhanced Sybil resistance.
-              </p>
+            </div>
+
+            <div className="w-full pt-3 border-t border-gray-100">
+              <div className="flex items-center gap-3 text-xs text-gray-400">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                  Scan QR
+                </div>
+                <span>&rarr;</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                  Open World App
+                </div>
+                <span>&rarr;</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                  Verify Identity
+                </div>
+              </div>
             </div>
           </div>
         </div>

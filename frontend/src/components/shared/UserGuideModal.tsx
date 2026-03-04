@@ -13,27 +13,29 @@ const sampleUsers = [
     role: "Investor",
     email: "investor@test.com",
     password: "password123",
-    description: "Access marketplace, view investments, and earn revenue from tokenized vehicles",
-    wallet: "0x54812efcb8633224edc32a268a7d580e0abfb9ae",
+    description:
+      "Access marketplace, view investments, and earn revenue from tokenized vehicles",
+    wallet: "0x...",
   },
   {
     role: "Rentor",
     email: "rentor@test.com",
     password: "password123",
-    description: "List vehicles, manage fleet, raise capital, and track bookings",
-    wallet: "0x0E128580d848fB51849ab6564467A9BA79B4820c",
+    description:
+      "List vehicles, manage fleet, raise capital, and track bookings",
+    wallet: "0x...",
   },
   {
     role: "Renter",
     email: "renter@test.com",
     password: "password123",
     description: "Browse verified vehicles and book short-term rentals",
-    wallet: "0x..." // Add renter wallet if available
+    wallet: "0x...", // Add renter wallet if available
   },
   {
     role: "Admin",
-    email: "admin@test.com",
-    password: "password123",
+    email: "admin@regshield.com",
+    password: "Admin@123456",
     description: "Manage KYC, compliance, milestones, and platform operations",
     wallet: "Admin wallet",
   },
@@ -45,10 +47,7 @@ export function UserGuideModal({ isOpen, onClose }: UserGuideModalProps) {
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 z-40"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -75,19 +74,34 @@ export function UserGuideModal({ isOpen, onClose }: UserGuideModalProps) {
               <ol className="space-y-2 text-gray-700">
                 <li className="flex gap-2">
                   <span className="font-semibold min-w-6">1.</span>
-                  <span><strong>Connect Your Wallet:</strong> Click the wallet connect button in the navbar to connect your Web3 wallet (MetaMask, WalletConnect, etc.)</span>
+                  <span>
+                    <strong>Connect Your Wallet:</strong> Click the wallet
+                    connect button in the navbar to connect your Web3 wallet
+                    (MetaMask, WalletConnect, etc.)
+                  </span>
                 </li>
                 <li className="flex gap-2">
                   <span className="font-semibold min-w-6">2.</span>
-                  <span><strong>Register/Login:</strong> After connecting your wallet, click the "Login" button and create an account or sign in with test credentials below</span>
+                  <span>
+                    <strong>Register/Login:</strong> After connecting your
+                    wallet, click the "Login" button and create an account or
+                    sign in with test credentials below
+                  </span>
                 </li>
                 <li className="flex gap-2">
                   <span className="font-semibold min-w-6">3.</span>
-                  <span><strong>Complete Verification:</strong> Follow the onboarding flow to complete KYC and wallet binding</span>
+                  <span>
+                    <strong>Complete Verification:</strong> Follow the
+                    onboarding flow to complete KYC and wallet binding
+                  </span>
                 </li>
                 <li className="flex gap-2">
                   <span className="font-semibold min-w-6">4.</span>
-                  <span><strong>Explore Your Dashboard:</strong> Access role-specific features based on whether you're an Investor, Rentor, or Renter</span>
+                  <span>
+                    <strong>Explore Your Dashboard:</strong> Access
+                    role-specific features based on whether you're an Investor,
+                    Rentor, or Renter
+                  </span>
                 </li>
               </ol>
             </section>
@@ -98,9 +112,18 @@ export function UserGuideModal({ isOpen, onClose }: UserGuideModalProps) {
                 ⚠️ Important Notes
               </h4>
               <ul className="space-y-1 text-sm text-amber-800">
-                <li>• Make sure your wallet is connected to <strong>Sepolia Testnet</strong></li>
-                <li>• If switching accounts, disconnect wallet at <code className="bg-amber-100 px-1 rounded">/web3-demo</code> first, then connect with a different address</li>
-                <li>• Each user account is bound to a specific wallet address</li>
+                <li>
+                  • Make sure your wallet is connected to{" "}
+                  <strong>Sepolia Testnet</strong>
+                </li>
+                <li>
+                  • If switching accounts, disconnect wallet at{" "}
+                  <code className="bg-amber-100 px-1 rounded">/web3-demo</code>{" "}
+                  first, then connect with a different address
+                </li>
+                <li>
+                  • Each user account is bound to a specific wallet address
+                </li>
               </ul>
             </section>
 
@@ -114,18 +137,22 @@ export function UserGuideModal({ isOpen, onClose }: UserGuideModalProps) {
               </p>
 
               <div className="grid gap-4">
-                {sampleUsers.map((user) => (
+                {sampleUsers.map(user => (
                   <div
                     key={user.role}
                     className="border border-gray-200 rounded-lg p-4 hover:border-primary transition-colors"
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-semibold text-gray-900">{user.role}</h4>
+                      <h4 className="font-semibold text-gray-900">
+                        {user.role}
+                      </h4>
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
                         Test Account
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600 mb-3">{user.description}</p>
+                    <p className="text-sm text-gray-600 mb-3">
+                      {user.description}
+                    </p>
                     <div className="space-y-1 text-sm">
                       <div className="flex gap-2">
                         <span className="text-gray-500 min-w-20">Email:</span>
@@ -134,14 +161,18 @@ export function UserGuideModal({ isOpen, onClose }: UserGuideModalProps) {
                         </code>
                       </div>
                       <div className="flex gap-2">
-                        <span className="text-gray-500 min-w-20">Password:</span>
+                        <span className="text-gray-500 min-w-20">
+                          Password:
+                        </span>
                         <code className="bg-gray-100 px-2 py-0.5 rounded text-gray-900">
                           {user.password}
                         </code>
                       </div>
                       {user.wallet && (
                         <div className="flex gap-2">
-                          <span className="text-gray-500 min-w-20">Wallet:</span>
+                          <span className="text-gray-500 min-w-20">
+                            Wallet:
+                          </span>
                           <code className="bg-gray-100 px-2 py-0.5 rounded text-gray-900 text-xs break-all">
                             {user.wallet}
                           </code>
@@ -164,7 +195,9 @@ export function UserGuideModal({ isOpen, onClose }: UserGuideModalProps) {
                   <div>
                     <h4 className="font-semibold text-gray-900">Investor</h4>
                     <p className="text-sm text-gray-600">
-                      Fund vehicle purchases via tokenized campaigns, receive ERC-3643 AssetTokens + RevenueTokens, and earn quarterly rental income
+                      Fund vehicle purchases via tokenized campaigns, receive
+                      ERC-3643 AssetTokens + RevenueTokens, and earn quarterly
+                      rental income
                     </p>
                   </div>
                 </div>
@@ -173,7 +206,8 @@ export function UserGuideModal({ isOpen, onClose }: UserGuideModalProps) {
                   <div>
                     <h4 className="font-semibold text-gray-900">Rentor</h4>
                     <p className="text-sm text-gray-600">
-                      List vehicles, mint VehicleNFTs, raise capital through investor campaigns, and earn 10% operator fee on bookings
+                      List vehicles, mint VehicleNFTs, raise capital through
+                      investor campaigns, and earn 10% operator fee on bookings
                     </p>
                   </div>
                 </div>
@@ -182,7 +216,8 @@ export function UserGuideModal({ isOpen, onClose }: UserGuideModalProps) {
                   <div>
                     <h4 className="font-semibold text-gray-900">Renter</h4>
                     <p className="text-sm text-gray-600">
-                      Browse compliance-verified vehicles, pay in ETH via smart contracts, and enjoy transparent pricing
+                      Browse compliance-verified vehicles, pay in ETH via smart
+                      contracts, and enjoy transparent pricing
                     </p>
                   </div>
                 </div>
