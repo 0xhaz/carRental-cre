@@ -143,14 +143,8 @@ function VerificationContent() {
       if (response.success) {
         setUser(response.user);
         toast.success("Wallet connected successfully!");
-        // If inside World App, go to World ID step first
-        let miniKitReady = false;
-        try { miniKitReady = MiniKit.isInstalled(); } catch {}
-        if (miniKitReady) {
-          setCurrentStep("world-id");
-        } else {
-          setCurrentStep(isInvestor ? "investor-type" : "kyc-upload");
-        }
+        // Always go to World ID step (shows QR if not in World App)
+        setCurrentStep("world-id");
         // Pre-populate renter email from user
         if (isRenter && user?.email) {
           setRenterPersonalInfo((prev) => ({ ...prev, email: user.email || "" }));
@@ -310,15 +304,11 @@ function VerificationContent() {
       label: "Bind Wallet",
       completed: ["world-id", "investor-type", "kyc-upload", "pending-approval"].includes(currentStep),
     },
-    ...(isMiniApp
-      ? [
-          {
-            id: "world-id",
-            label: "World ID",
-            completed: ["investor-type", "kyc-upload", "pending-approval"].includes(currentStep),
-          },
-        ]
-      : []),
+    {
+      id: "world-id",
+      label: "World ID",
+      completed: ["investor-type", "kyc-upload", "pending-approval"].includes(currentStep),
+    },
     {
       id: "investor-type",
       label: "Investor Type",
@@ -347,15 +337,11 @@ function VerificationContent() {
       label: "Bind Wallet",
       completed: ["world-id", "kyc-upload", "pending-approval"].includes(currentStep),
     },
-    ...(isMiniApp
-      ? [
-          {
-            id: "world-id",
-            label: "World ID",
-            completed: ["kyc-upload", "pending-approval"].includes(currentStep),
-          },
-        ]
-      : []),
+    {
+      id: "world-id",
+      label: "World ID",
+      completed: ["kyc-upload", "pending-approval"].includes(currentStep),
+    },
     {
       id: "kyc-upload",
       label: "KYC Verification",
@@ -379,15 +365,11 @@ function VerificationContent() {
       label: "Bind Wallet",
       completed: ["world-id", "kyc-upload", "pending-approval"].includes(currentStep),
     },
-    ...(isMiniApp
-      ? [
-          {
-            id: "world-id",
-            label: "World ID",
-            completed: ["kyc-upload", "pending-approval"].includes(currentStep),
-          },
-        ]
-      : []),
+    {
+      id: "world-id",
+      label: "World ID",
+      completed: ["kyc-upload", "pending-approval"].includes(currentStep),
+    },
     {
       id: "kyc-upload",
       label: "KYC Verification",
