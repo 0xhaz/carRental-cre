@@ -8,8 +8,9 @@ import { useComplianceStatus } from "@/hooks/useComplianceStatus";
 import { useUserStore } from "@/store/userStore";
 import { toast } from "react-hot-toast";
 import { authApi, kycApi } from "@/lib/api";
+import { WorldIDVerifyButton } from "@/components/web3/WorldIDVerifyButton";
 
-type OnboardingStep = "connect" | "bind" | "kyc" | "verify" | "complete";
+type OnboardingStep = "connect" | "bind" | "worldid" | "kyc" | "verify" | "complete";
 
 export interface ComplianceOnboardingFlowProps {
   roleType: "investor" | "rentor";
@@ -55,8 +56,12 @@ export function ComplianceOnboardingFlow({
       // KYC submitted, awaiting admin review
       setCurrentStep("verify");
     } else if (compliance.hasWalletBound && !compliance.isKYCApproved && !compliance.isVerifiedOnChain) {
-      // Wallet bound but no KYC submitted (or rejected)
-      setCurrentStep("kyc");
+      // Wallet bound but no KYC submitted (or rejected) — check WorldID first
+      if (roleType === "investor" && !compliance.isWorldIDVerified) {
+        setCurrentStep("worldid");
+      } else {
+        setCurrentStep("kyc");
+      }
     } else if (!compliance.hasWalletBound && isConnected) {
       setCurrentStep("bind");
     } else {
@@ -93,7 +98,7 @@ export function ComplianceOnboardingFlow({
           setUser(response.user);
         }
 
-        setCurrentStep("kyc");
+        setCurrentStep(roleType === "investor" ? "worldid" : "kyc");
       } else {
         toast.error(response.message || "Failed to bind wallet");
       }
@@ -172,12 +177,16 @@ export function ComplianceOnboardingFlow({
     }
   };
 
-  const steps = [
+  const baseSteps = [
     { id: "connect", label: "Connect Wallet", icon: "🔌" },
     { id: "bind", label: "Bind Wallet", icon: "🔗" },
+    ...(roleType === "investor"
+      ? [{ id: "worldid", label: "World ID", icon: "🌐" }]
+      : []),
     { id: "kyc", label: "KYC Verification", icon: "📄" },
     { id: "verify", label: "Verification", icon: "✅" },
   ];
+  const steps = baseSteps;
 
   const currentStepIndex = steps.findIndex((s) => s.id === currentStep);
   const progressPercentage = ((currentStepIndex + 1) / steps.length) * 100;
@@ -281,10 +290,31 @@ export function ComplianceOnboardingFlow({
             </div>
           )}
 
+          {currentStep === "worldid" && (
+            <div className="text-center">
+              <h3 className="text-xl font-semibold mb-4">
+                Step 3: World ID Verification
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Verify your identity with World ID to prevent sybil attacks
+              </p>
+              <WorldIDVerifyButton
+                onVerified={() => setCurrentStep("kyc")}
+              />
+              <Button
+                onClick={() => setCurrentStep("kyc")}
+                variant={compliance.isWorldIDVerified ? "default" : "outline"}
+                className="w-full mt-4"
+              >
+                {compliance.isWorldIDVerified ? "Continue to KYC" : "Skip for Now"}
+              </Button>
+            </div>
+          )}
+
           {currentStep === "kyc" && (
             <div>
               <h3 className="text-xl font-semibold mb-4 text-center">
-                Step 3: KYC Verification
+                Step {roleType === "investor" ? 4 : 3}: KYC Verification
               </h3>
               <p className="text-gray-600 mb-6 text-center">
                 Upload required documents for identity verification
@@ -354,7 +384,7 @@ export function ComplianceOnboardingFlow({
 
           {currentStep === "verify" && (
             <div className="text-center">
-              <h3 className="text-xl font-semibold mb-4">Step 4: Under Review</h3>
+              <h3 className="text-xl font-semibold mb-4">Step {roleType === "investor" ? 5 : 4}: Under Review</h3>
               <div className="w-20 h-20 bg-yellow-100 rounded-full mx-auto mb-4 flex items-center justify-center text-4xl">
                 ⏳
               </div>

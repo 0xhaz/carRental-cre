@@ -104,6 +104,21 @@ def add_note(text):
     run.font.color.rgb = RGBColor(180, 80, 0)
     run.bold = True
 
+def add_role(role):
+    """Active role indicator — shows which account to use"""
+    colors = {
+        "Investor": RGBColor(0, 102, 204),      # blue
+        "Rentor": RGBColor(22, 163, 74),         # green
+        "Renter": RGBColor(147, 51, 234),        # purple
+        "Admin": RGBColor(220, 38, 38),          # red
+        "No login": RGBColor(100, 100, 100),     # gray
+    }
+    p = doc.add_paragraph()
+    run = p.add_run(f"  ROLE: {role}  ")
+    run.bold = True
+    run.font.size = Pt(11)
+    run.font.color.rgb = colors.get(role, RGBColor(0, 0, 0))
+
 def add_blank():
     doc.add_paragraph("")
 
@@ -179,9 +194,10 @@ add_divider()
 # ═══════════════════════════════════════════════════════════════════════════
 
 add_section("SEGMENT 1: Opening — Landing Page  [0:00 – 0:30]")
+add_role("No login")
 
 add_step(1, "Landing Page Hero", "0:00")
-add_action("Open browser at http://localhost:3000 — landing page loads")
+add_action("Open browser at http://localhost:3000 — landing page loads (no login required)")
 add_say("RegShield is a tokenized vehicle rental platform. Investors fund real vehicles through milestone-based escrow, receive ERC-3643 security tokens, and earn quarterly rental revenue — all verified on-chain.")
 add_show("Hero section with orbiting badges: AssetToken, RevenueToken, Escrow, CRE Verified")
 add_blank()
@@ -200,12 +216,14 @@ add_divider()
 # ═══════════════════════════════════════════════════════════════════════════
 
 add_section("SEGMENT 2: Investor Flow  [0:30 – 1:45]")
+add_role("Investor")
 
 add_step(3, "Investor Onboarding — Connect Wallet", "0:30")
-add_action("Click 'Start Investing' on hero OR navigate to /onboarding")
-add_action("Select 'Investor' role card")
-add_say("Let's walk through the investor experience. A new user selects the Investor role and begins the verification process.")
-add_show("Role selection: Investor (blue), Rentor (green), Renter (purple)")
+add_action("Log in as Investor account → switch MetaMask to Investor wallet")
+add_action("Click 'Start Investing' on hero OR navigate to /onboarding, then select 'Investor' role card")
+add_action("Alternatively, if already registered: click 'Resubmit Verification' from the investor dashboard to open the verification modal")
+add_say("Let's walk through the investor experience. A new user selects the Investor role and begins the 5-step verification process: Connect Wallet, Bind Wallet, World ID, KYC, and final Verification.")
+add_show("Verification wizard with 5-step progress bar: Connect Wallet → Bind Wallet → World ID → KYC Verification → Verification")
 add_blank()
 
 add_step(4, "Wallet Connect + Bind", "0:40")
@@ -216,10 +234,10 @@ add_show("Wallet connected indicator with truncated address")
 add_blank()
 
 add_step(5, "WorldID Verification (Sponsor Highlight)", "0:50")
-add_action("Show the WorldID verification step on the verification page")
+add_action("On the investor verification flow, show Step 3: World ID Verification — visible in both the Resubmit modal and the /verification page")
 add_say("Here's where WorldID comes in. We integrate WorldID's proof-of-personhood to prevent sybil attacks. Each investor must be a unique human — verified through WorldID's Orb-level zero-knowledge proof. This is verified on-chain through our WorldIDVerifier contract on Sepolia.")
-add_show("WorldIDVerifyButton component — either 'Verified' badge or 'Open in World App' info panel")
-add_note("If not in World App, the UI shows an info banner explaining to open RegShield inside World App. For demo, you can show the verified state if the wallet is already verified, or show the UI explaining the flow.")
+add_show("WorldIDVerifyButton component with QR code — the flow is: Scan QR → Open World App → Verify Identity. If already verified, a green 'World ID Verified' badge is shown.")
+add_note("On desktop, the UI shows a QR code to scan with your phone and open RegShield inside World App. For demo, you can show the QR code UI and explain the flow, or show the verified badge if already completed.")
 add_tip("Emphasize: 'WorldID verification is stored on-chain — our smart contract WorldIDVerifier.sol calls WorldID's router contract to verify the ZK proof, then maps the address as verified. This prevents one person from creating multiple investor accounts.'")
 add_blank()
 
@@ -256,9 +274,10 @@ add_divider()
 # ═══════════════════════════════════════════════════════════════════════════
 
 add_section("SEGMENT 3: Rentor Flow  [1:45 – 2:45]")
+add_role("Rentor")
 
 add_step(10, "Switch to Rentor Account", "1:45")
-add_action("Log out or use Role Switcher → switch to Rentor account")
+add_action("Log out → log in as Rentor account → switch MetaMask to Rentor wallet")
 add_action("Navigate to /rentor/dashboard")
 add_say("Now let's see the vehicle owner's perspective. The Rentor lists vehicles, creates fundraising campaigns, and manages bookings.")
 add_show("Rentor dashboard with vehicle count, bookings, and monthly revenue")
@@ -298,9 +317,11 @@ add_divider()
 # ═══════════════════════════════════════════════════════════════════════════
 
 add_section("SEGMENT 4: Renter Flow  [2:45 – 3:15]")
+add_role("Renter")
 
 add_step(15, "Switch to Renter Account", "2:45")
-add_action("Switch to Renter account → navigate to /renter/browse")
+add_action("Log out → log in as Renter account → switch MetaMask to Renter wallet")
+add_action("Navigate to /renter/browse")
 add_say("The Renter browses available vehicles, books them, and leaves reviews. Let's do a quick walkthrough.")
 add_show("Vehicle browse page with filters (category, price, location)")
 add_blank()
@@ -325,9 +346,10 @@ add_divider()
 # ═══════════════════════════════════════════════════════════════════════════
 
 add_section("SEGMENT 5: Admin Panel  [3:15 – 4:00]")
+add_role("Admin")
 
 add_step(18, "Admin Dashboard Overview", "3:15")
-add_action("Switch to Admin account → navigate to /admin")
+add_action("Log out → log in as Admin account → navigate to /admin")
 add_say("The admin panel provides full oversight of the platform — KYC reviews, milestone tracking, revenue management, and most importantly, the CRE activity feed.")
 add_show("Admin dashboard with pending KYC count, vehicle registrations, platform stats")
 add_blank()
@@ -358,6 +380,8 @@ add_divider()
 # ═══════════════════════════════════════════════════════════════════════════
 
 add_section("SEGMENT 6: CRE Workflow Demo  [4:00 – 4:45]")
+add_role("Admin")
+add_note("Continue as Admin — stay on the CRE Activity Feed page from Step 21")
 
 add_step(22, "Activate CRE Simulation", "4:00")
 add_action("On the CRE Activity Feed page (/admin/cre-activity), click the 'Simulate Events' button in the Events section header")
@@ -392,9 +416,10 @@ add_divider()
 # ═══════════════════════════════════════════════════════════════════════════
 
 add_section("SEGMENT 7: Closing  [4:45 – 5:00]")
+add_role("No login")
 
 add_step(26, "Summary & Sponsors", "4:45")
-add_action("Switch back to browser — show landing page")
+add_action("Log out → navigate to landing page at http://localhost:3000")
 add_say("To summarize: RegShield uses Chainlink CRE to replace 4 centralized backend services and add 1 new capability — all with decentralized, verifiable automation. WorldID provides sybil-resistant identity verification for investors. Together with ERC-3643 security tokens and milestone-based escrow, we've built a fully on-chain compliant vehicle investment platform. Thank you.")
 add_show("Landing page with sponsor technology highlights visible")
 add_blank()
