@@ -101,6 +101,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 >
                   Tokens
                 </Link>
+                <Link
+                  href="/admin/cre-config"
+                  className="text-gray-700 hover:text-primary transition-colors"
+                >
+                  CRE
+                </Link>
               </nav>
             </div>
             <div className="flex items-center gap-4">

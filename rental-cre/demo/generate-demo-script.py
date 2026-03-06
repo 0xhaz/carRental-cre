@@ -121,7 +121,7 @@ def add_divider():
 add_title("RegShield Demo Walkthrough Script")
 add_subtitle("Tokenized Vehicle Rental Platform")
 add_subtitle("Powered by Chainlink CRE + WorldID + ERC-3643")
-add_subtitle(f"Version 1.0 — {datetime.date.today().strftime('%B %d, %Y')}")
+add_subtitle(f"Version 1.1 — {datetime.date.today().strftime('%B %d, %Y')}")
 
 add_blank()
 
@@ -134,7 +134,6 @@ checklist = [
     "Backend server running (node server.js)",
     "MetaMask installed with Sepolia testnet selected",
     "3 browser profiles ready: Investor wallet, Rentor wallet, Renter wallet",
-    "Terminal open in rental-cre/ directory for CRE demo scripts",
     "MongoDB running with seed data loaded",
     "Screen recorder ready (OBS / QuickTime / Loom)",
     "Resolution set to 1920x1080 for clear recording",
@@ -164,7 +163,7 @@ rows_data = [
     ("Rentor — Vehicle + Fundraising + CRE", "1:00", "2:45"),
     ("Renter — Browse + Book", "0:30", "3:15"),
     ("Admin — KYC + CRE Activity + Milestones", "0:45", "4:00"),
-    ("CRE Workflow Demo (Terminal)", "0:45", "4:45"),
+    ("CRE Workflow Demo (Live UI)", "0:45", "4:45"),
     ("Closing — Summary", "0:15", "5:00"),
 ]
 for i, (seg, dur, cum) in enumerate(rows_data):
@@ -343,48 +342,46 @@ add_step(20, "Milestone Tracking (Chainlink CRE)", "3:35")
 add_action("Navigate to /admin/milestones")
 add_say("This page shows the 4-milestone verification status for each vehicle investment. In production, Chainlink CRE workflows automatically verify each milestone — VIN validation via the NHTSA API, purchase escrow confirmation, insurance expiry check, and registration check — all from on-chain VehicleNFT data.")
 add_show("Milestone grid: Vehicle ID → 4 checkmarks (VIN, Purchase, Insurance, Registration)")
-add_tip("Emphasize: 'Each of these milestones maps to a CRE workflow that we'll demo next in the terminal.'")
+add_tip("Emphasize: 'Each of these milestones maps to a CRE workflow — we'll see those workflows in action next on the CRE Activity Feed.'")
 add_blank()
 
 add_step(21, "CRE Activity Feed", "3:50")
-add_action("Navigate to /admin/cre-activity (or show CRE section on dashboard)")
-add_say("The CRE activity feed shows real-time events from Chainlink's Compute Runtime Environment — every verification, every milestone check, every compliance action logged with timestamps.")
-add_show("Activity feed with event types, timestamps, and vehicle associations")
+add_action("Navigate to /admin/cre-activity")
+add_say("The CRE activity feed shows real-time events from Chainlink's Compute Runtime Environment — every verification, every milestone check, every compliance action logged with timestamps. Let me show you what this looks like when the CRE workflows are actively running.")
+add_show("Activity feed page with workflow filter tabs and 'Simulate Events' button in header")
 add_blank()
 
 add_divider()
 
 # ═══════════════════════════════════════════════════════════════════════════
-# SEGMENT 6: CRE TERMINAL DEMO
+# SEGMENT 6: CRE LIVE UI DEMO
 # ═══════════════════════════════════════════════════════════════════════════
 
 add_section("SEGMENT 6: CRE Workflow Demo  [4:00 – 4:45]")
 
-add_step(22, "Open Terminal — Show CRE Workflows", "4:00")
-add_action("Switch to terminal (split screen or full screen)")
-add_action("cd rental-cre/demo/")
-add_say("Now let's see the Chainlink CRE workflows in action. We have 5 workflows that replace centralized backend cron jobs with decentralized, verifiable automation.")
-add_terminal("cd rental-cre/demo && ls -la *.sh")
-add_show("Demo scripts: demo-rentor.sh, demo-investor.sh, demo-renter.sh, demo-admin.sh")
+add_step(22, "Activate CRE Simulation", "4:00")
+add_action("On the CRE Activity Feed page (/admin/cre-activity), click the 'Simulate Events' button in the Events section header")
+add_say("Now let's see the Chainlink CRE workflows in action. We have 5 workflows running on the Chainlink DON that replace centralized backend cron jobs with decentralized, verifiable automation. I'll activate the simulation to show what these events look like as they flow through the system.")
+add_show("Amber 'Demo Mode Active' banner appears at the top. The activity feed populates with 10 simulated CRE events across all 5 workflow types, each tagged with a 'Simulated' label.")
 add_blank()
 
-add_step(23, "Run Investor Demo (Onboarding + Rental Lifecycle)", "4:10")
-add_action("Run the investor demo script")
-add_terminal("./demo-investor.sh")
-add_say("The investor demo runs two CRE workflows. First, the onboarding workflow auto-processes investor verification — checking identity and WorldID status. Second, the rental lifecycle workflow verifies all four investment milestones: VIN validation via NHTSA, purchase escrow check, insurance verification, and registration check.")
-add_show("Terminal output showing [SIMULATION] mode with milestone reports submitted")
-add_tip("Point out the specific milestones: VEHICLE_IDENTIFIED, PURCHASE_VERIFIED, INSURANCE_OBTAINED, REGISTRATION_COMPLETED")
+add_step(23, "Walk Through Compliance & Vehicle Events", "4:10")
+add_action("Scroll through the simulated events — point out the Compliance and Vehicle workflow events")
+add_say("The compliance workflow detects expired registration and insurance on vehicles by reading on-chain VehicleNFT data. Here you can see it flagged an expired registration and triggered a suspension. The vehicle workflow monitors telematics — updating mileage and recording maintenance events directly on-chain.")
+add_show("Events showing: 'Registration Renewed' (compliance), 'Vehicle Suspended' (compliance), 'Mileage Updated' (vehicle), 'Maintenance Recorded' (vehicle)")
+add_tip("Point to the event details: contract address, block number, and timestamp — emphasize these are real on-chain events when running in production")
 add_blank()
 
-add_step(24, "Run Rentor Demo (Campaign + Vehicle Telematics)", "4:25")
-add_action("Run the rentor demo script")
-add_terminal("./demo-rentor.sh")
-add_say("The rentor demo monitors fundraising campaigns — detecting expired or underfunded ones and triggering batch refunds. It also runs the vehicle telematics workflow, which polls odometer data and updates mileage on the VehicleNFT on-chain.")
-add_show("Terminal output: campaign monitoring + mileage UPDATE_MILEAGE reports")
+add_step(24, "Walk Through Payment & Onboarding Events", "4:25")
+add_action("Click the 'Payment' and 'Onboarding' filter tabs to isolate those event types")
+add_say("The payment workflow handles revenue distribution — splitting rental income between investors, operators, and reserves according to the waterfall rules. The onboarding workflow auto-verifies new investors by checking their WorldID status and KYC completion, then submitting milestone reports to release escrowed funds.")
+add_show("Payment events: 'Revenue Distributed', 'Payment Processed'. Onboarding events: 'Investor Verified', 'KYC Processed'. Each event shows the receiver contract address and block details.")
 add_blank()
 
 add_step(25, "Highlight: 5 Workflows Replace Backend", "4:35")
+add_action("Click the 'All Workflows' tab to show all events together")
 add_say("In total, RegShield has 5 CRE workflows that replace centralized backend services: Onboarding replaces manual admin approval. Campaign Monitor replaces campaignScheduler.js. Rental Lifecycle replaces bookingScheduler.js. Vehicle Telematics replaces revenueSyncService.js. And Compliance Monitoring is an entirely new capability that only CRE makes possible — detecting expired registration, insurance, and overdue maintenance automatically.")
+add_show("Full activity feed with all 10 events from 5 workflow types — compliance (green), vehicle (blue), payment (purple), onboarding (cyan), campaign (amber)")
 add_tip("Keep this concise — list them quickly without pausing on each")
 add_blank()
 
@@ -420,7 +417,7 @@ for i, h in enumerate(headers2):
         p.runs[0].bold = True
 
 sponsor_data = [
-    ("Chainlink CRE", "5 off-chain workflows: onboarding, campaign, rental, vehicle, compliance. Replace centralized cron jobs with decentralized automation.", "Admin milestones page, CRE activity feed, terminal demo scripts"),
+    ("Chainlink CRE", "5 off-chain workflows: onboarding, campaign, rental, vehicle, compliance. Replace centralized cron jobs with decentralized automation.", "Admin milestones page, CRE activity feed (live events + simulation mode)"),
     ("Chainlink Price Feed", "ETH/USD oracle (Sepolia) for real-time price conversion throughout platform.", "Marketplace, dashboards, investment modal, revenue analytics"),
     ("WorldID", "Proof-of-personhood via Orb-level ZK verification. On-chain via WorldIDVerifier.sol. Prevents sybil attacks on investor onboarding.", "Verification page, onboarding flow, WorldIDVerifyButton component"),
 ]
@@ -488,7 +485,7 @@ add_section("Appendix D: Quick Troubleshooting")
 troubles = [
     ("MetaMask not connecting", "Ensure Sepolia testnet is selected. Clear site data if wallet state is stale."),
     ("WorldID shows 'Not in World App'", "Expected on desktop browser. For demo, show the UI state and explain the World App flow."),
-    ("CRE scripts fail", "Run 'cre version' to verify CLI installed. Check rental-cre/demo/ directory."),
+    ("CRE simulated events not showing", "Click 'Simulate Events' button on /admin/cre-activity. If button is missing, ensure frontend is running the latest build."),
     ("Frontend shows $0 revenue", "Run 'node backend/services/revenueSyncService.js' to trigger manual sync."),
     ("KYC page empty", "Ensure MongoDB is running with seed data. Check backend console for errors."),
 ]

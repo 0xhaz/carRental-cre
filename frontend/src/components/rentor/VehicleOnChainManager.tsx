@@ -49,6 +49,8 @@ export default function VehicleOnChainManager({ vehicleNftId, ownerAddress }: Ve
   const [mintMileage, setMintMileage] = useState("0");
   const [mintAsset, setMintAsset] = useState("");
   const [mintRevenue, setMintRevenue] = useState("");
+  const [mintRegExpiry, setMintRegExpiry] = useState("");
+  const [mintInsExpiry, setMintInsExpiry] = useState("");
 
   // Mileage form
   const [newMileage, setNewMileage] = useState("");
@@ -110,13 +112,15 @@ export default function VehicleOnChainManager({ vehicleNftId, ownerAddress }: Ve
             <Input label="Model" value={mintModel} onChange={(e) => setMintModel(e.target.value)} placeholder="X5" />
             <Input label="Year" type="number" value={mintYear} onChange={(e) => setMintYear(e.target.value)} placeholder="2024" />
             <Input label="Color" value={mintColor} onChange={(e) => setMintColor(e.target.value)} placeholder="Black" />
+            <Input label="Registration Expiry" type="date" value={mintRegExpiry} onChange={(e) => setMintRegExpiry(e.target.value)} />
+            <Input label="Insurance Expiry" type="date" value={mintInsExpiry} onChange={(e) => setMintInsExpiry(e.target.value)} />
             <Input label="AssetToken" value={mintAsset} onChange={(e) => setMintAsset(e.target.value)} placeholder="0x..." />
             <Input label="RevenueToken" value={mintRevenue} onChange={(e) => setMintRevenue(e.target.value)} placeholder="0x..." />
           </div>
           <Button
             onClick={() => mintVehicle.mintVehicle(
               mintTo as `0x${string}`,
-              { vin: mintVin, make: mintMake, model: mintModel, year: BigInt(mintYear || "0"), color: mintColor, mileage: BigInt(mintMileage || "0"), registrationExpiry: BigInt(0), insuranceExpiry: BigInt(0) },
+              { vin: mintVin, make: mintMake, model: mintModel, year: BigInt(mintYear || "0"), color: mintColor, mileage: BigInt(mintMileage || "0"), registrationExpiry: mintRegExpiry ? BigInt(Math.floor(new Date(mintRegExpiry).getTime() / 1000)) : BigInt(0), insuranceExpiry: mintInsExpiry ? BigInt(Math.floor(new Date(mintInsExpiry).getTime() / 1000)) : BigInt(0) },
               mintAsset as `0x${string}`,
               mintRevenue as `0x${string}`,
             )}

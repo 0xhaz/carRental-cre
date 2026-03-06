@@ -5,6 +5,8 @@
  */
 
 import { useReadContract, useWatchContractEvent } from "wagmi";
+import { createPublicClient, http, fallback } from "viem";
+import { sepolia } from "viem/chains";
 import {
   usePaymentReceiver,
   useComplianceReceiver,
@@ -24,7 +26,7 @@ import type {
   OnboardingAction,
   CampaignMonitorAction,
 } from "@/types/cre";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   COMPLIANCE_ACTION_LABELS,
   VEHICLE_ACTION_LABELS,
@@ -465,4 +467,205 @@ function campaignToActivity(e: CampaignReportEvent): CREActivityItem {
     transactionHash: e.transactionHash,
     blockNumber: e.blockNumber,
   };
+}
+
+// ═══════════════════════════════════════════════
+// Historical CRE Events (past logs)
+// ═══════════════════════════════════════════════
+
+/**
+ * Public RPC client for log fetching.
+ * Alchemy free tier limits getLogs to 10 blocks, so we use public RPCs
+ * with fallback that support wider block ranges for historical event scanning.
+ */
+const logsClient = createPublicClient({
+  chain: sepolia,
+  transport: fallback([
+    http(process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com"),
+    http("https://ethereum-sepolia-rpc.publicnode.com"),
+    http("https://1rpc.io/sepolia"),
+  ]),
+});
+
+/**
+ * Fetches historical events from all 5 CRE receivers.
+ * Scans the last ~50,000 blocks (~7 days on Sepolia).
+ * Uses a public RPC (not Alchemy) to avoid getLogs block range limits.
+ */
+export function useHistoricalCREEvents() {
+  const paymentContract = usePaymentReceiver();
+  const complianceContract = useComplianceReceiver();
+  const vehicleContract = useVehicleReceiver();
+  const onboardingContract = useOnboardingReceiver();
+  const campaignContract = useCampaignMonitorReceiver();
+
+  const [events, setEvents] = useState<CREActivityItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchEvents() {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const currentBlock = await logsClient.getBlockNumber();
+        // Scan last ~50k blocks (~7 days on Sepolia)
+        const scanRange = BigInt(50000);
+        const fromBlock = currentBlock > scanRange ? currentBlock - scanRange : BigInt(0);
+
+        const allItems: CREActivityItem[] = [];
+
+        // Fetch from all 5 receivers in parallel using public RPC
+        const [paymentLogs, complianceLogs, vehicleLogs, onboardingLogs, campaignLogs] =
+          await Promise.all([
+            logsClient.getLogs({
+              address: paymentContract.address,
+              event: {
+                type: "event",
+                name: "PaymentReportProcessed",
+                inputs: [
+                  { name: "paymentId", type: "uint256", indexed: true },
+                  { name: "milestone", type: "string", indexed: false },
+                  { name: "timestamp", type: "uint256", indexed: false },
+                ],
+              },
+              fromBlock,
+              toBlock: "latest",
+            }).catch(() => []),
+            logsClient.getLogs({
+              address: complianceContract.address,
+              event: {
+                type: "event",
+                name: "ComplianceReportProcessed",
+                inputs: [
+                  { name: "action", type: "uint8", indexed: false },
+                  { name: "timestamp", type: "uint256", indexed: false },
+                ],
+              },
+              fromBlock,
+              toBlock: "latest",
+            }).catch(() => []),
+            logsClient.getLogs({
+              address: vehicleContract.address,
+              event: {
+                type: "event",
+                name: "VehicleReportProcessed",
+                inputs: [
+                  { name: "action", type: "uint8", indexed: false },
+                  { name: "tokenId", type: "uint256", indexed: true },
+                  { name: "timestamp", type: "uint256", indexed: false },
+                ],
+              },
+              fromBlock,
+              toBlock: "latest",
+            }).catch(() => []),
+            logsClient.getLogs({
+              address: onboardingContract.address,
+              event: {
+                type: "event",
+                name: "OnboardingReportProcessed",
+                inputs: [
+                  { name: "action", type: "uint8", indexed: false },
+                  { name: "timestamp", type: "uint256", indexed: false },
+                ],
+              },
+              fromBlock,
+              toBlock: "latest",
+            }).catch(() => []),
+            logsClient.getLogs({
+              address: campaignContract.address,
+              event: {
+                type: "event",
+                name: "CampaignReportProcessed",
+                inputs: [
+                  { name: "vehicleId", type: "uint256", indexed: true },
+                  { name: "action", type: "string", indexed: false },
+                  { name: "refundedCount", type: "uint256", indexed: false },
+                  { name: "timestamp", type: "uint256", indexed: false },
+                ],
+              },
+              fromBlock,
+              toBlock: "latest",
+            }).catch(() => []),
+          ]);
+
+        // Map payment events
+        for (const log of paymentLogs) {
+          const args = (log as any).args;
+          if (!args) continue;
+          allItems.push(paymentToActivity({
+            paymentId: args.paymentId,
+            milestone: args.milestone,
+            timestamp: args.timestamp,
+            transactionHash: log.transactionHash as `0x${string}`,
+            blockNumber: log.blockNumber,
+          }));
+        }
+
+        // Map compliance events
+        for (const log of complianceLogs) {
+          const args = (log as any).args;
+          if (!args) continue;
+          allItems.push(complianceToActivity({
+            action: Number(args.action) as ComplianceAction,
+            timestamp: args.timestamp,
+            transactionHash: log.transactionHash as `0x${string}`,
+            blockNumber: log.blockNumber,
+          }));
+        }
+
+        // Map vehicle events
+        for (const log of vehicleLogs) {
+          const args = (log as any).args;
+          if (!args) continue;
+          allItems.push(vehicleToActivity({
+            action: Number(args.action) as VehicleAction,
+            tokenId: args.tokenId,
+            timestamp: args.timestamp,
+            transactionHash: log.transactionHash as `0x${string}`,
+            blockNumber: log.blockNumber,
+          }));
+        }
+
+        // Map onboarding events
+        for (const log of onboardingLogs) {
+          const args = (log as any).args;
+          if (!args) continue;
+          allItems.push(onboardingToActivity({
+            action: Number(args.action) as OnboardingAction,
+            timestamp: args.timestamp,
+            transactionHash: log.transactionHash as `0x${string}`,
+            blockNumber: log.blockNumber,
+          }));
+        }
+
+        // Map campaign events
+        for (const log of campaignLogs) {
+          const args = (log as any).args;
+          if (!args) continue;
+          allItems.push(campaignToActivity({
+            vehicleId: args.vehicleId,
+            action: args.action as CampaignMonitorAction,
+            refundedCount: args.refundedCount,
+            timestamp: args.timestamp,
+            transactionHash: log.transactionHash as `0x${string}`,
+            blockNumber: log.blockNumber,
+          }));
+        }
+
+        // Sort by block number descending
+        allItems.sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber));
+        setEvents(allItems);
+      } catch (err: any) {
+        setError(err.message || "Failed to fetch historical events");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchEvents();
+  }, [paymentContract.address, complianceContract.address, vehicleContract.address, onboardingContract.address, campaignContract.address]);
+
+  return { events, isLoading, error };
 }

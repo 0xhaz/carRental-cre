@@ -1971,9 +1971,10 @@ function VehicleHealthCard({ vehicleNftId }: { vehicleNftId: bigint }) {
   const registrationExpiry = meta?.[6];
   const insuranceExpiry = meta?.[7];
 
-  const info = vehicleInfo.data as [any, number, bigint, bigint, bigint] | undefined;
-  const maintenanceCount = info?.[3];
-  const incidentCount = info?.[4];
+  // getVehicleInfo returns: (metadata, status, assetToken, revenueToken, currentBooking, maintenanceCount, incidentCount)
+  const info = vehicleInfo.data as [any, number, `0x${string}`, `0x${string}`, bigint, bigint, bigint] | undefined;
+  const maintenanceCount = info?.[5];
+  const incidentCount = info?.[6];
 
   const now = BigInt(Math.floor(Date.now() / 1000));
   const regExpired = registrationExpiry ? registrationExpiry < now : false;
@@ -2013,18 +2014,18 @@ function VehicleHealthCard({ vehicleNftId }: { vehicleNftId: bigint }) {
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="bg-white rounded-lg p-3 text-center border border-gray-100">
             <p className="text-xs text-gray-500">Mileage</p>
-            <p className="text-lg font-bold text-blue-600">{mileage?.toString() ?? "—"}</p>
+            <p className="text-lg font-bold text-blue-600">{mileage !== undefined ? Number(mileage).toLocaleString() : "—"}</p>
             <p className="text-xs text-gray-400">km</p>
           </div>
           <div className="bg-white rounded-lg p-3 text-center border border-gray-100">
             <p className="text-xs text-gray-500">Maintenance</p>
-            <p className="text-lg font-bold text-amber-600">{maintenanceCount?.toString() ?? "0"}</p>
+            <p className="text-lg font-bold text-amber-600">{maintenanceCount !== undefined ? Number(maintenanceCount) : 0}</p>
             <p className="text-xs text-gray-400">records</p>
           </div>
           <div className="bg-white rounded-lg p-3 text-center border border-gray-100">
             <p className="text-xs text-gray-500">Incidents</p>
-            <p className={`text-lg font-bold ${incidentCount && incidentCount > BigInt(0) ? "text-red-600" : "text-green-600"}`}>
-              {incidentCount?.toString() ?? "0"}
+            <p className={`text-lg font-bold ${maintenanceCount !== undefined && incidentCount !== undefined && incidentCount > BigInt(0) ? "text-red-600" : "text-green-600"}`}>
+              {incidentCount !== undefined ? Number(incidentCount) : 0}
             </p>
             <p className="text-xs text-gray-400">reported</p>
           </div>
